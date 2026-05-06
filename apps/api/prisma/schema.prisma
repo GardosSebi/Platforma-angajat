@@ -7,29 +7,212 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SystemRole {
+  PLATFORM_ADMIN
+  TENANT_ADMIN
+  SSM_ADMIN
+  SSM_ENTITY_RESPONSIBLE
+  DEPARTMENT_MANAGER
+  EMPLOYEE
+}
+
+enum SsmResponsibleType {
+  DESIGNATED_WORKER
+  EXTERNAL_SERVICE
+}
+
 model Tenant {
   id        String   @id
   name      String
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  employees              Employee[]
-  ssmTrainingAssignments SsmTrainingAssignment[]
-  auditLogs              AuditLog[]
+  employees                  Employee[]
+  ssmTrainingAssignments     SsmTrainingAssignment[]
+  auditLogs                  AuditLog[]
+  users                      User[]
+  worksites                  Worksite[]
+  departments                Department[]
+  jobPositions               JobPosition[]
+  employeePlacementHistories EmployeePlacementHistory[]
+  employeeGroups             EmployeeGroup[]
+  ssmResponsibles            SsmResponsible[]
+}
+
+model User {
+  id           String       @id @default(cuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  fullName     String?
+  active       Boolean      @default(true)
+  roles        SystemRole[] @default([])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId, active])
+}
+
+model Worksite {
+  id        String   @id @default(cuid())
+  tenantId  String
+  code      String
+  name      String
+  address   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant                     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  departments                Department[]
+  employees                  Employee[]
+  employeePlacementHistories EmployeePlacementHistory[]
+  ssmResponsibles            SsmResponsible[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
+model Department {
+  id         String   @id @default(cuid())
+  tenantId   String
+  worksiteId String?
+  code       String
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant                     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite                   Worksite?                  @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  jobPositions               JobPosition[]
+  employees                  Employee[]
+  employeePlacementHistories EmployeePlacementHistory[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, worksiteId])
+}
+
+model JobPosition {
+  id           String   @id @default(cuid())
+  tenantId     String
+  departmentId String?
+  code         String
+  name         String
+  corCode      String?
+  description  String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant                     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  department                 Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employees                  Employee[]
+  employeePlacementHistories EmployeePlacementHistory[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, departmentId])
 }
 
 model Employee {
-  id        String   @id @default(cuid())
-  tenantId  String
-  fullName  String
-  email     String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id            String    @id @default(cuid())
+  tenantId      String
+  fullName      String
+  email         String
+  cnp           String?
+  active        Boolean   @default(true)
+  hireDate      DateTime?
+  leaveDate     DateTime?
+  worksiteId    String?
+  departmentId  String?
+  jobPositionId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  tenant                 Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant                 Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite               Worksite?                  @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department             Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  jobPosition            JobPosition?               @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+  placementHistory       EmployeePlacementHistory[]
+  groupMembers           EmployeeGroupMember[]
   ssmTrainingAssignments SsmTrainingAssignment[]
 
   @@unique([tenantId, email])
+  @@index([tenantId, active])
+  @@index([tenantId, worksiteId])
+  @@index([tenantId, departmentId])
+}
+
+model EmployeePlacementHistory {
+  id              String    @id @default(cuid())
+  tenantId        String
+  employeeId      String
+  effectiveFrom   DateTime  @default(now())
+  effectiveTo     DateTime?
+  worksiteId      String?
+  departmentId    String?
+  jobPositionId   String?
+  changeReason    String?
+  createdAt       DateTime  @default(now())
+  createdByUserId String
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  worksite    Worksite?    @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department  Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  jobPosition JobPosition? @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, effectiveFrom])
+}
+
+model EmployeeGroup {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members EmployeeGroupMember[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, active])
+}
+
+model EmployeeGroupMember {
+  groupId    String
+  employeeId String
+  addedAt    DateTime @default(now())
+
+  group    EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, employeeId])
+}
+
+model SsmResponsible {
+  id         String             @id @default(cuid())
+  tenantId   String
+  worksiteId String?
+  type       SsmResponsibleType
+  personName String
+  email      String?
+  phone      String?
+  notes      String?
+  active     Boolean            @default(true)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite Worksite? @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, worksiteId])
   @@index([tenantId, active])
 }
 

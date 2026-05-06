@@ -1,20 +1,32 @@
 import { authStore } from "../auth/auth-store";
+import { getApiBaseUrl } from "./api-base";
+import { httpErrorFromResponse } from "./http-error";
 
 export async function httpClient<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = authStore.get();
+  const base = getApiBaseUrl();
 
-  const response = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:3000/api/v1"}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
-      ...(session?.tenantId ? { "x-tenant-id": session.tenantId } : {}),
-      ...(init.headers ?? {})
-    }
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${base}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+        ...(session?.tenantId ? { "x-tenant-id": session.tenantId } : {}),
+        ...(init.headers ?? {})
+      }
+    });
+  } catch {
+    const hint =
+      import.meta.env.DEV
+        ? " Start Nest on port 3000: pnpm --filter @apps/api dev (or pnpm dev). Test: http://localhost:3000/api/v1/health/live"
+        : " Check that the backend is running and VITE_API_URL is correct.";
+    throw new Error(`Cannot reach the API (${base}).${hint}`);
+  }
 
   if (!response.ok) {
-    throw new Error(`Request failed with ${response.status}`);
+    throw await httpErrorFromResponse(response);
   }
 
   return response.json() as Promise<T>;

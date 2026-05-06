@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PermissionsGuard } from "../../common/guards/permissions.guard";
 import { AssignTrainingUseCase } from "./application/use-cases/assign-training.use-case";
 import { SsmController } from "./api/ssm.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
@@ -8,6 +9,7 @@ import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.cl
 @Module({
   controllers: [SsmController],
   providers: [
+    PermissionsGuard,
     AssignTrainingUseCase,
     SapServiceLayerClient,
     {

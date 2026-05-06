@@ -23,6 +23,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!payload.tenantId) {
       throw new UnauthorizedException("Tenant is missing in JWT");
     }
-    return payload;
+    return {
+      ...payload,
+      roles: payload.roles ?? []
+    };
   }
 }

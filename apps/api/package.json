@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "build": "tsc -p tsconfig.json",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
@@ -10,7 +11,12 @@
     "lint": "echo \"lint api\"",
     "test": "echo \"test api\"",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "latest",
@@ -21,9 +27,12 @@
     "@nestjs/platform-express": "latest",
     "@prisma/client": "^6.18.0",
     "axios": "latest",
+    "bcrypt": "latest",
     "class-transformer": "latest",
     "class-validator": "latest",
     "dotenv": "latest",
+    "multer": "latest",
+    "nodemailer": "latest",
     "passport": "latest",
     "passport-jwt": "latest",
     "reflect-metadata": "latest",
@@ -31,8 +40,11 @@
   },
   "devDependencies": {
     "@nestjs/cli": "latest",
+    "@types/bcrypt": "latest",
     "@types/express": "latest",
+    "@types/multer": "latest",
     "@types/node": "latest",
+    "@types/nodemailer": "latest",
     "@types/passport-jwt": "latest",
     "prisma": "^6.18.0",
     "ts-node": "latest",

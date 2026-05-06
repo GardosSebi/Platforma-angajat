@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./styles/global.css";
 import { AppProviders } from "./app/providers";
 import { AppRouter } from "./app/router";
 import { registerServiceWorker } from "./pwa/sw";
