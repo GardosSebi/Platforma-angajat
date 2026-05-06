@@ -1,0 +1,41 @@
+{
+  "name": "@apps/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"lint api\"",
+    "test": "echo \"test api\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@nestjs/common": "latest",
+    "@nestjs/config": "latest",
+    "@nestjs/core": "latest",
+    "@nestjs/jwt": "latest",
+    "@nestjs/passport": "latest",
+    "@nestjs/platform-express": "latest",
+    "@prisma/client": "^6.18.0",
+    "axios": "latest",
+    "class-transformer": "latest",
+    "class-validator": "latest",
+    "dotenv": "latest",
+    "passport": "latest",
+    "passport-jwt": "latest",
+    "reflect-metadata": "latest",
+    "rxjs": "latest"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "latest",
+    "@types/express": "latest",
+    "@types/node": "latest",
+    "@types/passport-jwt": "latest",
+    "prisma": "^6.18.0",
+    "ts-node": "latest",
+    "typescript": "^5.6.3"
+  }
+}

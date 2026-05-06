@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  employees              Employee[]
+  ssmTrainingAssignments SsmTrainingAssignment[]
+  auditLogs              AuditLog[]
+}
+
+model Employee {
+  id        String   @id @default(cuid())
+  tenantId  String
+  fullName  String
+  email     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant                 Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ssmTrainingAssignments SsmTrainingAssignment[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, active])
+}
+
+model SsmTrainingAssignment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  trainingCode String
+  dueDate      DateTime
+  completedAt  DateTime?
+  assignedBy   String
+  createdAt    DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, trainingCode])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  actorId    String
+  module     String
+  action     String
+  entityType String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, module, createdAt])
+}
