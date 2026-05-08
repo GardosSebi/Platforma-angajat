@@ -9,6 +9,7 @@ export function LoginPage() {
   const [tenantId, setTenantId] = useState("e01");
   const [email, setEmail] = useState("admin@company.local");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -64,14 +65,26 @@ export function LoginPage() {
           </div>
           <div className="field">
             <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? "Ascunde parola" : "Afișează parola"}
+                title={showPassword ? "Ascunde parola" : "Afișează parola"}
+                style={{ padding: "0.58rem 0.75rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff" }}
+              >
+                👁
+              </button>
+            </div>
           </div>
           {error ? (
             <p className="feedback error" role="alert">
