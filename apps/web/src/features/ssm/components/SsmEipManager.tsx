@@ -6,6 +6,7 @@ import type {
   SsmEipMovementType
 } from "@repo/shared-types/ssm";
 import { useEipNorms, useEipNotifications, useEipRegister, useEipStockGap, useEipTypes, useCreateEipType, useRegisterEipMovement, useUpsertEipNorm } from "../hooks/useSsmEip";
+import { useJobPositions } from "../../master-data/hooks/useMasterData";
 
 const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
 const DEMO_JOB_POSITION_ID = import.meta.env.VITE_DEMO_JOB_POSITION_ID ?? "";
@@ -35,8 +36,13 @@ const EMPTY_MOVEMENT: CreateSsmEipMovementRequest = {
 
 const MOVEMENT_TYPES: SsmEipMovementType[] = ["DISTRIBUTION", "RETURN", "SCRAP"];
 
+function mutationErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "A apărut o eroare neașteptată.";
+}
+
 export function SsmEipManager() {
   const typesQuery = useEipTypes();
+  const jobPositionsQuery = useJobPositions();
   const normsQuery = useEipNorms();
   const registerQuery = useEipRegister();
   const notificationsQuery = useEipNotifications();
@@ -99,6 +105,16 @@ export function SsmEipManager() {
           <button className="btn-primary" type="submit" disabled={createType.isPending}>
             {createType.isPending ? "Se salvează..." : "Adaugă tip EIP"}
           </button>
+          {createType.isSuccess ? (
+            <p className="feedback success" role="status">
+              Tipul EIP a fost adăugat.
+            </p>
+          ) : null}
+          {createType.isError ? (
+            <p className="feedback error" role="alert">
+              {mutationErrorMessage(createType.error)}
+            </p>
+          ) : null}
           <p className="field-hint">Tipuri: {(typesQuery.data ?? []).map((t) => t.code).join(", ") || "-"}</p>
         </form>
 
@@ -106,12 +122,18 @@ export function SsmEipManager() {
           <h3 className="card-title">Normativ EIP pe post</h3>
           <div className="field">
             <label htmlFor="norm-job">Job Position ID</label>
-            <input
+            <select
               id="norm-job"
               value={normForm.jobPositionId}
               onChange={(e) => setNormForm((p) => ({ ...p, jobPositionId: e.target.value }))}
-              placeholder="ID post din master-data"
-            />
+            >
+              <option value="">Selecteaza postul</option>
+              {(jobPositionsQuery.data ?? []).map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.code} - {job.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label htmlFor="norm-type">Tip EIP</label>
@@ -149,6 +171,16 @@ export function SsmEipManager() {
           <button className="btn-primary" type="submit" disabled={upsertNorm.isPending || !normForm.eipTypeId || !normForm.jobPositionId}>
             {upsertNorm.isPending ? "Se salvează..." : "Salvează normativ"}
           </button>
+          {upsertNorm.isSuccess ? (
+            <p className="feedback success" role="status">
+              Normativul EIP a fost salvat.
+            </p>
+          ) : null}
+          {upsertNorm.isError ? (
+            <p className="feedback error" role="alert">
+              {mutationErrorMessage(upsertNorm.error)}
+            </p>
+          ) : null}
           <p className="field-hint">Normative: {normsQuery.data?.items.length ?? 0}</p>
         </form>
       </div>
@@ -213,6 +245,16 @@ export function SsmEipManager() {
           <button className="btn-primary" type="submit" disabled={registerMovement.isPending || !movementForm.eipTypeId}>
             {registerMovement.isPending ? "Se înregistrează..." : "Înregistrează mișcare"}
           </button>
+          {registerMovement.isSuccess ? (
+            <p className="feedback success" role="status">
+              Mișcarea EIP a fost înregistrată.
+            </p>
+          ) : null}
+          {registerMovement.isError ? (
+            <p className="feedback error" role="alert">
+              {mutationErrorMessage(registerMovement.error)}
+            </p>
+          ) : null}
           <p className="field-hint">Registru automat: {registerQuery.data?.items.length ?? 0} înregistrări</p>
         </form>
 

@@ -31,11 +31,11 @@ export function TrainingAssignForm() {
   return (
     <section className="card" aria-labelledby="assign-training-title">
       <h2 id="assign-training-title" className="card-title">
-        Assign training
+        Alocare instruire
       </h2>
       <form onSubmit={onSubmit} className="form-stack">
         <div className="field">
-          <label htmlFor="employee-id">Employee ID</label>
+          <label htmlFor="employee-id">ID angajat</label>
           <input
             id="employee-id"
             name="employeeId"
@@ -46,18 +46,18 @@ export function TrainingAssignForm() {
           />
         </div>
         <div className="field">
-          <label htmlFor="training-code">Training code</label>
+          <label htmlFor="training-code">Cod instruire</label>
           <input
             id="training-code"
             name="trainingCode"
             autoComplete="off"
-            placeholder="e.g. SSM-INTRO-2025"
+            placeholder="ex: SSM-INTRO-2025"
             value={form.trainingCode}
             onChange={(event) => setForm((current) => ({ ...current, trainingCode: event.target.value }))}
           />
         </div>
         <div className="field">
-          <label htmlFor="due-date">Due date</label>
+          <label htmlFor="due-date">Data scadenței</label>
           <input
             id="due-date"
             name="dueDate"
@@ -76,16 +76,16 @@ export function TrainingAssignForm() {
           />
         </div>
         <button type="submit" className="btn-primary" disabled={mutation.isPending}>
-          {mutation.isPending ? "Assigning…" : "Assign training"}
+          {mutation.isPending ? "Se alocă..." : "Alocă instruire"}
         </button>
         {mutation.isSuccess ? (
           <p className="feedback success" role="status">
-            Training assigned. Assignment ID: <strong>{mutation.data.assignmentId}</strong>
+            Instruirea a fost alocată. ID alocare: <strong>{mutation.data.assignmentId}</strong>
           </p>
         ) : null}
         {mutation.isError ? (
           <p className="feedback error" role="alert">
-            {mutation.error instanceof Error ? mutation.error.message : "Unexpected error"}
+            {mutation.error instanceof Error ? mutation.error.message : "Eroare neașteptată"}
           </p>
         ) : null}
       </form>

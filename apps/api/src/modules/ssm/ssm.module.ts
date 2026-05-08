@@ -5,17 +5,26 @@ import { SsmDocumentsService } from "./application/services/ssm-documents.servic
 import { SsmTrainingSuiteService } from "./application/services/ssm-training-suite.service";
 import { SsmEipService } from "./application/services/ssm-eip.service";
 import { SsmAccidentsService } from "./application/services/ssm-accidents.service";
+import { SsmMedicalService } from "./application/services/ssm-medical.service";
 import { SsmController } from "./api/ssm.controller";
 import { SsmDocumentsController } from "./api/ssm-documents.controller";
 import { SsmTrainingSuiteController } from "./api/ssm-training-suite.controller";
 import { SsmEipController } from "./api/ssm-eip.controller";
 import { SsmAccidentsController } from "./api/ssm-accidents.controller";
+import { SsmMedicalController } from "./api/ssm-medical.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
 import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-training.repository";
 import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.client";
 
 @Module({
-  controllers: [SsmController, SsmDocumentsController, SsmTrainingSuiteController, SsmEipController, SsmAccidentsController],
+  controllers: [
+    SsmController,
+    SsmDocumentsController,
+    SsmTrainingSuiteController,
+    SsmEipController,
+    SsmAccidentsController,
+    SsmMedicalController
+  ],
   providers: [
     PermissionsGuard,
     AssignTrainingUseCase,
@@ -23,6 +32,7 @@ import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.cl
     SsmTrainingSuiteService,
     SsmEipService,
     SsmAccidentsService,
+    SsmMedicalService,
     SapServiceLayerClient,
     {
       provide: SSM_TRAINING_REPOSITORY,

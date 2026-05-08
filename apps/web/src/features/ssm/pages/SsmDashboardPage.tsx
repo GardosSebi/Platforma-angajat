@@ -6,8 +6,9 @@ import { SsmDocumentsManager } from "../components/SsmDocumentsManager";
 import { SsmTrainingSuiteManager } from "../components/SsmTrainingSuiteManager";
 import { SsmEipManager } from "../components/SsmEipManager";
 import { SsmAccidentsManager } from "../components/SsmAccidentsManager";
+import { SsmMedicalManager } from "../components/SsmMedicalManager";
 
-type SsmSectionId = "quick" | "documents" | "training" | "eip" | "accidents";
+type SsmSectionId = "quick" | "documents" | "training" | "eip" | "accidents" | "medical";
 
 const SSM_SECTIONS: Array<{
   id: SsmSectionId;
@@ -44,6 +45,12 @@ const SSM_SECTIONS: Array<{
     title: "Accidente și incidente",
     caption: "Cazuri, task-uri, statistici",
     description: "Înregistrează cazuri și urmărește fluxul de cercetare până la închidere."
+  },
+  {
+    id: "medical",
+    title: "Medicina muncii",
+    caption: "Aptitudini, fișe, reminder",
+    description: "Configurează tipuri de controale medicale, rezultate și următoarele scadențe."
   }
 ];
 
@@ -65,6 +72,8 @@ export function SsmDashboardPage() {
         return <SsmEipManager />;
       case "accidents":
         return <SsmAccidentsManager />;
+      case "medical":
+        return <SsmMedicalManager />;
       case "quick":
       default:
         return <TrainingAssignForm />;
@@ -112,20 +121,6 @@ export function SsmDashboardPage() {
         <div className="ssm-dashboard-grid">{renderSection()}</div>
       </section>
 
-      <div className="ssm-guidance-grid">
-        <article className="card ssm-guidance-card">
-          <h3 className="card-title">Flux recomandat</h3>
-          <p className="field-hint">
-            1) Documente si proceduri, 2) Instruire personal, 3) EIP, 4) Monitorizare accidente.
-          </p>
-        </article>
-        <article className="card ssm-guidance-card">
-          <h3 className="card-title">Tips de utilizare</h3>
-          <p className="field-hint">
-            Lucrează pe o singură secțiune activă și finalizează acțiunile înainte să schimbi modulul.
-          </p>
-        </article>
-      </div>
     </>
   );
 }

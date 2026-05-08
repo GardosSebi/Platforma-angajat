@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { LoginPage } from "../features/auth/pages/LoginPage";
 import { AppLayout } from "./AppLayout";
 import { SsmDashboardPage } from "../features/ssm/pages/SsmDashboardPage";
+import { MasterDataPage } from "../features/master-data/pages/MasterDataPage";
 
 function Placeholder({ title, icon }: { title: string; icon: string }) {
   return (
@@ -23,6 +24,7 @@ export function AppRouter() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/ssm" replace />} />
           <Route path="/ssm" element={<SsmDashboardPage />} />
+          <Route path="/master-data" element={<MasterDataPage />} />
           <Route path="/chatbot" element={<Placeholder title="Chatbot" icon="💬" />} />
           <Route path="/surveys" element={<Placeholder title="Surveys" icon="📋" />} />
           <Route path="/ticketing" element={<Placeholder title="Ticketing" icon="🎫" />} />

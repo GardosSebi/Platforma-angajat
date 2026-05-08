@@ -94,3 +94,20 @@ export function useSignPlan() {
     }
   });
 }
+
+export function useSignPlansBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { planIds: string[]; role: "EMPLOYEE" | "RESPONSIBLE"; signatureData: string }) =>
+      ssmApi.signPlansBatch(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
+    }
+  });
+}
+
+export function useDispatchTrainingReminders() {
+  return useMutation({
+    mutationFn: () => ssmApi.dispatchTrainingReminders()
+  });
+}

@@ -49,6 +49,10 @@ const EMPTY_DOC: CreateSsmDocumentRequest = {
   changeNote: ""
 };
 
+function mutationErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "A apărut o eroare neașteptată.";
+}
+
 export function SsmDocumentsManager() {
   const [filters, setFilters] = useState({
     q: "",
@@ -216,6 +220,16 @@ export function SsmDocumentsManager() {
           <button type="submit" className="btn-primary" disabled={createMutation.isPending || !createFile}>
             {createMutation.isPending ? "Se încarcă..." : "Adaugă document"}
           </button>
+          {createMutation.isSuccess ? (
+            <p className="feedback success" role="status">
+              Document adăugat cu succes.
+            </p>
+          ) : null}
+          {createMutation.isError ? (
+            <p className="feedback error" role="alert">
+              {mutationErrorMessage(createMutation.error)}
+            </p>
+          ) : null}
         </form>
 
         <div className="card ssm-doc-card ssm-doc-list">
@@ -322,6 +336,36 @@ export function SsmDocumentsManager() {
                 >
                   Arhivează document
                 </button>
+                {addVersionMutation.isSuccess ? (
+                  <p className="feedback success" role="status">
+                    Versiune nouă adăugată.
+                  </p>
+                ) : null}
+                {addVersionMutation.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(addVersionMutation.error)}
+                  </p>
+                ) : null}
+                {revertMutation.isSuccess ? (
+                  <p className="feedback success" role="status">
+                    Versiunea activă a fost actualizată.
+                  </p>
+                ) : null}
+                {revertMutation.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(revertMutation.error)}
+                  </p>
+                ) : null}
+                {archiveMutation.isSuccess ? (
+                  <p className="feedback success" role="status">
+                    Document arhivat.
+                  </p>
+                ) : null}
+                {archiveMutation.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(archiveMutation.error)}
+                  </p>
+                ) : null}
               </form>
 
               <div className="ssm-history-list">

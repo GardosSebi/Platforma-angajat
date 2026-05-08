@@ -107,15 +107,26 @@ export interface UploadSsmDocumentResponse {
 export interface CreateSsmTrainingTypeRequest {
   code: string;
   name: string;
+  category?: SsmTrainingCategory;
+  legalMinDurationHours?: number;
   description?: string;
   recurrenceDays?: number;
   reminderDays?: number[];
 }
 
+export type SsmTrainingCategory =
+  | "INTRODUCTORY_GENERAL"
+  | "WORKPLACE"
+  | "PERIODIC"
+  | "SUPPLEMENTARY"
+  | "EMERGENCY_PSI";
+
 export interface SsmTrainingTypeItem {
   id: string;
   code: string;
   name: string;
+  category: SsmTrainingCategory;
+  legalMinDurationHours?: number | null;
   description?: string | null;
   recurrenceDays?: number | null;
   reminderDays: number[];
@@ -142,6 +153,12 @@ export interface CompleteSsmTestRequest {
 }
 
 export interface SignSsmTrainingPlanRequest {
+  role: "EMPLOYEE" | "RESPONSIBLE";
+  signatureData: string;
+}
+
+export interface SignSsmTrainingBatchRequest {
+  planIds: string[];
   role: "EMPLOYEE" | "RESPONSIBLE";
   signatureData: string;
 }
@@ -315,4 +332,59 @@ export interface SsmAccidentStats {
   openCases: number;
   overdueTasks: number;
   totalCases: number;
+}
+
+export type SsmMedicalControlResult = "FIT" | "FIT_CONDITIONAL" | "TEMPORARY_UNFIT" | "UNFIT";
+
+export interface CreateSsmMedicalControlTypeRequest {
+  code: string;
+  name: string;
+  jobPositionId?: string;
+  recurrenceDays?: number;
+  reminderDays?: number[];
+}
+
+export interface SsmMedicalControlTypeItem {
+  id: string;
+  code: string;
+  name: string;
+  jobPositionId?: string | null;
+  jobPositionName?: string | null;
+  recurrenceDays?: number | null;
+  reminderDays: number[];
+  active: boolean;
+}
+
+export interface CreateSsmMedicalControlRequest {
+  employeeId: string;
+  controlTypeId: string;
+  scheduledAt: string;
+  performedAt?: string;
+  result?: SsmMedicalControlResult;
+  recommendations?: string;
+  validityUntil?: string;
+}
+
+export interface SsmMedicalControlItem {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  controlTypeId: string;
+  controlTypeCode: string;
+  controlTypeName: string;
+  scheduledAt: string;
+  performedAt?: string | null;
+  result?: SsmMedicalControlResult | null;
+  recommendations?: string | null;
+  validityUntil?: string | null;
+  nextDueAt?: string | null;
+  aptitudeSheetName?: string | null;
+}
+
+export interface SsmMedicalReminderItem {
+  controlId: string;
+  employeeName: string;
+  controlTypeName: string;
+  nextDueAt: string;
+  daysUntilDue: number;
 }

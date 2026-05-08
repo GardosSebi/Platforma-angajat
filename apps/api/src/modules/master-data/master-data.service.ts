@@ -16,6 +16,13 @@ import { UpdatePlacementDto } from "./dto/update-placement.dto";
 import { CreateEmployeeGroupDto } from "./dto/create-group.dto";
 import { CreateSsmResponsibleDto } from "./dto/create-ssm-responsible.dto";
 
+type SsmTrainingCategoryCode =
+  | "INTRODUCTORY_GENERAL"
+  | "WORKPLACE"
+  | "PERIODIC"
+  | "SUPPLEMENTARY"
+  | "EMERGENCY_PSI";
+
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value || !value.trim()) return undefined;
   const d = new Date(value);
@@ -66,6 +73,105 @@ export class MasterDataService {
     private readonly encryption: DataEncryptionService,
     private readonly auditLog: AuditLogService
   ) {}
+
+  private async ensureTrainingType(
+    tenantId: string,
+    category: SsmTrainingCategoryCode
+  ) {
+    const defaults: Record<SsmTrainingCategoryCode, { code: string; name: string; recurrenceDays?: number; legalMinDurationHours?: number }> = {
+      INTRODUCTORY_GENERAL: {
+        code: "SSM-INTRO",
+        name: "Instruire introductiv-generală",
+        legalMinDurationHours: 8
+      },
+      WORKPLACE: {
+        code: "SSM-WORKPLACE",
+        name: "Instruire la locul de muncă"
+      },
+      PERIODIC: {
+        code: "SSM-PERIODIC",
+        name: "Instruire periodică",
+        recurrenceDays: 180
+      },
+      SUPPLEMENTARY: {
+        code: "SSM-SUPL",
+        name: "Instruire suplimentară",
+        legalMinDurationHours: 8
+      },
+      EMERGENCY_PSI: {
+        code: "PSI-EMERGENCY",
+        name: "Instruire PSI / situații de urgență",
+        recurrenceDays: 180
+      }
+    };
+    const def = defaults[category];
+    return this.prisma.ssmTrainingType.upsert({
+      where: {
+        tenantId_code: {
+          tenantId,
+          code: def.code
+        }
+      },
+      create: {
+        tenantId,
+        code: def.code,
+        name: def.name,
+        category,
+        recurrenceDays: def.recurrenceDays,
+        reminderDays: [30, 15, 7],
+        legalMinDurationHours: def.legalMinDurationHours
+      },
+      update: {
+        category,
+        recurrenceDays: def.recurrenceDays,
+        legalMinDurationHours: def.legalMinDurationHours,
+        active: true
+      }
+    });
+  }
+
+  private async autoAssignTrainingPlan(
+    tenantId: string,
+    actorUserId: string,
+    employeeId: string,
+    category: SsmTrainingCategoryCode,
+    reason: string
+  ) {
+    const type = await this.ensureTrainingType(tenantId, category);
+    const existingOpen = await this.prisma.ssmTrainingPlan.findFirst({
+      where: {
+        tenantId,
+        employeeId,
+        trainingTypeId: type.id,
+        status: { in: ["PENDING", "OVERDUE"] as const }
+      }
+    });
+    if (existingOpen) {
+      return;
+    }
+    const now = new Date();
+    const dueAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    await this.prisma.ssmTrainingPlan.create({
+      data: {
+        tenantId,
+        employeeId,
+        trainingTypeId: type.id,
+        scheduledAt: now,
+        dueAt,
+        materialTitle: reason,
+        createdBy: actorUserId
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId: actorUserId,
+      module: "SSM",
+      action: "TRAINING_AUTO_ASSIGNED",
+      entityType: "SsmTrainingPlan",
+      entityId: "-",
+      payload: { employeeId, category, reason }
+    });
+  }
 
   private maskCnp(stored: string | null, reveal: boolean): string | null {
     if (!stored) return null;
@@ -235,6 +341,20 @@ export class MasterDataService {
           createdByUserId: actorUserId
         }
       });
+      await this.autoAssignTrainingPlan(
+        tenantId,
+        actorUserId,
+        created.id,
+        "INTRODUCTORY_GENERAL",
+        "Flux automat la angajare nouă"
+      );
+      await this.autoAssignTrainingPlan(
+        tenantId,
+        actorUserId,
+        created.id,
+        "WORKPLACE",
+        "Flux automat admitere la locul de muncă"
+      );
       return created;
     } catch {
       throw new ConflictException("Employee email already exists for this tenant");
@@ -290,6 +410,13 @@ export class MasterDataService {
           createdByUserId: actorUserId
         }
       });
+      await this.autoAssignTrainingPlan(
+        tenantId,
+        actorUserId,
+        updated.id,
+        "SUPPLEMENTARY",
+        "Flux automat la schimbare loc de muncă/funcție"
+      );
     }
 
     return updated;
@@ -338,6 +465,13 @@ export class MasterDataService {
         createdByUserId: actorUserId
       }
     });
+    await this.autoAssignTrainingPlan(
+      tenantId,
+      actorUserId,
+      employeeId,
+      "SUPPLEMENTARY",
+      "Flux automat la schimbare loc de muncă/funcție"
+    );
 
     return updated;
   }

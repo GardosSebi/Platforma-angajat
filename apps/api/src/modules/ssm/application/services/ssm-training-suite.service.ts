@@ -8,7 +8,15 @@ import PDFDocument from "pdfkit";
 import JSZip from "jszip";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
-import { CompleteTestDto, CreateTrainingPlanDto, CreateTrainingTypeDto, SignPlanDto } from "../../api/dto/training-suite.dto";
+import { MailService } from "../../../../infrastructure/mail/mail.service";
+import {
+  CompleteTestDto,
+  CreateTrainingPlanDto,
+  CreateTrainingTypeDto,
+  GenerateCollectiveSheetDto,
+  SignPlanDto,
+  SignPlansBatchDto
+} from "../../api/dto/training-suite.dto";
 
 function parseDate(value: string): Date {
   const d = new Date(value);
@@ -23,11 +31,105 @@ function daysDiff(from: Date, to: Date): number {
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
+type MedicalControlForDossier = {
+  id: string;
+  scheduledAt: Date;
+  performedAt: Date | null;
+  result: string | null;
+  aptitudeSheetName: string | null;
+  controlType: {
+    name: string;
+  };
+};
+
+type PrismaWithMedicalControl = PrismaService & {
+  ssmMedicalControl: {
+    findMany(args: {
+      where: { tenantId: string; employeeId: string };
+      include: { controlType: { select: { name: true } } };
+      orderBy: { scheduledAt: "asc" | "desc" };
+    }): Promise<MedicalControlForDossier[]>;
+  };
+};
+
+type SsmTrainingCategoryCode =
+  | "INTRODUCTORY_GENERAL"
+  | "WORKPLACE"
+  | "PERIODIC"
+  | "SUPPLEMENTARY"
+  | "EMERGENCY_PSI";
+
+type PrismaWithTrainingTypeExtended = PrismaService & {
+  ssmTrainingType: {
+    create(args: {
+      data: {
+        tenantId: string;
+        code: string;
+        name: string;
+        category: SsmTrainingCategoryCode;
+        legalMinDurationHours?: number;
+        description?: string;
+        recurrenceDays?: number;
+        reminderDays: number[];
+      };
+    }): Promise<{ id: string; code: string }>;
+  };
+};
+
+type TrainingPlanForTest = {
+  id: string;
+  attempts: Array<{ id: string }>;
+  trainingType: {
+    legalMinDurationHours?: number | null;
+    name: string;
+  };
+};
+
+type PrismaWithTrainingPlanLegal = PrismaService & {
+  ssmTrainingPlan: {
+    findFirst(args: {
+      where: { id: string; tenantId: string };
+      include: {
+        trainingType: { select: { legalMinDurationHours: true; name: true } };
+        attempts: { orderBy: { startedAt: "asc" | "desc" }; take: number };
+      };
+    }): Promise<TrainingPlanForTest | null>;
+  };
+};
+
+type PrismaWithReminderDispatch = PrismaService & {
+  ssmTrainingReminderDispatch: {
+    findUnique(args: {
+      where: {
+        trainingPlanId_daysUntilDue_channel: {
+          trainingPlanId: string;
+          daysUntilDue: number;
+          channel: string;
+        };
+      };
+    }): Promise<{ id: string } | null>;
+    create(args: {
+      data: {
+        tenantId: string;
+        trainingPlanId: string;
+        daysUntilDue: number;
+        channel: string;
+      };
+    }): Promise<{ id: string }>;
+  };
+};
+
+const LEGAL_MIN_HOURS_BY_CATEGORY: Partial<Record<SsmTrainingCategoryCode, number>> = {
+  INTRODUCTORY_GENERAL: 8,
+  SUPPLEMENTARY: 8
+};
+
 @Injectable()
 export class SsmTrainingSuiteService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly mailService: MailService
   ) {}
 
   private async syncOverdue(tenantId: string) {
@@ -52,11 +154,20 @@ export class SsmTrainingSuiteService {
   }
 
   async createTrainingType(tenantId: string, actorId: string, dto: CreateTrainingTypeDto) {
-    const created = await this.prisma.ssmTrainingType.create({
+    const category = (dto.category ?? "PERIODIC") as SsmTrainingCategoryCode;
+    const legalMinimum = LEGAL_MIN_HOURS_BY_CATEGORY[category];
+    if (legalMinimum && (dto.legalMinDurationHours ?? legalMinimum) < legalMinimum) {
+      throw new BadRequestException(
+        `${category} requires at least ${legalMinimum} legal hours.`
+      );
+    }
+    const created = await (this.prisma as PrismaWithTrainingTypeExtended).ssmTrainingType.create({
       data: {
         tenantId,
         code: dto.code.trim().toUpperCase(),
         name: dto.name.trim(),
+        category,
+        legalMinDurationHours: dto.legalMinDurationHours ?? legalMinimum,
         description: dto.description?.trim(),
         recurrenceDays: dto.recurrenceDays,
         reminderDays: dto.reminderDays ?? [30, 15, 7]
@@ -117,6 +228,19 @@ export class SsmTrainingSuiteService {
       payload: { employeeId: created.employeeId, trainingTypeId: created.trainingTypeId }
     });
 
+    if (employee.email) {
+      await this.mailService.sendMail({
+        to: employee.email,
+        subject: `Instruire SSM alocată: ${type.name}`,
+        text: [
+          `Ai o instruire nouă alocată în platformă.`,
+          `Tip: ${type.name} (${type.code})`,
+          `Scadență: ${dueAt.toISOString()}`,
+          `Te rugăm să parcurgi materialul și să completezi testul final.`
+        ].join("\n")
+      });
+    }
+
     return created;
   }
 
@@ -164,9 +288,15 @@ export class SsmTrainingSuiteService {
   }
 
   async completeTest(tenantId: string, actorId: string, dto: CompleteTestDto) {
-    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+    const plan = await (this.prisma as PrismaWithTrainingPlanLegal).ssmTrainingPlan.findFirst({
       where: { id: dto.trainingPlanId, tenantId },
       include: {
+        trainingType: {
+          select: {
+            legalMinDurationHours: true,
+            name: true
+          }
+        },
         attempts: {
           orderBy: { startedAt: "desc" },
           take: 1
@@ -181,6 +311,14 @@ export class SsmTrainingSuiteService {
     }
     const latestAttempt = plan.attempts[0];
     const now = new Date();
+    if (dto.passed && plan.trainingType.legalMinDurationHours) {
+      const minimumSeconds = plan.trainingType.legalMinDurationHours * 60 * 60;
+      if (dto.durationSeconds < minimumSeconds) {
+        throw new BadRequestException(
+          `Durata minimă legală pentru ${plan.trainingType.name} este ${plan.trainingType.legalMinDurationHours} ore.`
+        );
+      }
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.ssmTrainingTestAttempt.update({
@@ -253,6 +391,30 @@ export class SsmTrainingSuiteService {
     return signature;
   }
 
+  async signPlansBatch(tenantId: string, actorId: string, dto: SignPlansBatchDto) {
+    const uniquePlanIds = Array.from(new Set(dto.planIds));
+    if (!uniquePlanIds.length) {
+      throw new BadRequestException("planIds is empty.");
+    }
+    let signedCount = 0;
+    for (const planId of uniquePlanIds) {
+      try {
+        await this.signTrainingPlan(tenantId, actorId, planId, {
+          role: dto.role,
+          signatureData: dto.signatureData
+        });
+        signedCount += 1;
+      } catch {
+        // continue with remaining plans
+      }
+    }
+    return {
+      requested: uniquePlanIds.length,
+      signed: signedCount,
+      skipped: uniquePlanIds.length - signedCount
+    };
+  }
+
   async listPlans(tenantId: string) {
     await this.syncOverdue(tenantId);
     const rows = await this.prisma.ssmTrainingPlan.findMany({
@@ -282,7 +444,7 @@ export class SsmTrainingSuiteService {
     };
   }
 
-  async remindersPreview(tenantId: string) {
+  private async trainingReminders(tenantId: string) {
     await this.syncOverdue(tenantId);
     const rows = await this.prisma.ssmTrainingPlan.findMany({
       where: {
@@ -290,23 +452,75 @@ export class SsmTrainingSuiteService {
         status: { in: [SsmTrainingPlanStatus.PENDING, SsmTrainingPlanStatus.OVERDUE] }
       },
       include: {
-        employee: { select: { fullName: true } },
+        employee: { select: { fullName: true, email: true } },
         trainingType: { select: { name: true } }
       }
     });
     const now = new Date();
-    const reminders = rows
+    return rows
       .map((row) => ({
         trainingPlanId: row.id,
         employeeName: row.employee.fullName,
+        employeeEmail: row.employee.email,
         trainingTypeName: row.trainingType.name,
         dueAt: row.dueAt,
         daysUntilDue: daysDiff(now, row.dueAt)
       }))
       .filter((item) => [30, 15, 7].includes(item.daysUntilDue) || item.daysUntilDue < 0)
       .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
+  }
 
-    return { reminders };
+  async remindersPreview(tenantId: string) {
+    const reminders = await this.trainingReminders(tenantId);
+    return {
+      reminders: reminders.map(({ employeeEmail: _ignored, ...item }) => item)
+    };
+  }
+
+  async dispatchReminders(tenantId: string, actorId: string) {
+    const reminders = await this.trainingReminders(tenantId);
+    const dispatchRepo = (this.prisma as PrismaWithReminderDispatch).ssmTrainingReminderDispatch;
+    let sent = 0;
+    for (const reminder of reminders) {
+      const alreadySent = await dispatchRepo.findUnique({
+        where: {
+          trainingPlanId_daysUntilDue_channel: {
+            trainingPlanId: reminder.trainingPlanId,
+            daysUntilDue: reminder.daysUntilDue,
+            channel: "email"
+          }
+        }
+      });
+      if (alreadySent || !reminder.employeeEmail) {
+        continue;
+      }
+      await this.mailService.sendMail({
+        to: reminder.employeeEmail,
+        subject: `Reminder instruire SSM: ${reminder.trainingTypeName}`,
+        text: reminder.daysUntilDue < 0
+          ? `Instruirea ${reminder.trainingTypeName} este restantă cu ${Math.abs(reminder.daysUntilDue)} zile.`
+          : `Instruirea ${reminder.trainingTypeName} expiră în ${reminder.daysUntilDue} zile.`
+      });
+      await dispatchRepo.create({
+        data: {
+          tenantId,
+          trainingPlanId: reminder.trainingPlanId,
+          daysUntilDue: reminder.daysUntilDue,
+          channel: "email"
+        }
+      });
+      sent += 1;
+    }
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "TRAINING_REMINDERS_DISPATCHED",
+      entityType: "SsmTrainingReminderDispatch",
+      entityId: "-",
+      payload: { sent }
+    });
+    return { sent };
   }
 
   async calendar(tenantId: string) {
@@ -411,6 +625,19 @@ export class SsmTrainingSuiteService {
       },
       orderBy: { updatedAt: "desc" }
     });
+    const medicalControls = await (this.prisma as PrismaWithMedicalControl).ssmMedicalControl.findMany({
+      where: { tenantId, employeeId },
+      include: {
+        controlType: {
+          select: {
+            name: true
+          }
+        }
+      },
+      orderBy: { scheduledAt: "desc" }
+    });
+    const riskExposureSheets = documents.filter((doc) => doc.type === "RISK_ASSESSMENT");
+    const eipDecisionCopies = documents.filter((doc) => doc.type === "DECISION");
 
     return {
       employee: {
@@ -436,7 +663,25 @@ export class SsmTrainingSuiteService {
           type: doc.type,
           fileName: doc.activeVersion?.fileName,
           updatedAt: doc.updatedAt
-        }))
+        })),
+      riskExposureSheets: riskExposureSheets.map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        fileName: doc.activeVersion?.fileName
+      })),
+      eipDecisionCopies: eipDecisionCopies.map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        fileName: doc.activeVersion?.fileName
+      })),
+      medicalControls: medicalControls.map((control: MedicalControlForDossier) => ({
+        id: control.id,
+        controlType: control.controlType.name,
+        scheduledAt: control.scheduledAt,
+        performedAt: control.performedAt,
+        result: control.result,
+        aptitudeSheetName: control.aptitudeSheetName
+      }))
     };
   }
 
@@ -511,6 +756,33 @@ export class SsmTrainingSuiteService {
       doc.end();
     });
 
+    return buffer;
+  }
+
+  async generateCollectiveSheetPdf(dto: GenerateCollectiveSheetDto) {
+    const createdAt = new Date();
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      const doc = new PDFDocument({ margin: 40, size: "A4" });
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      doc.fontSize(16).text("Fișă colectivă de instructaj", { align: "center" });
+      doc.moveDown(0.6);
+      doc.fontSize(12).text(`Tematică: ${dto.title}`);
+      doc.text(`Instructor: ${dto.trainerName ?? "-"}`);
+      doc.text(`Locație: ${dto.location ?? "-"}`);
+      doc.text(`Data: ${createdAt.toISOString()}`);
+      doc.moveDown();
+      doc.text("Participanți:");
+      dto.attendees.forEach((name, index) => {
+        doc.text(`${index + 1}. ${name}`);
+      });
+      doc.moveDown();
+      doc.fontSize(10).text("Document generat automat pentru vizitatori/colaboratori.");
+      doc.end();
+    });
     return buffer;
   }
 }

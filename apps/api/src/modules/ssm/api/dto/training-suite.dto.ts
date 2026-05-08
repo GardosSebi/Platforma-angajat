@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -10,6 +11,15 @@ import {
   Min,
   MinLength
 } from "class-validator";
+
+const SSM_TRAINING_CATEGORIES = [
+  "INTRODUCTORY_GENERAL",
+  "WORKPLACE",
+  "PERIODIC",
+  "SUPPLEMENTARY",
+  "EMERGENCY_PSI"
+] as const;
+type SsmTrainingCategoryCode = (typeof SSM_TRAINING_CATEGORIES)[number];
 
 export class CreateTrainingTypeDto {
   @IsString()
@@ -21,6 +31,16 @@ export class CreateTrainingTypeDto {
   @MinLength(3)
   @MaxLength(160)
   name!: string;
+
+  @IsOptional()
+  @IsIn(SSM_TRAINING_CATEGORIES)
+  category?: SsmTrainingCategoryCode;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  legalMinDurationHours?: number;
 
   @IsOptional()
   @IsString()
@@ -91,4 +111,39 @@ export class SignPlanDto {
   @IsString()
   @MinLength(5)
   signatureData!: string;
+}
+
+export class SignPlansBatchDto {
+  @IsArray()
+  @IsString({ each: true })
+  @MinLength(2, { each: true })
+  planIds!: string[];
+
+  @IsString()
+  role!: "EMPLOYEE" | "RESPONSIBLE";
+
+  @IsString()
+  @MinLength(5)
+  signatureData!: string;
+}
+
+export class GenerateCollectiveSheetDto {
+  @IsString()
+  @MinLength(3)
+  title!: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @MinLength(2, { each: true })
+  attendees!: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  trainerName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  location?: string;
 }

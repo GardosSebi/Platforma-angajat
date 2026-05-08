@@ -52,6 +52,14 @@ enum SsmTrainingPlanStatus {
   BLOCKED
 }
 
+enum SsmTrainingCategory {
+  INTRODUCTORY_GENERAL
+  WORKPLACE
+  PERIODIC
+  SUPPLEMENTARY
+  EMERGENCY_PSI
+}
+
 enum SsmEipMovementType {
   DISTRIBUTION
   RETURN
@@ -78,6 +86,13 @@ enum SsmAccidentCaseStatus {
   CLOSED
 }
 
+enum SsmMedicalControlResult {
+  FIT
+  FIT_CONDITIONAL
+  TEMPORARY_UNFIT
+  UNFIT
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -100,12 +115,15 @@ model Tenant {
   ssmTrainingPlans           SsmTrainingPlan[]
   ssmTrainingTestAttempts    SsmTrainingTestAttempt[]
   ssmTrainingSignatures      SsmTrainingSignature[]
+  ssmTrainingReminderDispatches SsmTrainingReminderDispatch[]
   ssmEipTypes                SsmEipType[]
   ssmEipNorms                SsmEipNorm[]
   ssmEipStocks               SsmEipStock[]
   ssmEipMovements            SsmEipMovement[]
   ssmAccidentCases           SsmAccidentCase[]
   ssmAccidentTasks           SsmAccidentTask[]
+  ssmMedicalControlTypes     SsmMedicalControlType[]
+  ssmMedicalControls         SsmMedicalControl[]
 }
 
 model User {
@@ -182,6 +200,7 @@ model JobPosition {
   employees                  Employee[]
   employeePlacementHistories EmployeePlacementHistory[]
   ssmEipNorms                SsmEipNorm[]
+  ssmMedicalControlTypes     SsmMedicalControlType[]
 
   @@unique([tenantId, code])
   @@index([tenantId, departmentId])
@@ -212,6 +231,7 @@ model Employee {
   ssmTrainingPlans       SsmTrainingPlan[]
   ssmEipMovements        SsmEipMovement[]
   ssmAccidentCases       SsmAccidentCase[]
+  ssmMedicalControls     SsmMedicalControl[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
@@ -361,6 +381,8 @@ model SsmTrainingType {
   tenantId       String
   code           String
   name           String
+  category       SsmTrainingCategory @default(PERIODIC)
+  legalMinDurationHours Int?
   description    String?
   recurrenceDays Int?
   reminderDays   Int[]    @default([30, 15, 7])
@@ -373,6 +395,21 @@ model SsmTrainingType {
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
+}
+
+model SsmTrainingReminderDispatch {
+  id             String   @id @default(cuid())
+  tenantId       String
+  trainingPlanId String
+  daysUntilDue   Int
+  channel        String
+  sentAt         DateTime @default(now())
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  trainingPlan SsmTrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingPlanId, daysUntilDue, channel])
+  @@index([tenantId, sentAt])
 }
 
 model SsmTrainingPlan {
@@ -399,6 +436,7 @@ model SsmTrainingPlan {
   trainingType SsmTrainingType         @relation(fields: [trainingTypeId], references: [id], onDelete: Cascade)
   attempts     SsmTrainingTestAttempt[]
   signature    SsmTrainingSignature?
+  reminderDispatches SsmTrainingReminderDispatch[]
 
   @@index([tenantId, employeeId, status])
   @@index([tenantId, dueAt, status])
@@ -564,6 +602,56 @@ model SsmAccidentTask {
 
   @@index([tenantId, dueAt, completedAt])
   @@index([tenantId, accidentCaseId])
+}
+
+model SsmMedicalControlType {
+  id             String   @id @default(cuid())
+  tenantId       String
+  jobPositionId  String?
+  code           String
+  name           String
+  recurrenceDays Int?
+  reminderDays   Int[]    @default([30, 15, 7])
+  active         Boolean  @default(true)
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobPosition JobPosition?   @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+  controls    SsmMedicalControl[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+  @@index([tenantId, jobPositionId])
+}
+
+model SsmMedicalControl {
+  id                   String                  @id @default(cuid())
+  tenantId             String
+  employeeId           String
+  controlTypeId        String
+  scheduledAt          DateTime
+  performedAt          DateTime?
+  result               SsmMedicalControlResult?
+  recommendations      String?
+  validityUntil        DateTime?
+  nextDueAt            DateTime?
+  aptitudeSheetPath    String?
+  aptitudeSheetName    String?
+  aptitudeSheetMime    String?
+  aptitudeSheetSize    Int?
+  createdBy            String
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee    Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  controlType SsmMedicalControlType @relation(fields: [controlTypeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId, scheduledAt])
+  @@index([tenantId, nextDueAt])
+  @@index([tenantId, result])
 }
 
 model AuditLog {

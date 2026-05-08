@@ -8,6 +8,8 @@ import type {
   CreateSsmEipMovementRequest,
   CreateSsmEipNormRequest,
   CreateSsmEipTypeRequest,
+  CreateSsmMedicalControlRequest,
+  CreateSsmMedicalControlTypeRequest,
   CreateSsmTrainingPlanRequest,
   CreateSsmTrainingTypeRequest,
   CreateSsmDocumentRequest,
@@ -18,12 +20,16 @@ import type {
   SsmEipNormItem,
   SsmEipStockGapItem,
   SsmEipTypeItem,
+  SsmMedicalControlItem,
+  SsmMedicalControlTypeItem,
+  SsmMedicalReminderItem,
   SsmAccidentCaseItem,
   SsmAccidentStats,
   SsmReminderItem,
   SsmDocumentControlFoldersResponse,
   SsmDocumentHistoryResponse,
   SsmTrainingPlanItem,
+  SignSsmTrainingBatchRequest,
   SsmTrainingTypeItem,
   UploadSsmDocumentResponse
 } from "@repo/shared-types/ssm";
@@ -122,8 +128,19 @@ export const ssmApi = {
       body: JSON.stringify({ role, signatureData })
     });
   },
+  signPlansBatch(payload: SignSsmTrainingBatchRequest) {
+    return httpClient<{ requested: number; signed: number; skipped: number }>("/ssm/training-suite/plans/sign-batch", {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
   listReminders() {
     return httpClient<{ reminders: SsmReminderItem[] }>("/ssm/training-suite/reminders");
+  },
+  dispatchTrainingReminders() {
+    return httpClient<{ sent: number }>("/ssm/training-suite/reminders/dispatch", {
+      method: "POST"
+    });
   },
   listCalendar() {
     return httpClient<{ events: Array<{ id: string; title: string; scheduledAt: string; dueAt: string; status: string }> }>(
@@ -137,10 +154,23 @@ export const ssmApi = {
     return httpClient<{
       trainings: Array<{ id: string; type: string; dueAt: string; status: string; score?: number | null }>;
       documents: Array<{ id: string; title: string; type: string; fileName?: string }>;
+      riskExposureSheets?: Array<{ id: string; title: string; fileName?: string }>;
+      eipDecisionCopies?: Array<{ id: string; title: string; fileName?: string }>;
+      medicalControls?: Array<{
+        id: string;
+        controlType: string;
+        scheduledAt: string;
+        performedAt?: string | null;
+        result?: string | null;
+        aptitudeSheetName?: string | null;
+      }>;
     }>(`/ssm/training-suite/employees/${employeeId}/digital-file`);
   },
   getIndividualSheetUrl(trainingPlanId: string) {
     return `/ssm/training-suite/plans/${trainingPlanId}/individual-sheet.pdf`;
+  },
+  getCollectiveSheetUrl() {
+    return `/ssm/training-suite/collective-sheet.pdf`;
   },
   getDigitalFileZipUrl(employeeId: string) {
     return `/ssm/training-suite/employees/${employeeId}/digital-file.zip`;
@@ -209,5 +239,36 @@ export const ssmApi = {
   },
   getAccidentReportUrl(caseId: string) {
     return `/ssm/accidents/${caseId}/report.pdf`;
+  },
+  listMedicalControlTypes() {
+    return httpClient<SsmMedicalControlTypeItem[]>("/ssm/medical/control-types");
+  },
+  createMedicalControlType(payload: CreateSsmMedicalControlTypeRequest) {
+    return httpClient<SsmMedicalControlTypeItem>("/ssm/medical/control-types", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  listMedicalControls() {
+    return httpClient<{ items: SsmMedicalControlItem[] }>("/ssm/medical/controls");
+  },
+  createMedicalControl(payload: CreateSsmMedicalControlRequest, aptitudeSheet?: File) {
+    const body = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") {
+        return;
+      }
+      body.append(key, String(value));
+    });
+    if (aptitudeSheet) {
+      body.append("aptitudeSheet", aptitudeSheet);
+    }
+    return httpClient<{ id: string }>("/ssm/medical/controls", {
+      method: "POST",
+      body
+    });
+  },
+  medicalReminders() {
+    return httpClient<{ reminders: SsmMedicalReminderItem[] }>("/ssm/medical/reminders");
   }
 };

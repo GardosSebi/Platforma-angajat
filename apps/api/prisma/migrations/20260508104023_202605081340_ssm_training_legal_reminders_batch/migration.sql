@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "SsmTrainingReminderDispatch_trainingPlanId_daysUntilDue_channel" RENAME TO "SsmTrainingReminderDispatch_trainingPlanId_daysUntilDue_cha_key";

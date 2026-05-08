@@ -4,6 +4,7 @@ import { useAuthSession } from "../shared/auth/use-auth-session";
 
 const nav = [
   { to: "/ssm", label: "SSM" },
+  { to: "/master-data", label: "Master Data" },
   { to: "/chatbot", label: "Chatbot" },
   { to: "/surveys", label: "Surveys" },
   { to: "/ticketing", label: "Ticketing" }

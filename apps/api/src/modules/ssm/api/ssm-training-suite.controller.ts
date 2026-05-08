@@ -17,7 +17,14 @@ import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { Permission } from "../../../common/constants/permissions";
 import { PermissionsGuard } from "../../../common/guards/permissions.guard";
 import { SsmTrainingSuiteService } from "../application/services/ssm-training-suite.service";
-import { CompleteTestDto, CreateTrainingPlanDto, CreateTrainingTypeDto, SignPlanDto } from "./dto/training-suite.dto";
+import {
+  CompleteTestDto,
+  CreateTrainingPlanDto,
+  CreateTrainingTypeDto,
+  GenerateCollectiveSheetDto,
+  SignPlanDto,
+  SignPlansBatchDto
+} from "./dto/training-suite.dto";
 
 @Controller("ssm/training-suite")
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
@@ -81,6 +88,12 @@ export class SsmTrainingSuiteController {
     return this.trainingSuite.signTrainingPlan(tenantId, user.sub, id, dto);
   }
 
+  @Patch("plans/sign-batch")
+  @RequirePermissions(Permission.SSM_TRAINING_APPROVE)
+  signPlansBatch(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: SignPlansBatchDto) {
+    return this.trainingSuite.signPlansBatch(tenantId, user.sub, dto);
+  }
+
   @Get("calendar")
   @RequirePermissions(Permission.SSM_TRAINING_VIEW)
   calendar(@TenantId() tenantId: string) {
@@ -91,6 +104,12 @@ export class SsmTrainingSuiteController {
   @RequirePermissions(Permission.SSM_TRAINING_VIEW)
   reminders(@TenantId() tenantId: string) {
     return this.trainingSuite.remindersPreview(tenantId);
+  }
+
+  @Post("reminders/dispatch")
+  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  dispatchReminders(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
+    return this.trainingSuite.dispatchReminders(tenantId, user.sub);
   }
 
   @Get("compliance")
@@ -122,6 +141,16 @@ export class SsmTrainingSuiteController {
     const buffer = await this.trainingSuite.generateIndividualSheetPdf(tenantId, id);
     return new StreamableFile(buffer, {
       disposition: `attachment; filename=\"training-sheet-${id}.pdf\"`
+    });
+  }
+
+  @Post("collective-sheet.pdf")
+  @RequirePermissions(Permission.SSM_TRAINING_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async collectiveSheet(@Body() dto: GenerateCollectiveSheetDto) {
+    const buffer = await this.trainingSuite.generateCollectiveSheetPdf(dto);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename=\"collective-sheet.pdf\"`
     });
   }
 }
