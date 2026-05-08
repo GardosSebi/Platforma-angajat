@@ -44,10 +44,6 @@ export function TrainingAssignForm() {
             value={form.employeeId}
             onChange={(event) => setForm((current) => ({ ...current, employeeId: event.target.value }))}
           />
-          <p className="field-hint">
-            Use a real employee ID for your tenant. After <code>pnpm --filter @apps/api prisma:seed</code>, demo ID is{" "}
-            <code>{DEMO_EMPLOYEE_ID}</code> on <code>e01</code>.
-          </p>
         </div>
         <div className="field">
           <label htmlFor="training-code">Training code</label>

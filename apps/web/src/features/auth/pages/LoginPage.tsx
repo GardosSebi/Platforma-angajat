@@ -39,14 +39,6 @@ export function LoginPage() {
             <p className="login-sub">Employee Platform — use your tenant, email, and password.</p>
           </div>
         </div>
-        <p className="login-dev-hint">
-          The API must be on <strong>port 3000</strong>. Run <code>pnpm dev</code> or <code>pnpm --filter @apps/api dev</code>.
-          This page calls <code>{getApiBaseUrl()}</code>. Quick check: open{" "}
-          <a href="http://localhost:3000/api/v1/health/live" target="_blank" rel="noreferrer">
-            health/live
-          </a>{" "}
-          (should show JSON). Do not set <code>VITE_API_URL</code> to port <code>5173</code>.
-        </p>
         <form onSubmit={onSubmit} className="form-stack">
           <div className="field">
             <label htmlFor="tenant-id">Tenant ID</label>
@@ -90,10 +82,6 @@ export function LoginPage() {
             {pending ? "Signing in…" : "Sign in"}
           </button>
         </form>
-        <p className="login-hint">
-          After seed: tenant <code>e01</code>, <code>admin@company.local</code>, password from <code>SEED_ADMIN_PASSWORD</code>{" "}
-          (default <code>ChangeMe123!</code>).
-        </p>
         <p className="login-back">
           <Link to="/ssm">Back to app</Link>
         </p>

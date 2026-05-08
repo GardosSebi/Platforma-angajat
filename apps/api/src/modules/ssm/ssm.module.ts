@@ -1,16 +1,28 @@
 import { Module } from "@nestjs/common";
 import { PermissionsGuard } from "../../common/guards/permissions.guard";
 import { AssignTrainingUseCase } from "./application/use-cases/assign-training.use-case";
+import { SsmDocumentsService } from "./application/services/ssm-documents.service";
+import { SsmTrainingSuiteService } from "./application/services/ssm-training-suite.service";
+import { SsmEipService } from "./application/services/ssm-eip.service";
+import { SsmAccidentsService } from "./application/services/ssm-accidents.service";
 import { SsmController } from "./api/ssm.controller";
+import { SsmDocumentsController } from "./api/ssm-documents.controller";
+import { SsmTrainingSuiteController } from "./api/ssm-training-suite.controller";
+import { SsmEipController } from "./api/ssm-eip.controller";
+import { SsmAccidentsController } from "./api/ssm-accidents.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
 import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-training.repository";
 import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.client";
 
 @Module({
-  controllers: [SsmController],
+  controllers: [SsmController, SsmDocumentsController, SsmTrainingSuiteController, SsmEipController, SsmAccidentsController],
   providers: [
     PermissionsGuard,
     AssignTrainingUseCase,
+    SsmDocumentsService,
+    SsmTrainingSuiteService,
+    SsmEipService,
+    SsmAccidentsService,
     SapServiceLayerClient,
     {
       provide: SSM_TRAINING_REPOSITORY,

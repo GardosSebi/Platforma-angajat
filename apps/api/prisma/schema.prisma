@@ -21,6 +21,63 @@ enum SsmResponsibleType {
   EXTERNAL_SERVICE
 }
 
+enum SsmDocumentType {
+  IPSSM
+  RISK_ASSESSMENT
+  PPP
+  THEMATIC
+  DECISION
+  PSI
+  REGISTER
+  OTHER
+}
+
+enum SsmDocumentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum SsmDocumentTargetType {
+  JOB_POSITION
+  DEPARTMENT
+  WORKSITE
+  ENTITY
+  ALL
+}
+
+enum SsmTrainingPlanStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+  BLOCKED
+}
+
+enum SsmEipMovementType {
+  DISTRIBUTION
+  RETURN
+  SCRAP
+}
+
+enum SsmAccidentType {
+  ACCIDENT
+  INCIDENT
+  OCCUPATIONAL_DISEASE
+}
+
+enum SsmAccidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SsmAccidentCaseStatus {
+  OPEN
+  IN_RESEARCH
+  MEASURES_DEFINED
+  CLOSED
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -37,6 +94,18 @@ model Tenant {
   employeePlacementHistories EmployeePlacementHistory[]
   employeeGroups             EmployeeGroup[]
   ssmResponsibles            SsmResponsible[]
+  ssmDocuments               SsmDocument[]
+  ssmDocumentVersions        SsmDocumentVersion[]
+  ssmTrainingTypes           SsmTrainingType[]
+  ssmTrainingPlans           SsmTrainingPlan[]
+  ssmTrainingTestAttempts    SsmTrainingTestAttempt[]
+  ssmTrainingSignatures      SsmTrainingSignature[]
+  ssmEipTypes                SsmEipType[]
+  ssmEipNorms                SsmEipNorm[]
+  ssmEipStocks               SsmEipStock[]
+  ssmEipMovements            SsmEipMovement[]
+  ssmAccidentCases           SsmAccidentCase[]
+  ssmAccidentTasks           SsmAccidentTask[]
 }
 
 model User {
@@ -112,6 +181,7 @@ model JobPosition {
   department                 Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   employees                  Employee[]
   employeePlacementHistories EmployeePlacementHistory[]
+  ssmEipNorms                SsmEipNorm[]
 
   @@unique([tenantId, code])
   @@index([tenantId, departmentId])
@@ -139,6 +209,9 @@ model Employee {
   placementHistory       EmployeePlacementHistory[]
   groupMembers           EmployeeGroupMember[]
   ssmTrainingAssignments SsmTrainingAssignment[]
+  ssmTrainingPlans       SsmTrainingPlan[]
+  ssmEipMovements        SsmEipMovement[]
+  ssmAccidentCases       SsmAccidentCase[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
@@ -231,6 +304,266 @@ model SsmTrainingAssignment {
 
   @@index([tenantId, employeeId])
   @@index([tenantId, trainingCode])
+}
+
+model SsmDocument {
+  id              String                @id @default(cuid())
+  tenantId        String
+  title           String
+  type            SsmDocumentType
+  entityName      String?
+  departmentName  String?
+  jobPositionName String?
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  targetType      SsmDocumentTargetType
+  targetRefId     String?
+  targetLabel     String?
+  status          SsmDocumentStatus     @default(ACTIVE)
+  isControlFolder Boolean               @default(false)
+  activeVersionId String?
+  createdBy       String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions      SsmDocumentVersion[] @relation("DocumentVersions")
+  activeVersion SsmDocumentVersion?  @relation("ActiveDocumentVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, type, status])
+  @@index([tenantId, targetType, status])
+  @@index([tenantId, isControlFolder, status])
+}
+
+model SsmDocumentVersion {
+  id            String   @id @default(cuid())
+  tenantId      String
+  documentId    String
+  versionNumber Int
+  fileName      String
+  mimeType      String
+  fileSize      Int
+  storagePath   String
+  changeNote    String?
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document           SsmDocument   @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Cascade)
+  activeForDocuments SsmDocument[] @relation("ActiveDocumentVersion")
+
+  @@unique([documentId, versionNumber])
+  @@index([tenantId, documentId, createdAt])
+}
+
+model SsmTrainingType {
+  id             String   @id @default(cuid())
+  tenantId       String
+  code           String
+  name           String
+  description    String?
+  recurrenceDays Int?
+  reminderDays   Int[]    @default([30, 15, 7])
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plans  SsmTrainingPlan[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
+model SsmTrainingPlan {
+  id                  String                @id @default(cuid())
+  tenantId            String
+  employeeId          String
+  trainingTypeId      String
+  materialTitle       String?
+  materialUrl         String?
+  materialCompletedAt DateTime?
+  scheduledAt         DateTime
+  dueAt               DateTime
+  completedAt         DateTime?
+  score               Float?
+  durationMinutes     Int?
+  status              SsmTrainingPlanStatus @default(PENDING)
+  blockedAdmission    Boolean               @default(false)
+  createdBy           String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee     Employee                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  trainingType SsmTrainingType         @relation(fields: [trainingTypeId], references: [id], onDelete: Cascade)
+  attempts     SsmTrainingTestAttempt[]
+  signature    SsmTrainingSignature?
+
+  @@index([tenantId, employeeId, status])
+  @@index([tenantId, dueAt, status])
+  @@index([tenantId, blockedAdmission])
+}
+
+model SsmTrainingTestAttempt {
+  id              String   @id @default(cuid())
+  tenantId        String
+  trainingPlanId  String
+  startedAt       DateTime @default(now())
+  finishedAt      DateTime?
+  score           Float?
+  durationSeconds Int?
+  passed          Boolean?
+  answersJson     Json?
+  createdAt       DateTime @default(now())
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  trainingPlan SsmTrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, trainingPlanId, startedAt])
+}
+
+model SsmTrainingSignature {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  trainingPlanId         String   @unique
+  employeeSignature      String?
+  responsibleSignature   String?
+  employeeSignedAt       DateTime?
+  responsibleSignedAt    DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  trainingPlan SsmTrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, trainingPlanId])
+}
+
+model SsmEipType {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  code               String
+  name               String
+  defaultLifetimeDays Int?
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  norms  SsmEipNorm[]
+  stocks SsmEipStock[]
+  moves  SsmEipMovement[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
+model SsmEipNorm {
+  id                String   @id @default(cuid())
+  tenantId          String
+  jobPositionId     String
+  eipTypeId         String
+  requiredQuantity  Int
+  lifetimeDays      Int
+  replacementRule   String?
+  createdBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobPosition JobPosition @relation(fields: [jobPositionId], references: [id], onDelete: Cascade)
+  eipType     SsmEipType  @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([jobPositionId, eipTypeId])
+  @@index([tenantId, jobPositionId])
+}
+
+model SsmEipStock {
+  id               String   @id @default(cuid())
+  tenantId         String
+  eipTypeId        String
+  quantityOnHand   Int      @default(0)
+  minimumThreshold Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eipType SsmEipType @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, eipTypeId])
+  @@index([tenantId, quantityOnHand])
+}
+
+model SsmEipMovement {
+  id                String             @id @default(cuid())
+  tenantId          String
+  employeeId        String
+  eipTypeId         String
+  movementType      SsmEipMovementType
+  quantity          Int
+  movementDate      DateTime           @default(now())
+  replacementDueAt  DateTime?
+  signatureData     String?
+  signedAt          DateTime?
+  notes             String?
+  createdBy         String
+  createdAt         DateTime           @default(now())
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  eipType  SsmEipType @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId, movementDate])
+  @@index([tenantId, replacementDueAt])
+  @@index([tenantId, movementType])
+}
+
+model SsmAccidentCase {
+  id                 String                @id @default(cuid())
+  tenantId           String
+  employeeId         String?
+  type               SsmAccidentType
+  severity           SsmAccidentSeverity
+  status             SsmAccidentCaseStatus @default(OPEN)
+  title              String
+  occurredAt         DateTime
+  location           String?
+  description        String
+  conclusions        String?
+  correctiveMeasures String?
+  legalDaysDeadline  Int                   @default(30)
+  dueAt              DateTime
+  closedAt           DateTime?
+  createdBy          String
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  tasks    SsmAccidentTask[]
+
+  @@index([tenantId, status, dueAt])
+  @@index([tenantId, type, occurredAt])
+}
+
+model SsmAccidentTask {
+  id             String   @id @default(cuid())
+  tenantId       String
+  accidentCaseId String
+  title          String
+  assignedTo     String?
+  dueAt          DateTime
+  completedAt    DateTime?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accidentCase SsmAccidentCase @relation(fields: [accidentCaseId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, dueAt, completedAt])
+  @@index([tenantId, accidentCaseId])
 }
 
 model AuditLog {

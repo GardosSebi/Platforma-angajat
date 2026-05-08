@@ -31,10 +31,12 @@
     "class-transformer": "latest",
     "class-validator": "latest",
     "dotenv": "latest",
+    "jszip": "^3.10.1",
     "multer": "latest",
     "nodemailer": "latest",
     "passport": "latest",
     "passport-jwt": "latest",
+    "pdfkit": "^0.18.0",
     "reflect-metadata": "latest",
     "rxjs": "latest"
   },
@@ -46,6 +48,7 @@
     "@types/node": "latest",
     "@types/nodemailer": "latest",
     "@types/passport-jwt": "latest",
+    "@types/pdfkit": "^0.17.6",
     "prisma": "^6.18.0",
     "ts-node": "latest",
     "typescript": "^5.6.3"
