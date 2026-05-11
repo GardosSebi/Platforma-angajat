@@ -7,8 +7,22 @@ import { SsmTrainingSuiteManager } from "../components/SsmTrainingSuiteManager";
 import { SsmEipManager } from "../components/SsmEipManager";
 import { SsmAccidentsManager } from "../components/SsmAccidentsManager";
 import { SsmMedicalManager } from "../components/SsmMedicalManager";
+import { SsmRiskManager } from "../components/SsmRiskManager";
+import { SsmPsiManager } from "../components/SsmPsiManager";
+import { SsmComplianceDashboardManager } from "../components/SsmComplianceDashboardManager";
+import { SsmReportsManager } from "../components/SsmReportsManager";
 
-type SsmSectionId = "quick" | "documents" | "training" | "eip" | "accidents" | "medical";
+type SsmSectionId =
+  | "quick"
+  | "documents"
+  | "training"
+  | "eip"
+  | "accidents"
+  | "medical"
+  | "risk"
+  | "psi"
+  | "compliance"
+  | "reports";
 
 const SSM_SECTIONS: Array<{
   id: SsmSectionId;
@@ -51,6 +65,30 @@ const SSM_SECTIONS: Array<{
     title: "Medicina muncii",
     caption: "Aptitudini, fișe, reminder",
     description: "Configurează tipuri de controale medicale, rezultate și următoarele scadențe."
+  },
+  {
+    id: "risk",
+    title: "Evaluări risc + PPP",
+    caption: "Factori, nivel risc, măsuri",
+    description: "Versionează evaluări pe post, loc de muncă sau departament și păstrează motivul actualizării."
+  },
+  {
+    id: "psi",
+    title: "PSI / urgențe",
+    caption: "Documentație, echipamente, instruiri",
+    description: "Urmărește documentația PSI pe punct de lucru, scadențele echipamentelor și responsabilii."
+  },
+  {
+    id: "compliance",
+    title: "Calendar + conformitate",
+    caption: "KPI, status, restanțe",
+    description: "Calendar unificat și dashboard cu breakdown, top neconformități și drill-down restanțe."
+  },
+  {
+    id: "reports",
+    title: "Rapoarte & export",
+    caption: "PDF, Excel, inspector",
+    description: "Rapoarte pentru instruiri, EIP, medicina muncii și documente/versionare."
   }
 ];
 
@@ -74,6 +112,14 @@ export function SsmDashboardPage() {
         return <SsmAccidentsManager />;
       case "medical":
         return <SsmMedicalManager />;
+      case "risk":
+        return <SsmRiskManager />;
+      case "psi":
+        return <SsmPsiManager />;
+      case "compliance":
+        return <SsmComplianceDashboardManager />;
+      case "reports":
+        return <SsmReportsManager />;
       case "quick":
       default:
         return <TrainingAssignForm />;

@@ -229,7 +229,8 @@ button {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--color-border);
@@ -239,13 +240,21 @@ button {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
+.field textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-family: inherit;
+}
+
 .field input:hover,
-.field select:hover {
+.field select:hover,
+.field textarea:hover {
   border-color: #cbd5e1;
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: none;
   border-color: var(--color-primary);
   background: #fff;
@@ -496,6 +505,266 @@ button {
   min-height: 100%;
 }
 
+.ssm-module-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+  gap: 1rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+}
+
+.ssm-hero-card {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(255, 255, 255, 0.95));
+  border: 1px solid rgba(15, 118, 110, 0.18);
+}
+
+.ssm-hero-card .card-title {
+  margin-bottom: 0.35rem;
+}
+
+.ssm-hero-lead {
+  margin: 0;
+  color: var(--color-muted);
+  max-width: 72ch;
+}
+
+.ssm-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.ssm-stat-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 0.85rem 0.95rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.ssm-stat-card span {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ssm-stat-card strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.45rem;
+  letter-spacing: -0.04em;
+}
+
+.ssm-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.ssm-card-header .card-title {
+  margin-bottom: 0.25rem;
+}
+
+.ssm-card-header .field-hint {
+  margin: 0;
+}
+
+.ssm-card-eyebrow {
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ssm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.ssm-form-grid .field.wide {
+  grid-column: 1 / -1;
+}
+
+.ssm-doc-items {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ssm-doc-item {
+  width: 100%;
+  text-align: left;
+  display: block;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+button.ssm-doc-item {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+button.ssm-doc-item:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
+}
+
+.ssm-doc-item.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.08);
+}
+
+.ssm-doc-item strong {
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.ssm-doc-item span {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.ssm-badge-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.65rem;
+}
+
+.ssm-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: #fff;
+  padding: 0.25rem 0.55rem;
+  color: var(--color-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.ssm-chip.good {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-color: #a7f3d0;
+}
+
+.ssm-chip.warn {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.ssm-chip.bad {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-color: #fecaca;
+}
+
+.ssm-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: #e2e8f0;
+  margin-top: 0.6rem;
+}
+
+.ssm-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+}
+
+.ssm-report-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.5fr);
+  gap: 1rem;
+}
+
+.ssm-reports-section {
+  overflow-x: hidden;
+}
+
+.ssm-reports-section .ssm-reports-hero {
+  grid-template-columns: 1fr;
+}
+
+.ssm-reports-section .ssm-summary-strip {
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+}
+
+.ssm-reports-section .ssm-stat-card strong {
+  font-size: 1.12rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.ssm-report-preview {
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.ssm-report-row {
+  padding: 0.95rem;
+  border-color: #cbd5e1;
+}
+
+.ssm-report-row > strong {
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.ssm-report-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.ssm-report-field {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0.5rem 0.6rem;
+  min-width: 0;
+}
+
+.ssm-report-field span {
+  display: block;
+  margin: 0 0 0.15rem;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ssm-report-field strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .ssm-filters {
   display: grid;
   grid-template-columns: repeat(2, minmax(150px, 1fr));
@@ -701,6 +970,16 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .ssm-module-hero,
+  .ssm-report-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ssm-summary-strip,
+  .ssm-reports-section .ssm-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ssm-doc-row {
     grid-template-columns: 1fr;
   }
@@ -708,6 +987,13 @@ button {
 
 @media (max-width: 620px) {
   .ssm-overview-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .ssm-summary-strip,
+  .ssm-reports-section .ssm-summary-strip,
+  .ssm-form-grid,
+  .ssm-report-fields {
     grid-template-columns: 1fr;
   }
 }

@@ -23,7 +23,7 @@ CREATE TABLE "SsmTrainingReminderDispatch" (
   CONSTRAINT "SsmTrainingReminderDispatch_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "SsmTrainingReminderDispatch_trainingPlanId_daysUntilDue_channel_key"
+CREATE UNIQUE INDEX "SsmTrainingReminderDispatch_trainingPlanId_daysUntilDue_cha_key"
 ON "SsmTrainingReminderDispatch"("trainingPlanId", "daysUntilDue", "channel");
 CREATE INDEX "SsmTrainingReminderDispatch_tenantId_sentAt_idx"
 ON "SsmTrainingReminderDispatch"("tenantId", "sentAt");

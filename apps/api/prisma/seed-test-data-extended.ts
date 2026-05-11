@@ -35,6 +35,28 @@ const MEDICAL_CONTROL_COUNT = envInt("TEST_SEED_MEDICAL_CONTROL_COUNT", 50);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+type ExtendedSeedClient = {
+  ssmRiskAssessment: {
+    upsert(args: unknown): Promise<{ id: string }>;
+    update(args: unknown): Promise<unknown>;
+  };
+  ssmRiskAssessmentVersion: {
+    upsert(args: unknown): Promise<{ id: string }>;
+  };
+  ssmPsiEquipment: {
+    upsert(args: unknown): Promise<{ id: string }>;
+  };
+  ssmPsiEquipmentVerification: {
+    upsert(args: unknown): Promise<unknown>;
+  };
+  ssmPsiTrainingRecord: {
+    upsert(args: unknown): Promise<unknown>;
+  };
+  ssmPsiResponsible: {
+    upsert(args: unknown): Promise<unknown>;
+  };
+};
+
 async function ensureEmployee(id: string, fullName: string, email: string, refs: { worksiteId?: string; departmentId?: string; jobPositionId?: string }) {
   return prisma.employee.upsert({
     where: { id },
@@ -61,6 +83,7 @@ async function ensureEmployee(id: string, fullName: string, email: string, refs:
 }
 
 async function main() {
+  const prismaExtended = prisma as unknown as PrismaClient & ExtendedSeedClient;
   const tenant = await prisma.tenant.findUnique({ where: { id: TENANT_ID } });
   if (!tenant) {
     throw new Error(`Tenant ${TENANT_ID} not found. Run prisma seed first.`);
@@ -558,6 +581,224 @@ async function main() {
       }
     });
   }
+
+  const riskAssessment = await prismaExtended.ssmRiskAssessment.upsert({
+    where: { id: "seed-ext-risk-op-linie" },
+    update: {
+      tenantId: TENANT_ID,
+      title: "Evaluare risc Operator linie + PPP",
+      targetType: "JOB_POSITION",
+      jobPositionId: jobOperator.id,
+      worksiteId: null,
+      departmentId: null,
+      createdBy: CREATED_BY
+    },
+    create: {
+      id: "seed-ext-risk-op-linie",
+      tenantId: TENANT_ID,
+      title: "Evaluare risc Operator linie + PPP",
+      targetType: "JOB_POSITION",
+      jobPositionId: jobOperator.id,
+      createdBy: CREATED_BY
+    }
+  });
+  const riskVersion = await prismaExtended.ssmRiskAssessmentVersion.upsert({
+    where: { assessmentId_versionNumber: { assessmentId: riskAssessment.id, versionNumber: 1 } },
+    update: {
+      tenantId: TENANT_ID,
+      updateReason: "Evaluare initiala seed pentru fluxul 3.8",
+      factors: [
+        { name: "Contact cu piese in miscare", category: "Mecanic", probability: 3, severity: 4 },
+        { name: "Zgomot operational", category: "Fizic", probability: 3, severity: 3 }
+      ],
+      measures: [
+        { title: "Protectii mecanice si oprire de urgenta", owner: "Mentenanta" },
+        { title: "Instruire periodica si verificare semnalizare", owner: "Responsabil SSM" }
+      ],
+      riskLevel: 12,
+      effectiveFrom: new Date(now - 30 * DAY_MS),
+      createdBy: CREATED_BY
+    },
+    create: {
+      tenantId: TENANT_ID,
+      assessmentId: riskAssessment.id,
+      versionNumber: 1,
+      updateReason: "Evaluare initiala seed pentru fluxul 3.8",
+      factors: [
+        { name: "Contact cu piese in miscare", category: "Mecanic", probability: 3, severity: 4 },
+        { name: "Zgomot operational", category: "Fizic", probability: 3, severity: 3 }
+      ],
+      measures: [
+        { title: "Protectii mecanice si oprire de urgenta", owner: "Mentenanta" },
+        { title: "Instruire periodica si verificare semnalizare", owner: "Responsabil SSM" }
+      ],
+      riskLevel: 12,
+      effectiveFrom: new Date(now - 30 * DAY_MS),
+      createdBy: CREATED_BY
+    }
+  });
+  await prismaExtended.ssmRiskAssessment.update({
+    where: { id: riskAssessment.id },
+    data: { activeVersionId: riskVersion.id }
+  });
+
+  const psiDocument = await prisma.ssmDocument.upsert({
+    where: { id: "seed-ext-psi-document-plant" },
+    update: {
+      tenantId: TENANT_ID,
+      title: "Documentatie PSI punct de lucru fabrica",
+      type: "PSI",
+      targetType: "WORKSITE",
+      targetRefId: worksitePlant.id,
+      targetLabel: worksitePlant.name,
+      isControlFolder: true,
+      createdBy: CREATED_BY
+    },
+    create: {
+      id: "seed-ext-psi-document-plant",
+      tenantId: TENANT_ID,
+      title: "Documentatie PSI punct de lucru fabrica",
+      type: "PSI",
+      targetType: "WORKSITE",
+      targetRefId: worksitePlant.id,
+      targetLabel: worksitePlant.name,
+      isControlFolder: true,
+      createdBy: CREATED_BY
+    }
+  });
+  const psiDocumentVersion = await prisma.ssmDocumentVersion.upsert({
+    where: { documentId_versionNumber: { documentId: psiDocument.id, versionNumber: 1 } },
+    update: {
+      tenantId: TENANT_ID,
+      fileName: "documentatie-psi-plant.pdf",
+      mimeType: "application/pdf",
+      fileSize: 1024,
+      storagePath: "seed://documentatie-psi-plant.pdf",
+      changeNote: "Documentatie PSI initiala pentru punct de lucru",
+      createdBy: CREATED_BY
+    },
+    create: {
+      tenantId: TENANT_ID,
+      documentId: psiDocument.id,
+      versionNumber: 1,
+      fileName: "documentatie-psi-plant.pdf",
+      mimeType: "application/pdf",
+      fileSize: 1024,
+      storagePath: "seed://documentatie-psi-plant.pdf",
+      changeNote: "Documentatie PSI initiala pentru punct de lucru",
+      createdBy: CREATED_BY
+    }
+  });
+  await prisma.ssmDocument.update({
+    where: { id: psiDocument.id },
+    data: { activeVersionId: psiDocumentVersion.id }
+  });
+
+  const psiEquipment = await prismaExtended.ssmPsiEquipment.upsert({
+    where: { tenantId_code: { tenantId: TENANT_ID, code: "STING-PLANT-01" } },
+    update: {
+      worksiteId: worksitePlant.id,
+      name: "Stingator pulbere P6",
+      category: "Stingator",
+      location: "Hala productie - acces principal",
+      verificationIntervalDays: 365,
+      reminderDays: [30, 15, 7],
+      lastVerifiedAt: new Date(now - 320 * DAY_MS),
+      nextDueAt: new Date(now + 45 * DAY_MS),
+      notes: "Seed PSI 3.9",
+      createdBy: CREATED_BY
+    },
+    create: {
+      tenantId: TENANT_ID,
+      worksiteId: worksitePlant.id,
+      code: "STING-PLANT-01",
+      name: "Stingator pulbere P6",
+      category: "Stingator",
+      location: "Hala productie - acces principal",
+      verificationIntervalDays: 365,
+      reminderDays: [30, 15, 7],
+      lastVerifiedAt: new Date(now - 320 * DAY_MS),
+      nextDueAt: new Date(now + 45 * DAY_MS),
+      notes: "Seed PSI 3.9",
+      createdBy: CREATED_BY
+    }
+  });
+  await prismaExtended.ssmPsiEquipmentVerification.upsert({
+    where: { id: "seed-ext-psi-verification-1" },
+    update: {
+      tenantId: TENANT_ID,
+      equipmentId: psiEquipment.id,
+      performedAt: new Date(now - 320 * DAY_MS),
+      nextDueAt: new Date(now + 45 * DAY_MS),
+      result: "Verificat conform",
+      notes: "Verificare periodica seed",
+      createdBy: CREATED_BY
+    },
+    create: {
+      id: "seed-ext-psi-verification-1",
+      tenantId: TENANT_ID,
+      equipmentId: psiEquipment.id,
+      performedAt: new Date(now - 320 * DAY_MS),
+      nextDueAt: new Date(now + 45 * DAY_MS),
+      result: "Verificat conform",
+      notes: "Verificare periodica seed",
+      createdBy: CREATED_BY
+    }
+  });
+  await prismaExtended.ssmPsiTrainingRecord.upsert({
+    where: { id: "seed-ext-psi-training-1" },
+    update: {
+      tenantId: TENANT_ID,
+      worksiteId: worksitePlant.id,
+      employeeId: employees[0].id,
+      trainingTypeId: trainingTypes[2].id,
+      topic: "Instruire PSI si evacuare",
+      conductedAt: new Date(now - 20 * DAY_MS),
+      validUntil: new Date(now + 160 * DAY_MS),
+      trainerName: "Responsabil PSI seed",
+      responsibleName: "Coordonator urgenta",
+      createdBy: CREATED_BY
+    },
+    create: {
+      id: "seed-ext-psi-training-1",
+      tenantId: TENANT_ID,
+      worksiteId: worksitePlant.id,
+      employeeId: employees[0].id,
+      trainingTypeId: trainingTypes[2].id,
+      topic: "Instruire PSI si evacuare",
+      conductedAt: new Date(now - 20 * DAY_MS),
+      validUntil: new Date(now + 160 * DAY_MS),
+      trainerName: "Responsabil PSI seed",
+      responsibleName: "Coordonator urgenta",
+      createdBy: CREATED_BY
+    }
+  });
+  await prismaExtended.ssmPsiResponsible.upsert({
+    where: { id: "seed-ext-psi-responsible-1" },
+    update: {
+      tenantId: TENANT_ID,
+      worksiteId: worksitePlant.id,
+      employeeId: employees[0].id,
+      role: "PSI_RESPONSIBLE",
+      personName: employees[0].fullName,
+      email: employees[0].email,
+      active: true,
+      notes: "Responsabil PSI seed",
+      createdBy: CREATED_BY
+    },
+    create: {
+      id: "seed-ext-psi-responsible-1",
+      tenantId: TENANT_ID,
+      worksiteId: worksitePlant.id,
+      employeeId: employees[0].id,
+      role: "PSI_RESPONSIBLE",
+      personName: employees[0].fullName,
+      email: employees[0].email,
+      active: true,
+      notes: "Responsabil PSI seed",
+      createdBy: CREATED_BY
+    }
+  });
 
   console.log("Extended seed complete.");
   console.log(`Tenant: ${TENANT_ID}`);

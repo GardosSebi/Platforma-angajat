@@ -388,3 +388,262 @@ export interface SsmMedicalReminderItem {
   nextDueAt: string;
   daysUntilDue: number;
 }
+
+export type SsmRiskTargetType = "JOB_POSITION" | "WORKSITE" | "DEPARTMENT";
+export type SsmRiskAssessmentStatus = "ACTIVE" | "ARCHIVED";
+
+export interface SsmRiskFactor {
+  name: string;
+  category?: string;
+  probability: number;
+  severity: number;
+  description?: string;
+}
+
+export interface SsmRiskMeasure {
+  title: string;
+  owner?: string;
+  dueAt?: string;
+  notes?: string;
+}
+
+export interface CreateSsmRiskAssessmentRequest {
+  title: string;
+  targetType: SsmRiskTargetType;
+  jobPositionId?: string;
+  worksiteId?: string;
+  departmentId?: string;
+  riskLevel: number;
+  updateReason: string;
+  factors: SsmRiskFactor[];
+  measures: SsmRiskMeasure[];
+  effectiveFrom?: string;
+}
+
+export interface AddSsmRiskAssessmentVersionRequest {
+  riskLevel: number;
+  updateReason: string;
+  factors: SsmRiskFactor[];
+  measures: SsmRiskMeasure[];
+  effectiveFrom?: string;
+}
+
+export interface SsmRiskAssessmentItem {
+  id: string;
+  title: string;
+  targetType: SsmRiskTargetType;
+  targetId?: string | null;
+  targetLabel?: string | null;
+  status: SsmRiskAssessmentStatus;
+  riskLevel?: number | null;
+  activeVersionNumber?: number | null;
+  updateReason?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface SsmRiskAssessmentVersion {
+  id: string;
+  versionNumber: number;
+  updateReason: string;
+  factors: SsmRiskFactor[];
+  measures: SsmRiskMeasure[];
+  riskLevel: number;
+  effectiveFrom?: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SsmRiskAssessmentHistoryResponse {
+  assessmentId: string;
+  title: string;
+  activeVersionId?: string | null;
+  versions: SsmRiskAssessmentVersion[];
+}
+
+export type SsmPsiEquipmentStatus = "ACTIVE" | "RETIRED";
+export type SsmPsiResponsibleRole =
+  | "PSI_RESPONSIBLE"
+  | "EMERGENCY_COORDINATOR"
+  | "EVACUATION_RESPONSIBLE"
+  | "FIRST_AID_RESPONSIBLE";
+
+export interface CreateSsmPsiEquipmentRequest {
+  worksiteId: string;
+  code: string;
+  name: string;
+  category?: string;
+  serialNumber?: string;
+  location?: string;
+  verificationIntervalDays: number;
+  reminderDays?: number[];
+  lastVerifiedAt?: string;
+  nextDueAt?: string;
+  notes?: string;
+}
+
+export interface RegisterSsmPsiEquipmentVerificationRequest {
+  equipmentId: string;
+  performedAt: string;
+  nextDueAt?: string;
+  result: string;
+  notes?: string;
+  documentId?: string;
+}
+
+export interface SsmPsiEquipmentItem {
+  id: string;
+  worksiteId: string;
+  worksiteName: string;
+  code: string;
+  name: string;
+  category?: string | null;
+  serialNumber?: string | null;
+  location?: string | null;
+  verificationIntervalDays: number;
+  reminderDays: number[];
+  lastVerifiedAt?: string | null;
+  nextDueAt?: string | null;
+  status: SsmPsiEquipmentStatus;
+  notes?: string | null;
+}
+
+export interface SsmPsiEquipmentNotification {
+  equipmentId: string;
+  code: string;
+  name: string;
+  worksiteName: string;
+  nextDueAt: string;
+  daysUntilDue: number;
+}
+
+export interface SsmPsiWorksiteDocumentation {
+  id: string;
+  code: string;
+  name: string;
+  documents: Array<{
+    id: string;
+    title: string;
+    targetType: SsmDocumentTargetType;
+    targetLabel?: string | null;
+    activeVersionNumber?: number | null;
+    fileName?: string | null;
+    updatedAt: string;
+  }>;
+}
+
+export interface CreateSsmPsiTrainingRecordRequest {
+  worksiteId: string;
+  employeeId?: string;
+  trainingTypeId?: string;
+  topic: string;
+  conductedAt: string;
+  validUntil?: string;
+  trainerName: string;
+  responsibleName?: string;
+  evidenceDocumentId?: string;
+  notes?: string;
+}
+
+export interface SsmPsiTrainingRecordItem {
+  id: string;
+  worksiteId: string;
+  worksiteName: string;
+  employeeId?: string | null;
+  employeeName?: string | null;
+  trainingTypeId?: string | null;
+  topic: string;
+  conductedAt: string;
+  validUntil?: string | null;
+  trainerName: string;
+  responsibleName?: string | null;
+  evidenceDocumentId?: string | null;
+  notes?: string | null;
+}
+
+export interface CreateSsmPsiResponsibleRequest {
+  worksiteId: string;
+  employeeId?: string;
+  role: SsmPsiResponsibleRole;
+  personName: string;
+  email?: string;
+  phone?: string;
+  active?: boolean;
+  notes?: string;
+}
+
+export interface SsmPsiResponsibleItem {
+  id: string;
+  worksiteId: string;
+  worksiteName: string;
+  employeeId?: string | null;
+  employeeName?: string | null;
+  role: SsmPsiResponsibleRole;
+  personName: string;
+  email?: string | null;
+  phone?: string | null;
+  active: boolean;
+  notes?: string | null;
+}
+
+export type SsmCalendarSource = "TRAINING" | "MEDICAL" | "EIP" | "PSI" | "PSI_TRAINING";
+export type SsmTrafficLight = "GREEN" | "YELLOW" | "RED";
+export type SsmReportType = "trainings" | "eip" | "medical" | "documents";
+
+export interface SsmUnifiedCalendarEvent {
+  id: string;
+  source: SsmCalendarSource;
+  title: string;
+  startAt: string;
+  dueAt?: string | null;
+  status: string;
+  ownerLabel?: string | null;
+}
+
+export interface SsmUnifiedCalendarResponse {
+  events: SsmUnifiedCalendarEvent[];
+}
+
+export interface SsmComplianceBreakdownItem {
+  module: string;
+  total: number;
+  compliant: number;
+  noncompliant: number;
+  score: number;
+}
+
+export interface SsmTopNonconformity {
+  module: string;
+  count: number;
+  score: number;
+}
+
+export interface SsmOverdueItem {
+  id: string;
+  module: string;
+  title: string;
+  subject: string;
+  dueAt?: string | null;
+  daysOverdue: number;
+  severity: string;
+}
+
+export interface SsmComplianceDashboardResponse {
+  kpi: {
+    globalScore: number;
+    trafficLight: SsmTrafficLight;
+    totalChecks: number;
+    noncompliant: number;
+  };
+  breakdown: SsmComplianceBreakdownItem[];
+  topNonconformities: SsmTopNonconformity[];
+  overdueItems: SsmOverdueItem[];
+}
+
+export type SsmReportRow = Record<string, string | number | boolean | null>;
+
+export interface SsmReportResponse {
+  type: SsmReportType;
+  generatedAt: string;
+  rows: SsmReportRow[];
+}

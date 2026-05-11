@@ -10,9 +10,15 @@ import type {
   CreateSsmEipTypeRequest,
   CreateSsmMedicalControlRequest,
   CreateSsmMedicalControlTypeRequest,
+  CreateSsmPsiEquipmentRequest,
+  CreateSsmPsiResponsibleRequest,
+  CreateSsmPsiTrainingRecordRequest,
+  CreateSsmRiskAssessmentRequest,
+  RegisterSsmPsiEquipmentVerificationRequest,
   CreateSsmTrainingPlanRequest,
   CreateSsmTrainingTypeRequest,
   CreateSsmDocumentRequest,
+  AddSsmRiskAssessmentVersionRequest,
   ListSsmDocumentsResponse,
   SsmComplianceEmployee,
   SsmEipDueNotification,
@@ -23,6 +29,17 @@ import type {
   SsmMedicalControlItem,
   SsmMedicalControlTypeItem,
   SsmMedicalReminderItem,
+  SsmPsiEquipmentItem,
+  SsmPsiEquipmentNotification,
+  SsmPsiResponsibleItem,
+  SsmPsiTrainingRecordItem,
+  SsmPsiWorksiteDocumentation,
+  SsmRiskAssessmentHistoryResponse,
+  SsmRiskAssessmentItem,
+  SsmComplianceDashboardResponse,
+  SsmReportResponse,
+  SsmReportType,
+  SsmUnifiedCalendarResponse,
   SsmAccidentCaseItem,
   SsmAccidentStats,
   SsmReminderItem,
@@ -270,5 +287,86 @@ export const ssmApi = {
   },
   medicalReminders() {
     return httpClient<{ reminders: SsmMedicalReminderItem[] }>("/ssm/medical/reminders");
+  },
+  listRiskAssessments(query?: URLSearchParams) {
+    const q = query?.toString();
+    return httpClient<{ items: SsmRiskAssessmentItem[] }>(`/ssm/risk-assessments${q ? `?${q}` : ""}`);
+  },
+  createRiskAssessment(payload: CreateSsmRiskAssessmentRequest) {
+    return httpClient<{ assessmentId: string; versionId: string; versionNumber: number }>("/ssm/risk-assessments", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  addRiskAssessmentVersion(assessmentId: string, payload: AddSsmRiskAssessmentVersionRequest) {
+    return httpClient<{ assessmentId: string; versionId: string; versionNumber: number }>(
+      `/ssm/risk-assessments/${assessmentId}/versions`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload)
+      }
+    );
+  },
+  getRiskAssessmentHistory(assessmentId: string) {
+    return httpClient<SsmRiskAssessmentHistoryResponse>(`/ssm/risk-assessments/${assessmentId}/history`);
+  },
+  archiveRiskAssessment(assessmentId: string) {
+    return httpClient<{ status: "ARCHIVED" }>(`/ssm/risk-assessments/${assessmentId}/archive`, {
+      method: "PATCH"
+    });
+  },
+  psiDocumentation() {
+    return httpClient<{ worksites: SsmPsiWorksiteDocumentation[] }>("/ssm/psi/documentation");
+  },
+  psiEquipment() {
+    return httpClient<{ items: SsmPsiEquipmentItem[] }>("/ssm/psi/equipment");
+  },
+  createPsiEquipment(payload: CreateSsmPsiEquipmentRequest) {
+    return httpClient<SsmPsiEquipmentItem>("/ssm/psi/equipment", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  registerPsiEquipmentVerification(payload: RegisterSsmPsiEquipmentVerificationRequest) {
+    return httpClient("/ssm/psi/equipment/verifications", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  psiEquipmentNotifications() {
+    return httpClient<{ reminders: SsmPsiEquipmentNotification[] }>("/ssm/psi/equipment/notifications");
+  },
+  psiTrainings() {
+    return httpClient<{ items: SsmPsiTrainingRecordItem[] }>("/ssm/psi/trainings");
+  },
+  createPsiTraining(payload: CreateSsmPsiTrainingRecordRequest) {
+    return httpClient<SsmPsiTrainingRecordItem>("/ssm/psi/trainings", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  psiResponsibles() {
+    return httpClient<{ items: SsmPsiResponsibleItem[] }>("/ssm/psi/responsibles");
+  },
+  createPsiResponsible(payload: CreateSsmPsiResponsibleRequest) {
+    return httpClient<SsmPsiResponsibleItem>("/ssm/psi/responsibles", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  unifiedCalendar() {
+    return httpClient<SsmUnifiedCalendarResponse>("/ssm/overview/calendar");
+  },
+  complianceDashboard() {
+    return httpClient<SsmComplianceDashboardResponse>("/ssm/overview/compliance-dashboard");
+  },
+  ssmReport(type: SsmReportType) {
+    return httpClient<SsmReportResponse>(`/ssm/reports/${type}`);
+  },
+  getSsmReportPdfUrl(type: SsmReportType) {
+    return `/ssm/reports/${type}.pdf`;
+  },
+  getSsmReportExcelUrl(type: SsmReportType) {
+    return `/ssm/reports/${type}.xlsx`;
   }
 };

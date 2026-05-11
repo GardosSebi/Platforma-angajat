@@ -93,6 +93,29 @@ enum SsmMedicalControlResult {
   UNFIT
 }
 
+enum SsmRiskAssessmentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum SsmRiskTargetType {
+  JOB_POSITION
+  WORKSITE
+  DEPARTMENT
+}
+
+enum SsmPsiEquipmentStatus {
+  ACTIVE
+  RETIRED
+}
+
+enum SsmPsiResponsibleRole {
+  PSI_RESPONSIBLE
+  EMERGENCY_COORDINATOR
+  EVACUATION_RESPONSIBLE
+  FIRST_AID_RESPONSIBLE
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -124,6 +147,12 @@ model Tenant {
   ssmAccidentTasks           SsmAccidentTask[]
   ssmMedicalControlTypes     SsmMedicalControlType[]
   ssmMedicalControls         SsmMedicalControl[]
+  ssmRiskAssessments         SsmRiskAssessment[]
+  ssmRiskAssessmentVersions  SsmRiskAssessmentVersion[]
+  ssmPsiEquipments           SsmPsiEquipment[]
+  ssmPsiEquipmentVerifications SsmPsiEquipmentVerification[]
+  ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
+  ssmPsiResponsibles         SsmPsiResponsible[]
 }
 
 model User {
@@ -158,6 +187,10 @@ model Worksite {
   employees                  Employee[]
   employeePlacementHistories EmployeePlacementHistory[]
   ssmResponsibles            SsmResponsible[]
+  ssmRiskAssessments         SsmRiskAssessment[]
+  ssmPsiEquipments           SsmPsiEquipment[]
+  ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
+  ssmPsiResponsibles         SsmPsiResponsible[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -178,6 +211,7 @@ model Department {
   jobPositions               JobPosition[]
   employees                  Employee[]
   employeePlacementHistories EmployeePlacementHistory[]
+  ssmRiskAssessments         SsmRiskAssessment[]
 
   @@unique([tenantId, code])
   @@index([tenantId, worksiteId])
@@ -201,6 +235,7 @@ model JobPosition {
   employeePlacementHistories EmployeePlacementHistory[]
   ssmEipNorms                SsmEipNorm[]
   ssmMedicalControlTypes     SsmMedicalControlType[]
+  ssmRiskAssessments         SsmRiskAssessment[]
 
   @@unique([tenantId, code])
   @@index([tenantId, departmentId])
@@ -232,6 +267,8 @@ model Employee {
   ssmEipMovements        SsmEipMovement[]
   ssmAccidentCases       SsmAccidentCase[]
   ssmMedicalControls     SsmMedicalControl[]
+  ssmPsiTrainingRecords  SsmPsiTrainingRecord[]
+  ssmPsiResponsibles     SsmPsiResponsible[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
@@ -652,6 +689,151 @@ model SsmMedicalControl {
   @@index([tenantId, employeeId, scheduledAt])
   @@index([tenantId, nextDueAt])
   @@index([tenantId, result])
+}
+
+model SsmRiskAssessment {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  title           String
+  targetType      SsmRiskTargetType
+  jobPositionId   String?
+  worksiteId      String?
+  departmentId    String?
+  status          SsmRiskAssessmentStatus @default(ACTIVE)
+  activeVersionId String?
+  createdBy       String
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobPosition   JobPosition?               @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+  worksite      Worksite?                  @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department    Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  versions      SsmRiskAssessmentVersion[] @relation("RiskAssessmentVersions")
+  activeVersion SsmRiskAssessmentVersion?  @relation("ActiveRiskAssessmentVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, targetType, status])
+  @@index([tenantId, jobPositionId])
+  @@index([tenantId, worksiteId])
+  @@index([tenantId, departmentId])
+}
+
+model SsmRiskAssessmentVersion {
+  id            String   @id @default(cuid())
+  tenantId      String
+  assessmentId  String
+  versionNumber Int
+  updateReason  String
+  factors       Json
+  measures      Json
+  riskLevel     Int
+  effectiveFrom DateTime?
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assessment           SsmRiskAssessment   @relation("RiskAssessmentVersions", fields: [assessmentId], references: [id], onDelete: Cascade)
+  activeForAssessments SsmRiskAssessment[] @relation("ActiveRiskAssessmentVersion")
+
+  @@unique([assessmentId, versionNumber])
+  @@index([tenantId, assessmentId, createdAt])
+  @@index([tenantId, riskLevel])
+}
+
+model SsmPsiEquipment {
+  id                       String                @id @default(cuid())
+  tenantId                 String
+  worksiteId               String
+  code                     String
+  name                     String
+  category                 String?
+  serialNumber             String?
+  location                 String?
+  verificationIntervalDays Int
+  reminderDays             Int[]                 @default([30, 15, 7])
+  lastVerifiedAt           DateTime?
+  nextDueAt                DateTime?
+  status                   SsmPsiEquipmentStatus @default(ACTIVE)
+  notes                    String?
+  createdBy                String
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  tenant        Tenant                          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite      Worksite                        @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  verifications SsmPsiEquipmentVerification[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, worksiteId, status])
+  @@index([tenantId, nextDueAt])
+}
+
+model SsmPsiEquipmentVerification {
+  id          String   @id @default(cuid())
+  tenantId    String
+  equipmentId String
+  performedAt DateTime
+  nextDueAt   DateTime
+  result      String
+  notes       String?
+  documentId  String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  equipment SsmPsiEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, equipmentId, performedAt])
+  @@index([tenantId, nextDueAt])
+}
+
+model SsmPsiTrainingRecord {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  worksiteId         String
+  employeeId         String?
+  trainingTypeId     String?
+  topic              String
+  conductedAt        DateTime
+  validUntil         DateTime?
+  trainerName        String
+  responsibleName    String?
+  evidenceDocumentId String?
+  notes              String?
+  createdBy          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite Worksite  @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, worksiteId, conductedAt])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, validUntil])
+}
+
+model SsmPsiResponsible {
+  id         String                @id @default(cuid())
+  tenantId   String
+  worksiteId String
+  employeeId String?
+  role       SsmPsiResponsibleRole
+  personName String
+  email      String?
+  phone      String?
+  active     Boolean               @default(true)
+  notes      String?
+  createdBy  String
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite Worksite  @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, worksiteId, active])
+  @@index([tenantId, role])
 }
 
 model AuditLog {
