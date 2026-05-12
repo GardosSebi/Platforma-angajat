@@ -1,0 +1,592 @@
+import { FormEvent, useMemo, useState } from "react";
+import type {
+  CommunicationAnnouncementItem,
+  CommunicationAudienceType,
+  CommunicationContentType,
+  CreateCommunicationAnnouncementRequest,
+  CreateCommunicationTemplateRequest
+} from "@repo/shared-types/communications";
+import { useDepartments, useEmployees, useJobPositions, useWorksites } from "../../master-data/hooks/useMasterData";
+import {
+  useAnnouncements,
+  useChatbotDashboard,
+  useCommunicationReminders,
+  useCommunicationTemplates,
+  useCreateAnnouncement,
+  useCreateCommunicationTemplate,
+  useDispatchCommunicationReminders,
+  useDuplicateAnnouncement,
+  usePublishAnnouncement,
+  useRetractAnnouncement
+} from "../hooks/useChatbot";
+
+const CONTENT_TYPES: CommunicationContentType[] = ["TEXT", "RICH_TEXT", "LINK", "DOCUMENT", "SURVEY"];
+const AUDIENCE_TYPES: CommunicationAudienceType[] = [
+  "ALL",
+  "WORKSITE",
+  "DEPARTMENT",
+  "JOB_POSITION",
+  "EMPLOYEE",
+  "CUSTOM"
+];
+
+const CONTENT_TYPE_LABELS: Record<CommunicationContentType, string> = {
+  TEXT: "Text",
+  RICH_TEXT: "Text formatat",
+  LINK: "Link",
+  DOCUMENT: "Document",
+  SURVEY: "Sondaj"
+};
+
+const STATUS_LABELS: Record<CommunicationAnnouncementItem["status"], string> = {
+  DRAFT: "Ciornă",
+  SCHEDULED: "Programat",
+  PUBLISHED: "Publicat",
+  RETRACTED: "Retras",
+  ARCHIVED: "Arhivat"
+};
+
+const AUDIENCE_LABELS: Record<CommunicationAudienceType, string> = {
+  ALL: "Toți angajații",
+  WORKSITE: "Punct de lucru",
+  DEPARTMENT: "Departament",
+  JOB_POSITION: "Post",
+  EMPLOYEE_GROUP: "Grup angajați",
+  EMPLOYEE: "Angajat",
+  CUSTOM: "Listă personalizată"
+};
+
+type AnnouncementForm = CreateCommunicationAnnouncementRequest & {
+  targetEmployeeIdsCsv: string;
+};
+
+type FeedbackState = {
+  type: "success" | "error";
+  message: string;
+};
+
+const EMPTY_ANNOUNCEMENT: AnnouncementForm = {
+  title: "Anunț intern",
+  body: "Mesaj pentru angajați...",
+  contentType: "TEXT",
+  audienceType: "ALL",
+  status: "DRAFT",
+  publishAt: "",
+  expiresAt: "",
+  reminderAt: "",
+  contentUrl: "",
+  targetEmployeeIdsCsv: ""
+};
+
+const EMPTY_TEMPLATE: CreateCommunicationTemplateRequest = {
+  name: "Memento document",
+  title: "Document nou disponibil",
+  body: "Te rugăm să verifici documentul publicat în platformă.",
+  contentType: "TEXT",
+  audienceType: "ALL",
+  contentUrl: ""
+};
+
+function mutationErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "A apărut o eroare neașteptată.";
+  }
+  const translations: Record<string, string> = {
+    "Invalid date": "Dată invalidă",
+    "Employee not found for tenant.": "Angajatul nu a fost găsit pentru tenantul curent.",
+    "Template not found for tenant.": "Șablonul nu a fost găsit pentru tenantul curent.",
+    "Announcement not found for tenant.": "Anunțul nu a fost găsit pentru tenantul curent.",
+    "Custom audience requires targetEmployeeIds.": "Lista personalizată necesită cel puțin un angajat.",
+    "One or more target employees were not found for tenant.": "Unul sau mai mulți angajați selectați nu au fost găsiți pentru tenantul curent.",
+    "Not signed in or session expired. Sign in with tenant e01 and try again.": "Sesiunea a expirat. Autentifică-te din nou și încearcă iar.",
+    "You do not have permission for this action.": "Nu ai permisiune pentru această acțiune.",
+    "API route not found.": "Ruta API nu a fost găsită.",
+    "Request failed": "Cererea a eșuat",
+    "Cannot reach the API": "API-ul nu poate fi contactat"
+  };
+  const exact = translations[error.message];
+  if (exact) return exact;
+  const partial = Object.entries(translations).find(([key]) => error.message.includes(key));
+  return partial ? error.message.replace(partial[0], partial[1]) : error.message;
+}
+
+function formatDate(value?: string | null): string {
+  return value ? new Date(value).toLocaleString() : "-";
+}
+
+function statusChip(status: CommunicationAnnouncementItem["status"]): string {
+  if (status === "PUBLISHED") return "good";
+  if (status === "SCHEDULED" || status === "DRAFT") return "warn";
+  return "bad";
+}
+
+export function ChatbotPage() {
+  const dashboardQuery = useChatbotDashboard();
+  const announcementsQuery = useAnnouncements();
+  const templatesQuery = useCommunicationTemplates();
+  const remindersQuery = useCommunicationReminders();
+  const worksitesQuery = useWorksites();
+  const departmentsQuery = useDepartments();
+  const jobPositionsQuery = useJobPositions();
+  const employeesQuery = useEmployees();
+
+  const createAnnouncement = useCreateAnnouncement();
+  const publishAnnouncement = usePublishAnnouncement();
+  const retractAnnouncement = useRetractAnnouncement();
+  const duplicateAnnouncement = useDuplicateAnnouncement();
+  const dispatchReminders = useDispatchCommunicationReminders();
+  const createTemplate = useCreateCommunicationTemplate();
+
+  const [announcementForm, setAnnouncementForm] = useState<AnnouncementForm>(EMPTY_ANNOUNCEMENT);
+  const [templateForm, setTemplateForm] = useState<CreateCommunicationTemplateRequest>(EMPTY_TEMPLATE);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [announcementFeedback, setAnnouncementFeedback] = useState<FeedbackState | null>(null);
+  const [templateFeedback, setTemplateFeedback] = useState<FeedbackState | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<FeedbackState | null>(null);
+
+  const latest = dashboardQuery.data?.latestAnnouncements ?? [];
+  const announcements = announcementsQuery.data?.items ?? [];
+  const reminders = remindersQuery.data ?? [];
+  const kpi = dashboardQuery.data?.kpi;
+
+  const audienceOptions = useMemo(() => {
+    if (announcementForm.audienceType === "WORKSITE") {
+      return (worksitesQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+    }
+    if (announcementForm.audienceType === "DEPARTMENT") {
+      return (departmentsQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+    }
+    if (announcementForm.audienceType === "JOB_POSITION") {
+      return (jobPositionsQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+    }
+    if (announcementForm.audienceType === "EMPLOYEE") {
+      return (employeesQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.fullName} - ${item.email}` }));
+    }
+    return [];
+  }, [announcementForm.audienceType, departmentsQuery.data, employeesQuery.data, jobPositionsQuery.data, worksitesQuery.data]);
+
+  const selectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const template = templatesQuery.data?.items.find((item) => item.id === templateId);
+    if (!template) return;
+    setAnnouncementForm((prev) => ({
+      ...prev,
+      templateId: template.id,
+      title: template.title,
+      body: template.body,
+      contentType: template.contentType,
+      contentUrl: template.contentUrl ?? "",
+      audienceType: template.audienceType,
+      audienceRefId: template.audienceRefId ?? "",
+      audienceLabel: template.audienceLabel ?? ""
+    }));
+  };
+
+  const onAudienceRefChange = (value: string) => {
+    const option = audienceOptions.find((item) => item.id === value);
+    setAnnouncementForm((prev) => ({ ...prev, audienceRefId: value, audienceLabel: option?.label ?? "" }));
+  };
+
+  const onAnnouncementSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    setAnnouncementFeedback(null);
+    const { targetEmployeeIdsCsv, ...form } = announcementForm;
+    const payload: CreateCommunicationAnnouncementRequest = {
+      ...form,
+      contentUrl: announcementForm.contentUrl || undefined,
+      audienceRefId: announcementForm.audienceRefId || undefined,
+      audienceLabel: announcementForm.audienceLabel || undefined,
+      targetEmployeeIds:
+        announcementForm.audienceType === "CUSTOM"
+          ? targetEmployeeIdsCsv.split(",").map((item) => item.trim()).filter(Boolean)
+          : undefined,
+      publishAt: announcementForm.publishAt || undefined,
+      expiresAt: announcementForm.expiresAt || undefined,
+      reminderAt: announcementForm.reminderAt || undefined,
+      templateId: announcementForm.templateId || undefined
+    };
+    createAnnouncement.mutate(payload, {
+      onSuccess: () => {
+        setAnnouncementForm(EMPTY_ANNOUNCEMENT);
+        setSelectedTemplateId("");
+        setAnnouncementFeedback({ type: "success", message: "Anunțul a fost salvat cu succes." });
+      },
+      onError: (error) => {
+        setAnnouncementFeedback({ type: "error", message: mutationErrorMessage(error) });
+      }
+    });
+  };
+
+  const onTemplateSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    setTemplateFeedback(null);
+    createTemplate.mutate({
+      ...templateForm,
+      contentUrl: templateForm.contentUrl || undefined,
+      audienceRefId: templateForm.audienceRefId || undefined,
+      audienceLabel: templateForm.audienceLabel || undefined
+    }, {
+      onSuccess: () => {
+        setTemplateForm(EMPTY_TEMPLATE);
+        setTemplateFeedback({ type: "success", message: "Șablonul a fost salvat cu succes." });
+      },
+      onError: (error) => {
+        setTemplateFeedback({ type: "error", message: mutationErrorMessage(error) });
+      }
+    });
+  };
+
+  const runAnnouncementAction = (action: "publish" | "retract" | "duplicate", announcementId: string) => {
+    setActionFeedback(null);
+    const labels = {
+      publish: "Anunțul a fost publicat.",
+      retract: "Anunțul a fost retras.",
+      duplicate: "Anunțul a fost duplicat."
+    };
+    const options = {
+      onSuccess: () => setActionFeedback({ type: "success", message: labels[action] }),
+      onError: (error: unknown) => setActionFeedback({ type: "error", message: mutationErrorMessage(error) })
+    };
+    if (action === "publish") publishAnnouncement.mutate(announcementId, options);
+    if (action === "retract") retractAnnouncement.mutate(announcementId, options);
+    if (action === "duplicate") duplicateAnnouncement.mutate(announcementId, options);
+  };
+
+  return (
+    <>
+      <h1 className="page-title">Comunicări / Chatbot angajați</h1>
+      <p className="page-lead">
+        Partea L: panou KPI, anunțuri granulare, statistici de citire, mementouri și funcții avansate etapizate.
+      </p>
+
+      <section className="ssm-documents" aria-labelledby="communications-title">
+        <div className="ssm-module-hero">
+          <div className="card ssm-hero-card">
+            <p className="ssm-card-eyebrow">Partea L · 4.1 + 4.2</p>
+            <h2 id="communications-title" className="card-title">
+              Centru comunicări
+            </h2>
+            <p className="ssm-hero-lead">
+              Publică anunțuri către audiențe precise, urmărește citirea și programează mementouri pentru mesajele critice.
+            </p>
+            <div className="ssm-badge-row">
+              <span className="ssm-chip">Panou KPI</span>
+              <span className="ssm-chip">Anunțuri și destinatari</span>
+              <span className="ssm-chip">Șabloane</span>
+            </div>
+          </div>
+
+          <div className="ssm-summary-strip">
+            <div className="ssm-stat-card">
+              <span>Digitalizare</span>
+              <strong>{kpi ? `${kpi.digitalizationRate}%` : "-"}</strong>
+            </div>
+            <div className="ssm-stat-card">
+              <span>Activi</span>
+              <strong>{kpi?.activeEmployees ?? "-"}</strong>
+            </div>
+            <div className="ssm-stat-card">
+              <span>Citire</span>
+              <strong>{kpi ? `${kpi.readRate}%` : "-"}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="ssm-doc-grid">
+          <div className="card ssm-doc-card">
+            <div className="ssm-card-header">
+              <div>
+                <h3 className="card-title">Ultimele anunțuri</h3>
+                <p className="field-hint">KPI rapid pentru publicări recente și citire.</p>
+              </div>
+              <span className="ssm-chip">{kpi?.activeAnnouncements ?? 0} publicate</span>
+            </div>
+            <div className="ssm-doc-items">
+              {dashboardQuery.isLoading ? <p className="field-hint">Se încarcă dashboard-ul...</p> : null}
+              {latest.map((item) => (
+                <article key={item.id} className="ssm-doc-item">
+                  <strong>{item.title}</strong>
+                  <span>
+                    {AUDIENCE_LABELS[item.audienceType]} · {STATUS_LABELS[item.status]} · citire {item.stats.readRate}%
+                  </span>
+                  <div className="ssm-progress" aria-label={`Citire ${item.stats.readRate}%`}>
+                    <span style={{ width: `${Math.max(0, Math.min(item.stats.readRate, 100))}%` }} />
+                  </div>
+                </article>
+              ))}
+              {!dashboardQuery.isLoading && latest.length === 0 ? <p className="field-hint">Nu există anunțuri încă.</p> : null}
+            </div>
+          </div>
+
+          <form className="card form-stack ssm-doc-card" onSubmit={onAnnouncementSubmit}>
+            <div className="ssm-card-header">
+              <div>
+                <h3 className="card-title">Adaugă mesaj / anunț</h3>
+                <p className="field-hint">Conținut, destinatari granulari, programare și memento.</p>
+              </div>
+            </div>
+            <div className="ssm-form-grid">
+              <div className="field wide">
+                <label htmlFor="template-select">Șablon</label>
+                <select id="template-select" value={selectedTemplateId} onChange={(event) => selectTemplate(event.target.value)}>
+                  <option value="">Fără șablon</option>
+                  {(templatesQuery.data?.items ?? []).map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field wide">
+                <label htmlFor="announcement-title">Titlu</label>
+                <input
+                  id="announcement-title"
+                  value={announcementForm.title}
+                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, title: event.target.value }))}
+                  required
+                />
+              </div>
+              <div className="field wide">
+                <label htmlFor="announcement-body">Mesaj</label>
+                <textarea
+                  id="announcement-body"
+                  value={announcementForm.body}
+                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, body: event.target.value }))}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="content-type">Tip conținut</label>
+                <select
+                  id="content-type"
+                  value={announcementForm.contentType}
+                  onChange={(event) =>
+                    setAnnouncementForm((prev) => ({ ...prev, contentType: event.target.value as CommunicationContentType }))
+                  }
+                >
+                  {CONTENT_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {CONTENT_TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="content-url">Link / document</label>
+                <input
+                  id="content-url"
+                  value={announcementForm.contentUrl ?? ""}
+                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, contentUrl: event.target.value }))}
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="audience-type">Destinatari</label>
+                <select
+                  id="audience-type"
+                  value={announcementForm.audienceType}
+                  onChange={(event) =>
+                    setAnnouncementForm((prev) => ({
+                      ...prev,
+                      audienceType: event.target.value as CommunicationAudienceType,
+                      audienceRefId: "",
+                      audienceLabel: ""
+                    }))
+                  }
+                >
+                  {AUDIENCE_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {AUDIENCE_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {audienceOptions.length > 0 ? (
+                <div className="field">
+                  <label htmlFor="audience-ref">Segment</label>
+                  <select id="audience-ref" value={announcementForm.audienceRefId ?? ""} onChange={(event) => onAudienceRefChange(event.target.value)}>
+                    <option value="">Selectează segmentul</option>
+                    {audienceOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {announcementForm.audienceType === "CUSTOM" ? (
+                <div className="field wide">
+                  <label htmlFor="custom-employees">Listă personalizată de angajați</label>
+                  <textarea
+                    id="custom-employees"
+                    value={announcementForm.targetEmployeeIdsCsv}
+                    onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, targetEmployeeIdsCsv: event.target.value }))}
+                    placeholder="idAngajat1, idAngajat2"
+                  />
+                  <p className="field-hint">Angajați disponibili: {(employeesQuery.data ?? []).slice(0, 4).map((item) => item.fullName).join(", ")}</p>
+                </div>
+              ) : null}
+              <div className="field">
+                <label htmlFor="announcement-status">Stare inițială</label>
+                <select
+                  id="announcement-status"
+                  value={announcementForm.status}
+                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, status: event.target.value as "DRAFT" | "PUBLISHED" }))}
+                >
+                  <option value="DRAFT">Ciornă</option>
+                  <option value="PUBLISHED">Publicat / programat</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="publish-at">Programare</label>
+                <input
+                  id="publish-at"
+                  type="datetime-local"
+                  value={announcementForm.publishAt ?? ""}
+                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, publishAt: event.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="expires-at">Expiră la</label>
+                <input
+                  id="expires-at"
+                  type="datetime-local"
+                  value={announcementForm.expiresAt ?? ""}
+                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, expiresAt: event.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="reminder-at">Memento</label>
+                <input
+                  id="reminder-at"
+                  type="datetime-local"
+                  value={announcementForm.reminderAt ?? ""}
+                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, reminderAt: event.target.value }))}
+                />
+              </div>
+            </div>
+            <button className="btn-primary" type="submit" disabled={createAnnouncement.isPending}>
+              {createAnnouncement.isPending ? "Se salvează..." : "Salvează anunț"}
+            </button>
+            {announcementFeedback ? (
+              <div className={`feedback ${announcementFeedback.type}`} role={announcementFeedback.type === "error" ? "alert" : "status"}>
+                {announcementFeedback.message}
+              </div>
+            ) : null}
+          </form>
+        </div>
+
+        <div className="ssm-doc-grid second">
+          <div className="card ssm-doc-card">
+            <div className="ssm-card-header">
+              <div>
+                <h3 className="card-title">Anunțuri și statistici citire</h3>
+                <p className="field-hint">Retragere, duplicare și publicare etapizată.</p>
+              </div>
+              <span className="ssm-chip">{announcements.length} total</span>
+            </div>
+            <div className="ssm-doc-items">
+              {actionFeedback ? (
+                <div className={`feedback ${actionFeedback.type}`} role={actionFeedback.type === "error" ? "alert" : "status"}>
+                  {actionFeedback.message}
+                </div>
+              ) : null}
+              {announcements.map((item) => (
+                <article key={item.id} className="ssm-doc-item">
+                  <strong>{item.title}</strong>
+                  <span>
+                    {formatDate(item.publishAt)} · {AUDIENCE_LABELS[item.audienceType]} · {item.stats.readCount}/{item.stats.targetCount} citiri
+                  </span>
+                  <div className="ssm-badge-row">
+                    <span className={`ssm-chip ${statusChip(item.status)}`}>{STATUS_LABELS[item.status]}</span>
+                    <button className="btn-secondary" type="button" onClick={() => runAnnouncementAction("publish", item.id)}>
+                      Publică
+                    </button>
+                    <button className="btn-secondary" type="button" onClick={() => runAnnouncementAction("retract", item.id)}>
+                      Retrage
+                    </button>
+                    <button className="btn-secondary" type="button" onClick={() => runAnnouncementAction("duplicate", item.id)}>
+                      Duplică
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {!announcementsQuery.isLoading && announcements.length === 0 ? <p className="field-hint">Nu există anunțuri definite.</p> : null}
+            </div>
+          </div>
+
+          <div className="card ssm-doc-card">
+            <div className="ssm-card-header">
+              <div>
+                <h3 className="card-title">Mementouri</h3>
+                <p className="field-hint">Previzualizare pentru anunțurile cu memento planificat.</p>
+              </div>
+              <button className="btn-secondary" type="button" onClick={() => dispatchReminders.mutate()} disabled={dispatchReminders.isPending}>
+                Trimite mementourile scadente
+              </button>
+            </div>
+            <div className="ssm-doc-items">
+              {reminders.map((item) => (
+                <article key={item.announcementId} className="ssm-doc-item">
+                  <strong>{item.title}</strong>
+                  <span>
+                    memento {formatDate(item.reminderAt)} · necitite {item.unreadCount} · citire {item.readRate}%
+                  </span>
+                </article>
+              ))}
+              {!remindersQuery.isLoading && reminders.length === 0 ? <p className="field-hint">Nu există mementouri active.</p> : null}
+            </div>
+            {dispatchReminders.isSuccess ? <div className="feedback success">Mementouri trimise: {dispatchReminders.data.sent}</div> : null}
+            {dispatchReminders.isError ? <div className="feedback error" role="alert">{mutationErrorMessage(dispatchReminders.error)}</div> : null}
+          </div>
+        </div>
+
+        <form className="card form-stack ssm-doc-card ssm-documents" onSubmit={onTemplateSubmit}>
+          <div className="ssm-card-header">
+            <div>
+              <h3 className="card-title">Șabloane comunicări</h3>
+              <p className="field-hint">Șabloane reutilizabile pentru mesaje recurente.</p>
+            </div>
+            <span className="ssm-chip">{templatesQuery.data?.items.length ?? 0} șabloane</span>
+          </div>
+          <div className="ssm-form-grid">
+            <div className="field">
+              <label htmlFor="template-name">Nume șablon</label>
+              <input id="template-name" value={templateForm.name} onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))} required />
+            </div>
+            <div className="field">
+              <label htmlFor="template-content-type">Tip</label>
+              <select
+                id="template-content-type"
+                value={templateForm.contentType}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, contentType: event.target.value as CommunicationContentType }))}
+              >
+                {CONTENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {CONTENT_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field wide">
+              <label htmlFor="template-title">Titlu</label>
+              <input id="template-title" value={templateForm.title} onChange={(event) => setTemplateForm((prev) => ({ ...prev, title: event.target.value }))} required />
+            </div>
+            <div className="field wide">
+              <label htmlFor="template-body">Mesaj</label>
+              <textarea id="template-body" value={templateForm.body} onChange={(event) => setTemplateForm((prev) => ({ ...prev, body: event.target.value }))} required />
+            </div>
+          </div>
+          <button className="btn-primary" type="submit" disabled={createTemplate.isPending}>
+            {createTemplate.isPending ? "Se salvează..." : "Salvează șablon"}
+          </button>
+          {templateFeedback ? (
+            <div className={`feedback ${templateFeedback.type}`} role={templateFeedback.type === "error" ? "alert" : "status"}>
+              {templateFeedback.message}
+            </div>
+          ) : null}
+        </form>
+      </section>
+    </>
+  );
+}

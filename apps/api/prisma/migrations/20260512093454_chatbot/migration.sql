@@ -1,0 +1,8 @@
+-- RenameIndex
+ALTER INDEX "CommunicationAnnouncement_tenantId_audienceType_audienceRefId_i" RENAME TO "CommunicationAnnouncement_tenantId_audienceType_audienceRef_idx";
+
+-- RenameIndex
+ALTER INDEX "CommunicationAnnouncementRead_tenantId_announcementId_readAt_id" RENAME TO "CommunicationAnnouncementRead_tenantId_announcementId_readA_idx";
+
+-- RenameIndex
+ALTER INDEX "SsmPsiEquipmentVerification_tenantId_equipmentId_performedAt_id" RENAME TO "SsmPsiEquipmentVerification_tenantId_equipmentId_performedA_idx";

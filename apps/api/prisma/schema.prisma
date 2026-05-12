@@ -116,6 +116,83 @@ enum SsmPsiResponsibleRole {
   FIRST_AID_RESPONSIBLE
 }
 
+enum CommunicationContentType {
+  TEXT
+  RICH_TEXT
+  LINK
+  DOCUMENT
+  SURVEY
+}
+
+enum CommunicationAudienceType {
+  ALL
+  WORKSITE
+  DEPARTMENT
+  JOB_POSITION
+  EMPLOYEE_GROUP
+  EMPLOYEE
+  CUSTOM
+}
+
+enum CommunicationAnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  RETRACTED
+  ARCHIVED
+}
+
+enum SurveyStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum SurveyQuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  SCALE
+  TEXT
+  LONG_TEXT
+  DATE
+  BOOLEAN
+}
+
+enum SurveyAudienceType {
+  ALL
+  WORKSITE
+  DEPARTMENT
+  JOB_POSITION
+  EMPLOYEE_GROUP
+  EMPLOYEE
+  CUSTOM
+}
+
+enum HelpdeskTicketStatus {
+  NEW
+  TRIAGE
+  IN_PROGRESS
+  WAITING_REQUESTER
+  RESOLVED
+  CLOSED
+}
+
+enum HelpdeskTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum HelpdeskTicketSource {
+  PORTAL
+  SURVEY
+  CHATBOT
+  EMAIL
+  MANUAL
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -153,6 +230,14 @@ model Tenant {
   ssmPsiEquipmentVerifications SsmPsiEquipmentVerification[]
   ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
   ssmPsiResponsibles         SsmPsiResponsible[]
+  communicationAnnouncements CommunicationAnnouncement[]
+  communicationTemplates      CommunicationTemplate[]
+  communicationAnnouncementReads CommunicationAnnouncementRead[]
+  communicationReminderDispatches CommunicationReminderDispatch[]
+  surveys                    Survey[]
+  surveyResponses            SurveyResponse[]
+  helpdeskTickets            HelpdeskTicket[]
+  helpdeskTicketComments     HelpdeskTicketComment[]
 }
 
 model User {
@@ -269,6 +354,9 @@ model Employee {
   ssmMedicalControls     SsmMedicalControl[]
   ssmPsiTrainingRecords  SsmPsiTrainingRecord[]
   ssmPsiResponsibles     SsmPsiResponsible[]
+  communicationAnnouncementReads CommunicationAnnouncementRead[]
+  surveyResponses        SurveyResponse[]
+  helpdeskTickets        HelpdeskTicket[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
@@ -834,6 +922,193 @@ model SsmPsiResponsible {
 
   @@index([tenantId, worksiteId, active])
   @@index([tenantId, role])
+}
+
+model CommunicationAnnouncement {
+  id                String                          @id @default(cuid())
+  tenantId          String
+  title             String
+  body              String
+  contentType       CommunicationContentType        @default(TEXT)
+  contentUrl        String?
+  audienceType      CommunicationAudienceType
+  audienceRefId     String?
+  audienceLabel     String?
+  targetEmployeeIds String[]                        @default([])
+  status            CommunicationAnnouncementStatus @default(DRAFT)
+  publishAt         DateTime?
+  expiresAt         DateTime?
+  reminderAt        DateTime?
+  lastReminderSentAt DateTime?
+  templateId        String?
+  duplicatedFromId  String?
+  retractedAt       DateTime?
+  createdBy         String
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+
+  tenant           Tenant                           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template         CommunicationTemplate?           @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  readReceipts     CommunicationAnnouncementRead[]
+  reminderDispatches CommunicationReminderDispatch[]
+
+  @@index([tenantId, status, publishAt])
+  @@index([tenantId, audienceType, audienceRefId])
+  @@index([tenantId, createdAt])
+}
+
+model CommunicationAnnouncementRead {
+  id             String   @id @default(cuid())
+  tenantId       String
+  announcementId String
+  employeeId     String
+  readAt         DateTime @default(now())
+
+  tenant       Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  announcement CommunicationAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  employee     Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, employeeId])
+  @@index([tenantId, announcementId, readAt])
+  @@index([tenantId, employeeId, readAt])
+}
+
+model CommunicationTemplate {
+  id             String                    @id @default(cuid())
+  tenantId       String
+  name           String
+  title          String
+  body           String
+  contentType    CommunicationContentType  @default(TEXT)
+  contentUrl     String?
+  audienceType   CommunicationAudienceType @default(ALL)
+  audienceRefId  String?
+  audienceLabel  String?
+  active         Boolean                   @default(true)
+  createdBy      String
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  tenant        Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  announcements CommunicationAnnouncement[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, active])
+}
+
+model CommunicationReminderDispatch {
+  id             String   @id @default(cuid())
+  tenantId       String
+  announcementId String
+  scheduledFor   DateTime
+  sentAt         DateTime @default(now())
+  channel        String   @default("CHATBOT")
+  createdBy      String
+
+  tenant       Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  announcement CommunicationAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, scheduledFor, sentAt])
+  @@index([tenantId, announcementId])
+}
+
+model Survey {
+  id                  String             @id @default(cuid())
+  tenantId            String
+  title               String
+  description         String?
+  status              SurveyStatus       @default(DRAFT)
+  audienceType        SurveyAudienceType @default(ALL)
+  audienceRefId       String?
+  audienceLabel       String?
+  targetEmployeeIds   String[]           @default([])
+  questionSchema      Json
+  conditionalLogic    Json?
+  privateLinkEnabled  Boolean            @default(true)
+  publicToken         String?            @unique
+  publicEnabled       Boolean            @default(false)
+  publicExpiresAt     DateTime?
+  publicResponseLimit Int?
+  publicResponseCount Int                @default(0)
+  createdBy           String
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  responses SurveyResponse[]
+
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, audienceType, audienceRefId])
+}
+
+model SurveyResponse {
+  id               String   @id @default(cuid())
+  tenantId         String
+  surveyId         String
+  employeeId       String?
+  respondentUserId String?
+  publicToken      String?
+  answersJson      Json
+  submittedAt      DateTime @default(now())
+  ipHash           String?
+  userAgent        String?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  survey   Survey    @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  helpdeskTickets HelpdeskTicket[]
+
+  @@index([tenantId, surveyId, submittedAt])
+  @@index([tenantId, employeeId, submittedAt])
+  @@index([publicToken, submittedAt])
+}
+
+model HelpdeskTicket {
+  id                     String                 @id @default(cuid())
+  tenantId               String
+  title                  String
+  description            String
+  category               String?
+  status                 HelpdeskTicketStatus   @default(NEW)
+  priority               HelpdeskTicketPriority @default(MEDIUM)
+  source                 HelpdeskTicketSource   @default(PORTAL)
+  reporterEmployeeId     String?
+  reporterName           String?
+  reporterEmail          String?
+  assignedToUserId       String?
+  assignedToName         String?
+  sourceSurveyResponseId String?
+  dueAt                  DateTime?
+  resolvedAt             DateTime?
+  closedAt               DateTime?
+  createdBy              String
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  tenant               Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reporterEmployee     Employee?              @relation(fields: [reporterEmployeeId], references: [id], onDelete: SetNull)
+  sourceSurveyResponse SurveyResponse?        @relation(fields: [sourceSurveyResponseId], references: [id], onDelete: SetNull)
+  comments             HelpdeskTicketComment[]
+
+  @@index([tenantId, status, priority])
+  @@index([tenantId, assignedToUserId, status])
+  @@index([tenantId, reporterEmployeeId, createdAt])
+  @@index([tenantId, source, createdAt])
+}
+
+model HelpdeskTicketComment {
+  id        String   @id @default(cuid())
+  tenantId  String
+  ticketId  String
+  body      String
+  internal  Boolean  @default(false)
+  createdBy String
+  createdAt DateTime @default(now())
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket HelpdeskTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, ticketId, createdAt])
 }
 
 model AuditLog {

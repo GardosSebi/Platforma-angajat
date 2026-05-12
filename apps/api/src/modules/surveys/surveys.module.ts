@@ -1,14 +1,10 @@
-import { Controller, Get, Module } from "@nestjs/common";
-
-@Controller("surveys")
-class SurveysController {
-  @Get("health")
-  health() {
-    return { module: "surveys", status: "ok" };
-  }
-}
+import { Module } from "@nestjs/common";
+import { PermissionsGuard } from "../../common/guards/permissions.guard";
+import { PublicSurveysController, SurveysController } from "./api/surveys.controller";
+import { SurveysService } from "./application/services/surveys.service";
 
 @Module({
-  controllers: [SurveysController]
+  controllers: [SurveysController, PublicSurveysController],
+  providers: [PermissionsGuard, SurveysService]
 })
 export class SurveysModule {}

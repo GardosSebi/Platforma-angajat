@@ -1,0 +1,207 @@
+import { Type } from "class-transformer";
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  Allow,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested
+} from "class-validator";
+
+const QUESTION_TYPES = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "SCALE", "TEXT", "LONG_TEXT", "DATE", "BOOLEAN"] as const;
+const AUDIENCE_TYPES = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE_GROUP", "EMPLOYEE", "CUSTOM"] as const;
+const SURVEY_STATUSES = ["DRAFT", "ACTIVE", "CLOSED", "ARCHIVED"] as const;
+const RULE_OPERATORS = ["EQUALS", "NOT_EQUALS", "INCLUDES", "GREATER_THAN", "LESS_THAN"] as const;
+
+type SurveyQuestionTypeCode = (typeof QUESTION_TYPES)[number];
+type SurveyAudienceTypeCode = (typeof AUDIENCE_TYPES)[number];
+type SurveyStatusCode = (typeof SURVEY_STATUSES)[number];
+type SurveyRuleOperatorCode = (typeof RULE_OPERATORS)[number];
+
+export class SurveyQuestionOptionDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  value!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(220)
+  label!: string;
+}
+
+export class SurveyQuestionDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  id!: string;
+
+  @IsIn(QUESTION_TYPES)
+  type!: SurveyQuestionTypeCode;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(400)
+  title!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  required?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SurveyQuestionOptionDto)
+  options?: SurveyQuestionOptionDto[];
+
+  @IsOptional()
+  @IsInt()
+  min?: number;
+
+  @IsOptional()
+  @IsInt()
+  max?: number;
+}
+
+export class SurveyConditionalRuleDto {
+  @IsString()
+  @MinLength(1)
+  questionId!: string;
+
+  @IsIn(RULE_OPERATORS)
+  operator!: SurveyRuleOperatorCode;
+
+  @Allow()
+  value!: string | number | boolean | string[] | null;
+
+  @IsString()
+  @MinLength(1)
+  showQuestionId!: string;
+}
+
+export class CreateSurveyDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(180)
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1200)
+  description?: string;
+
+  @IsOptional()
+  @IsIn(AUDIENCE_TYPES)
+  audienceType?: SurveyAudienceTypeCode;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  audienceRefId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  audienceLabel?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  targetEmployeeIds?: string[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SurveyQuestionDto)
+  questionSchema!: SurveyQuestionDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SurveyConditionalRuleDto)
+  conditionalLogic?: SurveyConditionalRuleDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  privateLinkEnabled?: boolean;
+}
+
+export class UpdateSurveyDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(180)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1200)
+  description?: string;
+
+  @IsOptional()
+  @IsIn(SURVEY_STATUSES)
+  status?: SurveyStatusCode;
+
+  @IsOptional()
+  @IsIn(AUDIENCE_TYPES)
+  audienceType?: SurveyAudienceTypeCode;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  audienceRefId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  audienceLabel?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  targetEmployeeIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SurveyQuestionDto)
+  questionSchema?: SurveyQuestionDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SurveyConditionalRuleDto)
+  conditionalLogic?: SurveyConditionalRuleDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  privateLinkEnabled?: boolean;
+}
+
+export class SubmitSurveyResponseDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  employeeId?: string;
+
+  @IsObject()
+  answers!: Record<string, string | number | boolean | string[] | null>;
+}
+
+export class CreatePublicLinkDto {
+  @IsDateString()
+  expiresAt!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  responseLimit?: number;
+}

@@ -228,6 +228,14 @@ button {
   margin-bottom: 0.35rem;
 }
 
+.field-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  margin-bottom: 0.35rem;
+}
+
 .field input,
 .field select,
 .field textarea {
@@ -833,6 +841,254 @@ button.ssm-doc-item:hover {
   flex-wrap: wrap;
 }
 
+.survey-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.survey-builder-card {
+  border-color: rgba(15, 118, 110, 0.22);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+}
+
+.survey-section {
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 1rem;
+}
+
+.survey-question-builder {
+  background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 100%);
+  border-color: rgba(15, 118, 110, 0.25);
+}
+
+.survey-section-title {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.9rem;
+}
+
+.survey-section-title > span {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 6px 14px rgba(15, 118, 110, 0.22);
+}
+
+.survey-section-title strong {
+  display: block;
+  color: var(--color-text);
+  font-size: 0.98rem;
+}
+
+.survey-section-title p {
+  margin: 0.15rem 0 0;
+  color: #475569;
+  font-size: 0.8rem;
+}
+
+.survey-add-question {
+  margin-top: 0.85rem;
+}
+
+.survey-option-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.survey-option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.survey-add-option {
+  margin-top: 0.65rem;
+}
+
+.survey-question-list {
+  margin-top: 0.9rem;
+}
+
+.survey-question-item {
+  border-color: rgba(15, 118, 110, 0.18);
+  background: #ffffff;
+}
+
+.ticket-kanban-board {
+  align-items: stretch;
+}
+
+.ticket-kanban-column {
+  min-height: 260px;
+  border: 1px dashed rgba(15, 118, 110, 0.25);
+  background: #f8fafc;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.ticket-kanban-column.drop-target {
+  border-color: var(--color-primary);
+  background: #ecfdf5;
+  transform: translateY(-2px);
+}
+
+.ticket-kanban-card {
+  cursor: grab;
+  background: #ffffff;
+  gap: 0.45rem;
+}
+
+.ticket-kanban-card:active {
+  cursor: grabbing;
+}
+
+.ticket-kanban-card.dragging {
+  opacity: 0.55;
+  border-color: var(--color-primary);
+}
+
+.ticket-kanban-card.selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-muted);
+}
+
+.ticket-card-meta {
+  gap: 0.35rem;
+}
+
+.ticket-open-button {
+  width: 100%;
+}
+
+.ticket-move-select {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 9.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.ticket-move-select select {
+  width: 100%;
+  padding: 0.52rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+}
+
+.ticket-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.ticket-detail-modal {
+  width: min(780px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 16px;
+  background: #f8fafc;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.ticket-detail-description {
+  margin: 0 0 1rem;
+  color: #334155;
+  line-height: 1.55;
+}
+
+.ticket-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.ticket-detail-grid > div {
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.ticket-detail-grid span,
+.ticket-detail-grid strong {
+  display: block;
+}
+
+.ticket-detail-grid span {
+  margin-bottom: 0.2rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.ticket-detail-grid strong {
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.survey-save-bar {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(15, 118, 110, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+.survey-save-bar strong,
+.survey-save-bar span {
+  display: block;
+}
+
+.survey-save-bar strong {
+  font-size: 0.95rem;
+}
+
+.survey-save-bar span {
+  color: #475569;
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
+.survey-side-panel,
+.survey-action-card {
+  border-color: #cbd5e1;
+}
+
+.survey-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
 .badge-good,
 .badge-bad {
   padding: 0.2rem 0.55rem;
@@ -971,7 +1227,10 @@ button.ssm-doc-item:hover {
   }
 
   .ssm-module-hero,
-  .ssm-report-layout {
+  .ssm-report-layout,
+  .survey-workspace,
+  .ticket-detail-grid,
+  .survey-bottom-grid {
     grid-template-columns: 1fr;
   }
 
@@ -993,7 +1252,15 @@ button.ssm-doc-item:hover {
   .ssm-summary-strip,
   .ssm-reports-section .ssm-summary-strip,
   .ssm-form-grid,
-  .ssm-report-fields {
+  .ssm-report-fields,
+  .survey-option-row,
+  .survey-save-bar {
     grid-template-columns: 1fr;
+  }
+
+  .survey-save-bar {
+    position: static;
+    align-items: stretch;
+    flex-direction: column;
   }
 }

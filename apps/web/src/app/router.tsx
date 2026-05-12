@@ -3,6 +3,9 @@ import { LoginPage } from "../features/auth/pages/LoginPage";
 import { AppLayout } from "./AppLayout";
 import { SsmDashboardPage } from "../features/ssm/pages/SsmDashboardPage";
 import { MasterDataPage } from "../features/master-data/pages/MasterDataPage";
+import { ChatbotPage } from "../features/chatbot/pages/ChatbotPage";
+import { SurveysPage } from "../features/surveys/pages/SurveysPage";
+import { TicketingPage } from "../features/ticketing/pages/TicketingPage";
 
 function Placeholder({ title, icon }: { title: string; icon: string }) {
   return (
@@ -25,9 +28,9 @@ export function AppRouter() {
           <Route path="/" element={<Navigate to="/ssm" replace />} />
           <Route path="/ssm" element={<SsmDashboardPage />} />
           <Route path="/master-data" element={<MasterDataPage />} />
-          <Route path="/chatbot" element={<Placeholder title="Chatbot" icon="💬" />} />
-          <Route path="/surveys" element={<Placeholder title="Surveys" icon="📋" />} />
-          <Route path="/ticketing" element={<Placeholder title="Ticketing" icon="🎫" />} />
+          <Route path="/chatbot" element={<ChatbotPage />} />
+          <Route path="/surveys" element={<SurveysPage />} />
+          <Route path="/ticketing" element={<TicketingPage />} />
           <Route path="*" element={<Navigate to="/ssm" replace />} />
         </Route>
       </Routes>
