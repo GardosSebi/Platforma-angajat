@@ -32,6 +32,12 @@ export class SurveysController {
     return this.surveys.list(tenantId);
   }
 
+  @Get(":id/for-respond")
+  @RequirePermissions(Permission.SURVEYS_RESPOND)
+  forRespond(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.surveys.getForRespond(tenantId, id);
+  }
+
   @Post()
   @RequirePermissions(Permission.SURVEYS_EDIT)
   create(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: CreateSurveyDto) {

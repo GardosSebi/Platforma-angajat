@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateSurveyPublicLinkRequest, CreateSurveyRequest } from "@repo/shared-types/surveys";
-import { surveysApi } from "../api/surveys.api";
+import { fetchPublicSurvey, surveysApi } from "../api/surveys.api";
 
 export function useSurveysOverview() {
   return useQuery({
@@ -64,5 +64,22 @@ export function useCreatePublicSurveyLink() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: CreateSurveyPublicLinkRequest }) => surveysApi.publicLink(id, payload),
     onSuccess: refresh
+  });
+}
+
+export function useSurveyForRespond(surveyId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["surveys", "for-respond", surveyId],
+    queryFn: () => surveysApi.getForRespond(surveyId!),
+    enabled: Boolean(surveyId && enabled)
+  });
+}
+
+export function usePublicSurveyQuery(token: string | undefined) {
+  return useQuery({
+    queryKey: ["surveys", "public", token],
+    queryFn: () => fetchPublicSurvey(token!),
+    enabled: Boolean(token),
+    retry: false
   });
 }

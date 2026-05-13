@@ -37,6 +37,14 @@ export interface EmployeeItem {
   active: boolean;
 }
 
+export interface EmployeeGroupItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  active: boolean;
+  _count?: { members: number };
+}
+
 export interface CreateWorksitePayload {
   code: string;
   name: string;
@@ -108,5 +116,8 @@ export const masterDataApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  listGroups() {
+    return httpClient<EmployeeGroupItem[]>("/master-data/groups");
   }
 };

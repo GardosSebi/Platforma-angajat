@@ -196,6 +196,17 @@ export class SurveysService {
     return this.get(tenantId, id);
   }
 
+  async getForRespond(tenantId: string, id: string) {
+    const survey = await this.assertSurvey(tenantId, id);
+    if (!survey.privateLinkEnabled) {
+      throw new BadRequestException("Private survey link is disabled for this survey.");
+    }
+    if (survey.status !== SurveyStatus.ACTIVE) {
+      throw new BadRequestException("Survey is not active.");
+    }
+    return this.serializeSurvey(survey, { responseCount: 0, privateResponses: 0, publicResponses: 0 });
+  }
+
   async privateLink(tenantId: string, id: string) {
     const survey = await this.assertSurvey(tenantId, id);
     if (!survey.privateLinkEnabled) {

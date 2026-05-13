@@ -15,6 +15,7 @@ import { ChatbotModule } from "./modules/chatbot/chatbot.module";
 import { SurveysModule } from "./modules/surveys/surveys.module";
 import { TicketingModule } from "./modules/ticketing/ticketing.module";
 import { MasterDataModule } from "./modules/master-data/master-data.module";
+import { PlatformAdminModule } from "./modules/platform-admin/platform-admin.module";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { MasterDataModule } from "./modules/master-data/master-data.module";
     FilesModule,
     AuthModule,
     MasterDataModule,
+    PlatformAdminModule,
     SsmModule,
     ChatbotModule,
     SurveysModule,

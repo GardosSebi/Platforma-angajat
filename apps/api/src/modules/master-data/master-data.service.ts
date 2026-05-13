@@ -27,7 +27,7 @@ function parseOptionalDate(value?: string): Date | undefined {
   if (!value || !value.trim()) return undefined;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return d;
 }
@@ -192,7 +192,7 @@ export class MasterDataService {
     return this.encryption.encrypt(plain.trim());
   }
 
-  // --- Worksites ---
+  // --- Puncte de lucru ---
   listWorksites(tenantId: string) {
     return this.prisma.worksite.findMany({
       where: { tenantId },
@@ -212,11 +212,11 @@ export class MasterDataService {
         }
       });
     } catch {
-      throw new ConflictException("Worksite code already exists for this tenant");
+      throw new ConflictException("Codul punctului de lucru există deja pentru acest tenant.");
     }
   }
 
-  // --- Departments ---
+  // --- Departamente ---
   listDepartments(tenantId: string) {
     return this.prisma.department.findMany({
       where: { tenantId },
@@ -229,7 +229,7 @@ export class MasterDataService {
       const ws = await this.prisma.worksite.findFirst({
         where: { id: dto.worksiteId, tenantId }
       });
-      if (!ws) throw new BadRequestException("Invalid worksiteId for tenant");
+      if (!ws) throw new BadRequestException("worksiteId nevalid pentru acest tenant.");
     }
     try {
       return await this.prisma.department.create({
@@ -242,11 +242,11 @@ export class MasterDataService {
         }
       });
     } catch {
-      throw new ConflictException("Department code already exists for this tenant");
+      throw new ConflictException("Codul departamentului există deja pentru acest tenant.");
     }
   }
 
-  // --- Job positions ---
+  // --- Posturi (funcții) ---
   listJobPositions(tenantId: string) {
     return this.prisma.jobPosition.findMany({
       where: { tenantId },
@@ -259,7 +259,7 @@ export class MasterDataService {
       const dep = await this.prisma.department.findFirst({
         where: { id: dto.departmentId, tenantId }
       });
-      if (!dep) throw new BadRequestException("Invalid departmentId for tenant");
+      if (!dep) throw new BadRequestException("departmentId nevalid pentru acest tenant.");
     }
     try {
       return await this.prisma.jobPosition.create({
@@ -274,11 +274,11 @@ export class MasterDataService {
         }
       });
     } catch {
-      throw new ConflictException("Job code already exists for this tenant");
+      throw new ConflictException("Codul postului există deja pentru acest tenant.");
     }
   }
 
-  // --- Employees ---
+  // --- Angajați ---
   async listEmployees(tenantId: string, revealCnp: boolean) {
     const rows = await this.prisma.employee.findMany({
       where: { tenantId },
@@ -305,7 +305,7 @@ export class MasterDataService {
         placementHistory: { orderBy: { effectiveFrom: "desc" }, take: 50 }
       }
     });
-    if (!e) throw new NotFoundException("Employee not found");
+    if (!e) throw new NotFoundException("Angajat negăsit.");
     return { ...e, cnp: this.maskCnp(e.cnp, revealCnp) };
   }
 
@@ -337,7 +337,7 @@ export class MasterDataService {
           worksiteId: dto.worksiteId,
           departmentId: dto.departmentId,
           jobPositionId: dto.jobPositionId,
-          changeReason: "Initial create",
+          changeReason: "Creare inițială",
           createdByUserId: actorUserId
         }
       });
@@ -357,13 +357,13 @@ export class MasterDataService {
       );
       return created;
     } catch {
-      throw new ConflictException("Employee email already exists for this tenant");
+      throw new ConflictException("Adresa de e-mail a angajatului există deja pentru acest tenant.");
     }
   }
 
   async updateEmployee(tenantId: string, id: string, dto: UpdateEmployeeDto, actorUserId: string) {
     const existing = await this.prisma.employee.findFirst({ where: { id, tenantId } });
-    if (!existing) throw new NotFoundException("Employee not found");
+    if (!existing) throw new NotFoundException("Angajat negăsit.");
 
     await this.assertOrgRefs(tenantId, dto.worksiteId, dto.departmentId, dto.jobPositionId);
 
@@ -406,7 +406,7 @@ export class MasterDataService {
           worksiteId: updated.worksiteId,
           departmentId: updated.departmentId,
           jobPositionId: updated.jobPositionId,
-          changeReason: "Profile update",
+          changeReason: "Actualizare profil",
           createdByUserId: actorUserId
         }
       });
@@ -429,7 +429,7 @@ export class MasterDataService {
     actorUserId: string
   ) {
     const existing = await this.prisma.employee.findFirst({ where: { id: employeeId, tenantId } });
-    if (!existing) throw new NotFoundException("Employee not found");
+    if (!existing) throw new NotFoundException("Angajat negăsit.");
 
     const worksiteId =
       dto.worksiteId === null ? null : dto.worksiteId ?? existing.worksiteId ?? undefined;
@@ -484,19 +484,19 @@ export class MasterDataService {
   ) {
     if (worksiteId) {
       const w = await this.prisma.worksite.findFirst({ where: { id: worksiteId, tenantId } });
-      if (!w) throw new BadRequestException("Invalid worksiteId");
+      if (!w) throw new BadRequestException("worksiteId nevalid.");
     }
     if (departmentId) {
       const d = await this.prisma.department.findFirst({ where: { id: departmentId, tenantId } });
-      if (!d) throw new BadRequestException("Invalid departmentId");
+      if (!d) throw new BadRequestException("departmentId nevalid.");
     }
     if (jobPositionId) {
       const j = await this.prisma.jobPosition.findFirst({ where: { id: jobPositionId, tenantId } });
-      if (!j) throw new BadRequestException("Invalid jobPositionId");
+      if (!j) throw new BadRequestException("jobPositionId nevalid.");
     }
   }
 
-  // --- Groups ---
+  // --- Grupuri angajați ---
   listGroups(tenantId: string) {
     return this.prisma.employeeGroup.findMany({
       where: { tenantId },
@@ -516,15 +516,15 @@ export class MasterDataService {
         }
       });
     } catch {
-      throw new ConflictException("Group name already exists for this tenant");
+      throw new ConflictException("Numele grupului există deja pentru acest tenant.");
     }
   }
 
   async addGroupMember(tenantId: string, groupId: string, employeeId: string) {
     const g = await this.prisma.employeeGroup.findFirst({ where: { id: groupId, tenantId } });
-    if (!g) throw new NotFoundException("Group not found");
+    if (!g) throw new NotFoundException("Grup negăsit.");
     const e = await this.prisma.employee.findFirst({ where: { id: employeeId, tenantId } });
-    if (!e) throw new NotFoundException("Employee not found");
+    if (!e) throw new NotFoundException("Angajat negăsit.");
     await this.prisma.employeeGroupMember.upsert({
       where: { groupId_employeeId: { groupId, employeeId } },
       create: { groupId, employeeId },
@@ -535,12 +535,12 @@ export class MasterDataService {
 
   async removeGroupMember(tenantId: string, groupId: string, employeeId: string) {
     const g = await this.prisma.employeeGroup.findFirst({ where: { id: groupId, tenantId } });
-    if (!g) throw new NotFoundException("Group not found");
+    if (!g) throw new NotFoundException("Grup negăsit.");
     await this.prisma.employeeGroupMember.deleteMany({ where: { groupId, employeeId } });
     return { removed: true };
   }
 
-  // --- SSM responsibles ---
+  // --- Responsabili SSM ---
   listSsmResponsibles(tenantId: string) {
     return this.prisma.ssmResponsible.findMany({
       where: { tenantId },
@@ -551,7 +551,7 @@ export class MasterDataService {
   async createSsmResponsible(tenantId: string, dto: CreateSsmResponsibleDto) {
     if (dto.worksiteId) {
       const w = await this.prisma.worksite.findFirst({ where: { id: dto.worksiteId, tenantId } });
-      if (!w) throw new BadRequestException("Invalid worksiteId");
+      if (!w) throw new BadRequestException("worksiteId nevalid.");
     }
     return this.prisma.ssmResponsible.create({
       data: {
@@ -567,7 +567,7 @@ export class MasterDataService {
     });
   }
 
-  // --- CSV import ---
+  // --- Import CSV angajați ---
   async importEmployeesFromCsv(
     tenantId: string,
     csvText: string,
@@ -575,7 +575,7 @@ export class MasterDataService {
   ): Promise<{ created: number; updated: number; errors: { row: number; message: string }[] }> {
     const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
     if (lines.length < 2) {
-      throw new BadRequestException("CSV must include header and at least one data row");
+      throw new BadRequestException("Fișierul CSV trebuie să conțină linia de antet și cel puțin o linie de date.");
     }
     const header = parseCsvRow(lines[0]).map((h) => h.toLowerCase());
     const idx = (name: string) => header.indexOf(name);
@@ -583,7 +583,7 @@ export class MasterDataService {
     const colEmail = idx("email");
     const colName = idx("fullname");
     if (colEmail < 0 || colName < 0) {
-      throw new BadRequestException("CSV header must include email,fullName");
+      throw new BadRequestException("Antetul CSV trebuie să includă coloanele email și fullName.");
     }
 
     const colCnp = idx("cnp");
@@ -612,7 +612,7 @@ export class MasterDataService {
         const email = cells[colEmail]?.toLowerCase();
         const fullName = cells[colName];
         if (!email || !fullName) {
-          errors.push({ row: rowNum, message: "Missing email or fullName" });
+          errors.push({ row: rowNum, message: "Lipsește adresa de e-mail sau numele complet." });
           continue;
         }
 
@@ -623,7 +623,7 @@ export class MasterDataService {
         if (colWs >= 0 && cells[colWs]) {
           const id = wsByCode.get(cells[colWs].toLowerCase());
           if (!id) {
-            errors.push({ row: rowNum, message: `Unknown worksite code ${cells[colWs]}` });
+            errors.push({ row: rowNum, message: `Cod punct de lucru necunoscut: ${cells[colWs]}` });
             continue;
           }
           worksiteId = id;
@@ -633,7 +633,7 @@ export class MasterDataService {
         if (colDep >= 0 && cells[colDep]) {
           const id = depByCode.get(cells[colDep].toLowerCase());
           if (!id) {
-            errors.push({ row: rowNum, message: `Unknown department code ${cells[colDep]}` });
+            errors.push({ row: rowNum, message: `Cod departament necunoscut: ${cells[colDep]}` });
             continue;
           }
           departmentId = id;
@@ -643,7 +643,7 @@ export class MasterDataService {
         if (colJob >= 0 && cells[colJob]) {
           const id = jobByCode.get(cells[colJob].toLowerCase());
           if (!id) {
-            errors.push({ row: rowNum, message: `Unknown job code ${cells[colJob]}` });
+            errors.push({ row: rowNum, message: `Cod post necunoscut: ${cells[colJob]}` });
             continue;
           }
           jobPositionId = id;
@@ -696,7 +696,7 @@ export class MasterDataService {
               worksiteId,
               departmentId,
               jobPositionId,
-              changeReason: "CSV import",
+              changeReason: "Import CSV",
               createdByUserId: actorUserId
             }
           });
@@ -705,7 +705,7 @@ export class MasterDataService {
       } catch (e) {
         errors.push({
           row: rowNum,
-          message: e instanceof Error ? e.message : "Unknown error"
+          message: e instanceof Error ? e.message : "Eroare necunoscută"
         });
       }
     }

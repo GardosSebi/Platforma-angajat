@@ -15,3 +15,14 @@ export enum SsmResponsibleType {
   DESIGNATED_WORKER = "DESIGNATED_WORKER",
   EXTERNAL_SERVICE = "EXTERNAL_SERVICE"
 }
+
+export enum RoleAssignmentScope {
+  WORKSITE = "WORKSITE",
+  EMPLOYEE_GROUP = "EMPLOYEE_GROUP"
+}
+
+export enum EmployeeStaticAudienceType {
+  ALL = "ALL",
+  WORKSITE = "WORKSITE",
+  EMPLOYEE_GROUP = "EMPLOYEE_GROUP"
+}

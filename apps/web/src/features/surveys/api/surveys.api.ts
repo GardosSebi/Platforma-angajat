@@ -7,7 +7,9 @@ import type {
   SurveyStatsResponse,
   UpdateSurveyRequest
 } from "@repo/shared-types/surveys";
+import { getApiBaseUrl } from "../../../shared/api/api-base";
 import { httpClient } from "../../../shared/api/http-client";
+import { httpErrorFromResponse } from "../../../shared/api/http-error";
 
 export interface SurveysOverviewResponse {
   kpi: {
@@ -25,6 +27,9 @@ export const surveysApi = {
   },
   listSurveys() {
     return httpClient<{ items: SurveyItem[] }>("/surveys");
+  },
+  getForRespond(surveyId: string) {
+    return httpClient<SurveyItem>(`/surveys/${surveyId}/for-respond`);
   },
   createSurvey(payload: CreateSurveyRequest) {
     return httpClient<SurveyItem>("/surveys", {
@@ -72,3 +77,23 @@ export const surveysApi = {
     return `/surveys/${id}/export.${type}`;
   }
 };
+
+export async function fetchPublicSurvey(token: string): Promise<SurveyItem> {
+  const response = await fetch(`${getApiBaseUrl()}/surveys/public/${encodeURIComponent(token)}`);
+  if (!response.ok) {
+    throw await httpErrorFromResponse(response);
+  }
+  return response.json() as Promise<SurveyItem>;
+}
+
+export async function submitPublicSurveyResponse(token: string, payload: SubmitSurveyResponseRequest): Promise<{ responseId: string }> {
+  const response = await fetch(`${getApiBaseUrl()}/surveys/public/${encodeURIComponent(token)}/responses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw await httpErrorFromResponse(response);
+  }
+  return response.json() as Promise<{ responseId: string }>;
+}

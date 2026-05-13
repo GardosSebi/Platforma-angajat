@@ -10,7 +10,8 @@ import { JwtStrategy } from "./jwt.strategy";
     PassportModule.register({ defaultStrategy: "jwt" }),
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? "dev-jwt-secret",
-      signOptions: { expiresIn: "15m" }
+      // Long-lived access token for internal portal (no refresh flow yet). Adjust or add refresh tokens for production hardening.
+      signOptions: { expiresIn: "365d" }
     })
   ],
   controllers: [AuthController],

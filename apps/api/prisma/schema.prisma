@@ -193,6 +193,17 @@ enum HelpdeskTicketSource {
   MANUAL
 }
 
+enum RoleAssignmentScope {
+  WORKSITE
+  EMPLOYEE_GROUP
+}
+
+enum EmployeeStaticAudienceType {
+  ALL
+  WORKSITE
+  EMPLOYEE_GROUP
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -238,6 +249,8 @@ model Tenant {
   surveyResponses            SurveyResponse[]
   helpdeskTickets            HelpdeskTicket[]
   helpdeskTicketComments     HelpdeskTicketComment[]
+  userScopedRoles            UserScopedRole[]
+  employeeStaticPages        EmployeeStaticPage[]
 }
 
 model User {
@@ -251,7 +264,8 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scopedRoles UserScopedRole[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
@@ -276,6 +290,7 @@ model Worksite {
   ssmPsiEquipments           SsmPsiEquipment[]
   ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
   ssmPsiResponsibles         SsmPsiResponsible[]
+  userScopedRoles            UserScopedRole[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -396,8 +411,9 @@ model EmployeeGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  members EmployeeGroupMember[]
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members         EmployeeGroupMember[]
+  userScopedRoles UserScopedRole[]
 
   @@unique([tenantId, name])
   @@index([tenantId, active])
@@ -1125,4 +1141,49 @@ model AuditLog {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, module, createdAt])
+}
+
+model UserScopedRole {
+  id                String              @id @default(cuid())
+  tenantId          String
+  userId            String
+  role              SystemRole
+  scope             RoleAssignmentScope
+  worksiteId        String?
+  employeeGroupId   String?
+  createdAt         DateTime            @default(now())
+  createdByUserId   String
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  worksite      Worksite?      @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  employeeGroup EmployeeGroup? @relation(fields: [employeeGroupId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@index([tenantId, worksiteId])
+  @@index([tenantId, employeeGroupId])
+}
+
+model EmployeeStaticPage {
+  id             String                     @id @default(cuid())
+  tenantId       String
+  slug           String
+  title          String
+  bodyMarkdown   String
+  audienceType   EmployeeStaticAudienceType @default(ALL)
+  audienceRefId  String?
+  sortOrder      Int                        @default(0)
+  published      Boolean                    @default(false)
+  attachmentName String?
+  attachmentPath String?
+  attachmentMime String?
+  attachmentSize Int?
+  createdBy      String
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, published, sortOrder])
 }

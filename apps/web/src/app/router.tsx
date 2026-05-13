@@ -5,25 +5,20 @@ import { SsmDashboardPage } from "../features/ssm/pages/SsmDashboardPage";
 import { MasterDataPage } from "../features/master-data/pages/MasterDataPage";
 import { ChatbotPage } from "../features/chatbot/pages/ChatbotPage";
 import { SurveysPage } from "../features/surveys/pages/SurveysPage";
+import { PublicSurveyPage } from "../features/surveys/pages/PublicSurveyPage";
+import { SurveyRespondPage } from "../features/surveys/pages/SurveyRespondPage";
 import { TicketingPage } from "../features/ticketing/pages/TicketingPage";
-
-function Placeholder({ title, icon }: { title: string; icon: string }) {
-  return (
-    <div className="placeholder-page">
-      <div className="placeholder-icon" aria-hidden>
-        {icon}
-      </div>
-      <h2>{title}</h2>
-      <p>This module is not wired up yet. You will see tools and workflows here in a later iteration.</p>
-    </div>
-  );
-}
+import { AdminPage } from "../features/platform-admin/pages/AdminPage";
+import { EmployeeStaticListPage } from "../features/employee-static/pages/EmployeeStaticListPage";
+import { EmployeeStaticDetailPage } from "../features/employee-static/pages/EmployeeStaticDetailPage";
 
 export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/surveys/public/:token" element={<PublicSurveyPage />} />
+        <Route path="/surveys/respond/:surveyId" element={<SurveyRespondPage />} />
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/ssm" replace />} />
           <Route path="/ssm" element={<SsmDashboardPage />} />
@@ -31,6 +26,9 @@ export function AppRouter() {
           <Route path="/chatbot" element={<ChatbotPage />} />
           <Route path="/surveys" element={<SurveysPage />} />
           <Route path="/ticketing" element={<TicketingPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/informatii" element={<EmployeeStaticListPage />} />
+          <Route path="/informatii/:slug" element={<EmployeeStaticDetailPage />} />
           <Route path="*" element={<Navigate to="/ssm" replace />} />
         </Route>
       </Routes>

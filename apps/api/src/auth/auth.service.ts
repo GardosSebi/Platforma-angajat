@@ -57,7 +57,7 @@ export class AuthService {
 
     return {
       accessToken,
-      expiresIn: "15m",
+      expiresIn: "365d",
       user: {
         id: user.id,
         email: user.email,

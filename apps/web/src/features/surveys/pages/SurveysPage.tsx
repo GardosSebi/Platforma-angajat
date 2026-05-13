@@ -528,13 +528,21 @@ export function SurveysPage() {
             </button>
             {createPublicLink.isSuccess ? (
               <div className="feedback success">
-                Link public: <code>{createPublicLink.data.url}</code>
+                Link public (copiază în browser):{" "}
+                <code>
+                  {typeof window !== "undefined" ? `${window.location.origin}${createPublicLink.data.url}` : createPublicLink.data.url}
+                </code>
               </div>
             ) : null}
             {createPublicLink.isError ? <div className="feedback error">{mutationErrorMessage(createPublicLink.error)}</div> : null}
             {selectedSurvey ? (
               <p className="field-hint">
-                Link privat autentificat: <code>/surveys/respond/{selectedSurvey.id}</code>
+                Link privat (autentificare obligatorie):{" "}
+                <code>
+                  {typeof window !== "undefined"
+                    ? `${window.location.origin}/surveys/respond/${selectedSurvey.id}`
+                    : `/surveys/respond/${selectedSurvey.id}`}
+                </code>
               </p>
             ) : null}
           </div>

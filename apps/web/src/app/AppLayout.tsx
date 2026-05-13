@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { authStore } from "../shared/auth/auth-store";
+import { canAccessTenantAdmin } from "../shared/auth/roles";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 
 const nav = [
@@ -7,7 +8,8 @@ const nav = [
   { to: "/master-data", label: "Master Data" },
   { to: "/chatbot", label: "Chatbot" },
   { to: "/surveys", label: "Surveys" },
-  { to: "/ticketing", label: "Ticketing" }
+  { to: "/ticketing", label: "Ticketing" },
+  { to: "/informatii", label: "Informații" }
 ];
 
 export function AppLayout() {
@@ -26,10 +28,20 @@ export function AppLayout() {
           </div>
           <nav className="app-nav" aria-label="Main">
             {nav.map(({ to, label }) => (
-              <NavLink key={to} to={to} className={({ isActive }) => (isActive ? "active" : undefined)} end={to === "/ssm"}>
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) => (isActive ? "active" : undefined)}
+                end={to === "/ssm" || to === "/informatii"}
+              >
                 {label}
               </NavLink>
             ))}
+            {canAccessTenantAdmin(session) ? (
+              <NavLink to="/admin" className={({ isActive }) => (isActive ? "active" : undefined)}>
+                Admin
+              </NavLink>
+            ) : null}
           </nav>
           <div className="app-auth">
             {session ? (

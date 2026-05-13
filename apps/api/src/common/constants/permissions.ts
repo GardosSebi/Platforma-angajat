@@ -43,7 +43,12 @@ export const Permission = {
   AUDIT_READ: "audit:read",
   MASTER_DATA_READ: "master-data:read",
   MASTER_DATA_WRITE: "master-data:write",
-  MASTER_DATA_IMPORT: "master-data:import"
+  MASTER_DATA_IMPORT: "master-data:import",
+  ADMIN_USERS_VIEW: "admin:users:view",
+  ADMIN_USERS_EDIT: "admin:users:edit",
+  ADMIN_ROLE_SCOPE_MANAGE: "admin:role-scope:manage",
+  STATIC_PAGES_MANAGE: "platform:static-pages:manage",
+  USAGE_STATS_VIEW: "admin:usage:view"
 } as const;
 
 export type PermissionCode = (typeof Permission)[keyof typeof Permission];
@@ -90,7 +95,12 @@ const allPermissions: string[] = [
   Permission.AUDIT_READ,
   Permission.MASTER_DATA_READ,
   Permission.MASTER_DATA_WRITE,
-  Permission.MASTER_DATA_IMPORT
+  Permission.MASTER_DATA_IMPORT,
+  Permission.ADMIN_USERS_VIEW,
+  Permission.ADMIN_USERS_EDIT,
+  Permission.ADMIN_ROLE_SCOPE_MANAGE,
+  Permission.STATIC_PAGES_MANAGE,
+  Permission.USAGE_STATS_VIEW
 ];
 
 const masterDataReadWrite: string[] = [
@@ -198,7 +208,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.TICKETS_EDIT,
     Permission.MASTER_DATA_READ
   ],
-  [SystemRole.EMPLOYEE]: []
+  [SystemRole.EMPLOYEE]: [Permission.SURVEYS_RESPOND]
 };
 
 export function permissionsForRoles(roles: SystemRole[]): Set<string> {

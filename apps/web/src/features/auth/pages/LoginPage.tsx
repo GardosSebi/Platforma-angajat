@@ -1,11 +1,20 @@
-import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { FormEvent, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getApiBaseUrl } from "../../../shared/api/api-base";
 import { loginRequest } from "../api/auth.api";
 import { authStore } from "../../../shared/auth/auth-store";
 
+function safeReturnPath(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/")) return null;
+  if (raw.startsWith("//")) return null;
+  if (raw.includes("://")) return null;
+  return raw;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnUrl = useMemo(() => safeReturnPath(searchParams.get("returnUrl")), [searchParams]);
   const [tenantId, setTenantId] = useState("e01");
   const [email, setEmail] = useState("admin@company.local");
   const [password, setPassword] = useState("");
@@ -19,10 +28,14 @@ export function LoginPage() {
     setPending(true);
     try {
       const data = await loginRequest(tenantId.trim(), email.trim(), password);
-      authStore.set({ accessToken: data.accessToken, tenantId: data.user.tenantId });
-      navigate("/ssm", { replace: true });
+      authStore.set({
+        accessToken: data.accessToken,
+        tenantId: data.user.tenantId,
+        roles: data.user.roles
+      });
+      navigate(returnUrl ?? "/ssm", { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Login failed");
+      setError(e instanceof Error ? e.message : "Autentificarea a eșuat.");
     } finally {
       setPending(false);
     }
@@ -36,13 +49,13 @@ export function LoginPage() {
             EP
           </span>
           <div>
-            <h1 className="login-title">Sign in</h1>
-            <p className="login-sub">Employee Platform — use your tenant, email, and password.</p>
+            <h1 className="login-title">Autentificare</h1>
+            <p className="login-sub">Platformă angajați — introduceți ID-ul tenant, adresa de e-mail și parola.</p>
           </div>
         </div>
         <form onSubmit={onSubmit} className="form-stack">
           <div className="field">
-            <label htmlFor="tenant-id">Tenant ID</label>
+            <label htmlFor="tenant-id">ID tenant</label>
             <input
               id="tenant-id"
               name="tenantId"
@@ -53,7 +66,7 @@ export function LoginPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">E-mail</label>
             <input
               id="email"
               name="email"
@@ -64,7 +77,7 @@ export function LoginPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">Parolă</label>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
               <input
                 id="password"
@@ -92,11 +105,11 @@ export function LoginPage() {
             </p>
           ) : null}
           <button type="submit" className="btn-primary" disabled={pending}>
-            {pending ? "Signing in…" : "Sign in"}
+            {pending ? "Se conectează…" : "Conectare"}
           </button>
         </form>
         <p className="login-back">
-          <Link to="/ssm">Back to app</Link>
+          <Link to="/ssm">Înapoi la aplicație</Link>
         </p>
       </div>
     </div>
