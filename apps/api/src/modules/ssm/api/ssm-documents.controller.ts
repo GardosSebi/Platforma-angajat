@@ -12,6 +12,7 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
+import { JwtPayload } from "../../../auth/jwt.strategy";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
 import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
@@ -39,20 +40,20 @@ export class SsmDocumentsController {
 
   @Get()
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
-  list(@TenantId() tenantId: string, @Query() query: ListSsmDocumentsDto) {
-    return this.documentsService.listDocuments(tenantId, query);
+  list(@TenantId() tenantId: string, @Query() query: ListSsmDocumentsDto, @CurrentUser() user: JwtPayload) {
+    return this.documentsService.listDocuments(tenantId, query, user);
   }
 
   @Get("control/quick-access")
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
-  quickControlAccess(@TenantId() tenantId: string) {
-    return this.documentsService.quickControlAccess(tenantId);
+  quickControlAccess(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.documentsService.quickControlAccess(tenantId, user);
   }
 
   @Get(":id/history")
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
-  history(@TenantId() tenantId: string, @Param("id") id: string) {
-    return this.documentsService.getDocumentHistory(tenantId, id);
+  history(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.documentsService.getDocumentHistory(tenantId, id, user);
   }
 
   @Post()

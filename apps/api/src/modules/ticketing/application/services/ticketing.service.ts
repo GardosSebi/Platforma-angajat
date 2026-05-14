@@ -12,11 +12,10 @@ import {
 } from "../../api/dto/ticketing.dto";
 
 const KANBAN_STATUSES = [
-  HelpdeskTicketStatus.NEW,
-  HelpdeskTicketStatus.TRIAGE,
-  HelpdeskTicketStatus.IN_PROGRESS,
-  HelpdeskTicketStatus.WAITING_REQUESTER,
-  HelpdeskTicketStatus.RESOLVED,
+  HelpdeskTicketStatus.OPEN,
+  HelpdeskTicketStatus.WAITING_OPERATOR,
+  HelpdeskTicketStatus.WAITING_USER,
+  HelpdeskTicketStatus.WAITING_INFO,
   HelpdeskTicketStatus.CLOSED
 ];
 
@@ -69,8 +68,9 @@ export class TicketingService {
         title: dto.title.trim(),
         description: dto.description.trim(),
         category: clean(dto.category),
-        priority: dto.priority ?? HelpdeskTicketPriority.MEDIUM,
-        source: dto.source ?? (dto.sourceSurveyResponseId ? HelpdeskTicketSource.SURVEY : HelpdeskTicketSource.PORTAL),
+        priority: (dto.priority ?? HelpdeskTicketPriority.MEDIUM) as HelpdeskTicketPriority,
+        source: (dto.source ??
+          (dto.sourceSurveyResponseId ? HelpdeskTicketSource.SURVEY : HelpdeskTicketSource.PORTAL)) as HelpdeskTicketSource,
         reporterEmployeeId: clean(dto.reporterEmployeeId),
         reporterName: clean(dto.reporterName),
         reporterEmail: clean(dto.reporterEmail),
@@ -96,8 +96,9 @@ export class TicketingService {
   async updateTicket(tenantId: string, actorId: string, id: string, dto: UpdateTicketDto) {
     const current = await this.assertTicket(tenantId, id);
     await this.assertReporter(tenantId, dto.reporterEmployeeId);
-    const status = dto.status;
-    const resolvedAt = status === HelpdeskTicketStatus.RESOLVED && !current.resolvedAt ? new Date() : undefined;
+    const status = dto.status as HelpdeskTicketStatus | undefined;
+    const resolvedAt =
+      status === HelpdeskTicketStatus.WAITING_INFO && !current.resolvedAt ? new Date() : undefined;
     const closedAt = status === HelpdeskTicketStatus.CLOSED && !current.closedAt ? new Date() : undefined;
     const ticket = await this.prisma.helpdeskTicket.update({
       where: { id },
@@ -106,7 +107,7 @@ export class TicketingService {
         description: dto.description?.trim(),
         category: cleanNullable(dto.category),
         status,
-        priority: dto.priority,
+        priority: dto.priority as HelpdeskTicketPriority | undefined,
         reporterEmployeeId: cleanNullable(dto.reporterEmployeeId),
         reporterName: cleanNullable(dto.reporterName),
         reporterEmail: cleanNullable(dto.reporterEmail),
@@ -174,25 +175,29 @@ export class TicketingService {
 
   async stats(tenantId: string) {
     const now = new Date();
-    const [total, open, overdue, byStatus, byPriority, assigned] = await Promise.all([
+    const [total, open, overdue, byStatus, byPriority, byCategory, assignedRows] = await Promise.all([
       this.prisma.helpdeskTicket.count({ where: { tenantId } }),
       this.prisma.helpdeskTicket.count({
-        where: { tenantId, status: { notIn: [HelpdeskTicketStatus.RESOLVED, HelpdeskTicketStatus.CLOSED] } }
+        where: { tenantId, status: { not: HelpdeskTicketStatus.CLOSED } }
       }),
       this.prisma.helpdeskTicket.count({
         where: {
           tenantId,
           dueAt: { lt: now },
-          status: { notIn: [HelpdeskTicketStatus.RESOLVED, HelpdeskTicketStatus.CLOSED] }
+          status: { not: HelpdeskTicketStatus.CLOSED }
         }
       }),
       this.prisma.helpdeskTicket.groupBy({ by: ["status"], where: { tenantId }, _count: { _all: true } }),
       this.prisma.helpdeskTicket.groupBy({ by: ["priority"], where: { tenantId }, _count: { _all: true } }),
-      this.prisma.helpdeskTicket.groupBy({
-        by: ["assignedToUserId", "assignedToName"],
-        where: { tenantId, assignedToUserId: { not: null } },
-        _count: { _all: true }
-      })
+      this.prisma.helpdeskTicket.groupBy({ by: ["category"], where: { tenantId }, _count: { _all: true } }),
+      this.prisma.$queryRaw<
+        Array<{ assignedToUserId: string; assignedToName: string | null; count: number }>
+      >(Prisma.sql`
+        SELECT "assignedToUserId", MAX("assignedToName") AS "assignedToName", COUNT(*)::int AS "count"
+        FROM "HelpdeskTicket"
+        WHERE "tenantId" = ${tenantId} AND "assignedToUserId" IS NOT NULL
+        GROUP BY "assignedToUserId"
+      `)
     ]);
     return {
       total,
@@ -206,30 +211,49 @@ export class TicketingService {
         priority,
         count: byPriority.find((item) => item.priority === priority)?._count._all ?? 0
       })),
-      operators: assigned.map((item) => ({
-        assignedToUserId: item.assignedToUserId ?? "",
-        assignedToName: item.assignedToName,
+      byCategory: byCategory.map((item) => ({
+        category: item.category ?? "",
         count: item._count._all
+      })),
+      operators: assignedRows.map((item) => ({
+        assignedToUserId: item.assignedToUserId,
+        assignedToName: item.assignedToName,
+        count: item.count
       }))
     };
   }
 
   private async findTickets(tenantId: string, query: ListTicketsDto) {
+    const subjectTrim = clean(query.subject);
+    const searchTrim = query.search?.trim();
+    const assignedToNameTrim = clean(query.assignedToName);
+
+    const textAnd: Prisma.HelpdeskTicketWhereInput[] = [];
+    if (subjectTrim) {
+      textAnd.push({ title: { contains: subjectTrim, mode: "insensitive" } });
+    }
+    if (searchTrim) {
+      textAnd.push({
+        OR: [
+          { title: { contains: searchTrim, mode: "insensitive" } },
+          { description: { contains: searchTrim, mode: "insensitive" } },
+          { reporterName: { contains: searchTrim, mode: "insensitive" } },
+          { reporterEmail: { contains: searchTrim, mode: "insensitive" } }
+        ]
+      });
+    }
+
     const where: Prisma.HelpdeskTicketWhereInput = {
       tenantId,
-      status: query.status,
-      priority: query.priority,
+      status: query.status as HelpdeskTicketStatus | undefined,
+      priority: query.priority as HelpdeskTicketPriority | undefined,
       assignedToUserId: clean(query.assignedToUserId),
       reporterEmployeeId: clean(query.reporterEmployeeId),
       category: clean(query.category),
-      OR: query.search?.trim()
-        ? [
-            { title: { contains: query.search.trim(), mode: "insensitive" } },
-            { description: { contains: query.search.trim(), mode: "insensitive" } },
-            { reporterName: { contains: query.search.trim(), mode: "insensitive" } },
-            { reporterEmail: { contains: query.search.trim(), mode: "insensitive" } }
-          ]
-        : undefined
+      assignedToName: assignedToNameTrim
+        ? { contains: assignedToNameTrim, mode: "insensitive" }
+        : undefined,
+      AND: textAnd.length ? textAnd : undefined
     };
     const rows = await this.prisma.helpdeskTicket.findMany({
       where,

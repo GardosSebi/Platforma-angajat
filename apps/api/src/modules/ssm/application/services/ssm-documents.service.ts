@@ -1,9 +1,11 @@
 import { mkdir, writeFile } from "fs/promises";
 import { extname, resolve } from "path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { SsmDocumentStatus, SsmDocumentTargetType, SsmDocumentType } from "@prisma/client";
+import { JwtPayload } from "../../../../auth/jwt.strategy";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { resolveSsmViewerScope } from "../../api/ssm-viewer-scope";
 import { CreateSsmDocumentDto } from "../../api/dto/create-ssm-document.dto";
 import { ListSsmDocumentsDto } from "../../api/dto/list-ssm-documents.dto";
 
@@ -28,6 +30,34 @@ function sanitizeFilename(name: string): string {
 
 function toBool(value?: string): boolean {
   return value === "true" || value === "1" || value === "yes";
+}
+
+type EmployeePlacementNames = {
+  department: { name: string } | null;
+  jobPosition: { name: string } | null;
+  worksite: { name: string } | null;
+};
+
+function ssmDocumentVisibleToEmployee(
+  doc: { targetType: SsmDocumentTargetType; targetLabel: string | null; status: SsmDocumentStatus },
+  employee: EmployeePlacementNames
+): boolean {
+  if (doc.status !== SsmDocumentStatus.ACTIVE) {
+    return false;
+  }
+  if (doc.targetType === SsmDocumentTargetType.ALL) {
+    return true;
+  }
+  if (doc.targetType === SsmDocumentTargetType.DEPARTMENT) {
+    return doc.targetLabel === (employee.department?.name ?? undefined);
+  }
+  if (doc.targetType === SsmDocumentTargetType.JOB_POSITION) {
+    return doc.targetLabel === (employee.jobPosition?.name ?? undefined);
+  }
+  if (doc.targetType === SsmDocumentTargetType.WORKSITE) {
+    return doc.targetLabel === (employee.worksite?.name ?? undefined);
+  }
+  return false;
 }
 
 @Injectable()
@@ -242,7 +272,45 @@ export class SsmDocumentsService {
     return { documentId, status: SsmDocumentStatus.ARCHIVED };
   }
 
-  async listDocuments(tenantId: string, query: ListSsmDocumentsDto) {
+  private async employeeRowForViewer(
+    tenantId: string,
+    viewer: JwtPayload
+  ): Promise<
+    { scope: "tenant" } | { scope: "empty" } | { scope: "self"; employee: EmployeePlacementNames }
+  > {
+    const resolved = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+    if (resolved.mode === "tenant") {
+      return { scope: "tenant" };
+    }
+    if (resolved.mode === "empty") {
+      return { scope: "empty" };
+    }
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: resolved.employeeId, tenantId },
+      include: {
+        department: { select: { name: true } },
+        jobPosition: { select: { name: true } },
+        worksite: { select: { name: true } }
+      }
+    });
+    if (!employee) {
+      return { scope: "empty" };
+    }
+    return {
+      scope: "self",
+      employee: {
+        department: employee.department,
+        jobPosition: employee.jobPosition,
+        worksite: employee.worksite
+      }
+    };
+  }
+
+  async listDocuments(tenantId: string, query: ListSsmDocumentsDto, viewer: JwtPayload) {
+    const ctx = await this.employeeRowForViewer(tenantId, viewer);
+    if (ctx.scope === "empty") {
+      return { items: [] };
+    }
     const rows = await this.prisma.ssmDocument.findMany({
       where: {
         tenantId,
@@ -272,17 +340,25 @@ export class SsmDocumentsService {
       orderBy: [{ updatedAt: "desc" }]
     });
 
+    let filtered = rows.filter((row) => row.activeVersion);
+    if (ctx.scope === "self") {
+      filtered = filtered.filter((row) =>
+        ssmDocumentVisibleToEmployee(
+          { targetType: row.targetType, targetLabel: row.targetLabel, status: row.status },
+          ctx.employee
+        )
+      );
+    }
+
     return {
-      items: rows
-        .filter((row) => row.activeVersion)
-        .map((row) => ({
-          ...row,
-          activeVersion: row.activeVersion!
-        }))
+      items: filtered.map((row) => ({
+        ...row,
+        activeVersion: row.activeVersion!
+      }))
     };
   }
 
-  async getDocumentHistory(tenantId: string, documentId: string) {
+  async getDocumentHistory(tenantId: string, documentId: string, viewer: JwtPayload) {
     const document = await this.prisma.ssmDocument.findFirst({
       where: { id: documentId, tenantId },
       include: {
@@ -294,6 +370,24 @@ export class SsmDocumentsService {
     if (!document) {
       throw new NotFoundException("Document not found.");
     }
+
+    const ctx = await this.employeeRowForViewer(tenantId, viewer);
+    if (ctx.scope === "empty") {
+      throw new ForbiddenException("Contul nu este asociat unui angajat pentru acces la documente.");
+    }
+    if (
+      ctx.scope === "self" &&
+      !ssmDocumentVisibleToEmployee(
+        {
+          targetType: document.targetType,
+          targetLabel: document.targetLabel,
+          status: document.status
+        },
+        ctx.employee
+      )
+    ) {
+      throw new ForbiddenException("Nu aveți acces la acest document.");
+    }
     return {
       documentId: document.id,
       title: document.title,
@@ -302,7 +396,11 @@ export class SsmDocumentsService {
     };
   }
 
-  async quickControlAccess(tenantId: string) {
+  async quickControlAccess(tenantId: string, viewer: JwtPayload) {
+    const ctx = await this.employeeRowForViewer(tenantId, viewer);
+    if (ctx.scope === "empty") {
+      return { folders: [] };
+    }
     const rows = await this.prisma.ssmDocument.findMany({
       where: {
         tenantId,
@@ -317,6 +415,9 @@ export class SsmDocumentsService {
 
     const grouped = new Map<string, typeof rows>();
     for (const row of rows) {
+      if (ctx.scope === "self" && !ssmDocumentVisibleToEmployee(row, ctx.employee)) {
+        continue;
+      }
       const key = `${row.type}/${row.targetType}`;
       if (!grouped.has(key)) {
         grouped.set(key, []);

@@ -1,33 +1,42 @@
 import { useMemo, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
-import type {
-  CreateHelpdeskTicketRequest,
-  HelpdeskTicketItem,
-  HelpdeskTicketPriority,
-  HelpdeskTicketSource,
-  HelpdeskTicketStatus
+import {
+  HELPDESK_TICKET_STATUSES,
+  type CreateHelpdeskTicketRequest,
+  type HelpdeskTicketItem,
+  type HelpdeskTicketPriority,
+  type HelpdeskTicketSource,
+  type HelpdeskTicketStatus
 } from "@repo/shared-types/ticketing";
 import { useEmployees } from "../../master-data/hooks/useMasterData";
 import { TicketFilters } from "../api/ticketing.api";
 import { useAssignTicket, useCreateTicket, useMoveTicket, useTicketingKanban, useTicketingStats } from "../hooks/useTicketing";
 
-const STATUSES: HelpdeskTicketStatus[] = ["NEW", "TRIAGE", "IN_PROGRESS", "WAITING_REQUESTER", "RESOLVED", "CLOSED"];
+const STATUSES = [...HELPDESK_TICKET_STATUSES] as HelpdeskTicketStatus[];
 const PRIORITIES: HelpdeskTicketPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const SOURCES: HelpdeskTicketSource[] = ["PORTAL", "SURVEY", "CHATBOT", "EMAIL", "MANUAL"];
 
 const STATUS_LABELS: Record<HelpdeskTicketStatus, string> = {
-  NEW: "Nou",
-  TRIAGE: "Triere",
-  IN_PROGRESS: "În lucru",
-  WAITING_REQUESTER: "Așteaptă solicitant",
-  RESOLVED: "Rezolvat",
+  OPEN: "Deschis",
+  WAITING_OPERATOR: "În așteptare operator",
+  WAITING_USER: "În așteptare utilizator",
+  WAITING_INFO: "În așteptare informații",
   CLOSED: "Închis"
 };
 
+const PRIORITY_LABELS: Record<HelpdeskTicketPriority, string> = {
+  LOW: "Scăzută",
+  MEDIUM: "Medie",
+  HIGH: "Ridicată",
+  URGENT: "Urgentă"
+};
+
+const TICKET_CATEGORIES = ["HR", "CONCEDIU", "IT", "LEGAL", "FACILITĂȚI", "ALTE"] as const;
+
 const EMPTY_TICKET: CreateHelpdeskTicketRequest = {
-  title: "Problemă acces platformă",
-  description: "Descrierea solicitării...",
-  category: "IT",
+  title: "Cerere concediu / HR",
+  description: "Descrierea solicitării interne (ex: perioada, motiv, date de contact)...",
+  category: "HR",
   priority: "MEDIUM",
   source: "PORTAL",
   reporterEmployeeId: "",
@@ -147,23 +156,27 @@ export function TicketingPage() {
 
   return (
     <>
-      <h1 className="page-title">Tichete Helpdesk</h1>
-      <p className="page-lead">Partea N · 4.4: board Kanban, filtre, operatori, statistici și tichete pornite din sondaje.</p>
+      <h1 className="page-title">Tichete — Help desk intern</h1>
+      <p className="page-lead">
+        Modul 4.4: solicitări interne (ex. concediu, HR), Kanban pe stări, filtre după subiect / destinatar / operator și
+        statistici.
+      </p>
 
       <section className="ssm-documents" aria-labelledby="ticketing-title">
         <div className="ssm-module-hero">
           <div className="card ssm-hero-card">
-            <p className="ssm-card-eyebrow">Partea N · 4.4</p>
+            <p className="ssm-card-eyebrow">4.4 Help desk intern</p>
             <h2 id="ticketing-title" className="card-title">
-              Helpdesk operațional
+              Tichete interne
             </h2>
             <p className="ssm-hero-lead">
-              Urmărește solicitările pe stări, filtrează după prioritate/operator și creează tichete inclusiv din răspunsuri de sondaj.
+              Solicitări interne ale angajaților: deschis, în așteptare operator, utilizator sau informații, apoi închis.
+              Filtrează după subiect (titlu), destinatar (nume operator) și operator (ID).
             </p>
             <div className="ssm-badge-row">
               <span className="ssm-chip">Kanban</span>
-              <span className="ssm-chip">Operatori</span>
-              <span className="ssm-chip">Sondaj → tichet</span>
+              <span className="ssm-chip">HR / concediu</span>
+              <span className="ssm-chip">Statistici</span>
             </div>
           </div>
 
@@ -173,11 +186,11 @@ export function TicketingPage() {
               <strong>{stats?.total ?? "-"}</strong>
             </div>
             <div className="ssm-stat-card">
-              <span>Deschise</span>
+              <span>Deschise (≠ închis)</span>
               <strong>{stats?.open ?? "-"}</strong>
             </div>
             <div className="ssm-stat-card">
-              <span>Depășite</span>
+              <span>Depășite termen</span>
               <strong>{stats?.overdue ?? "-"}</strong>
             </div>
           </div>
@@ -206,8 +219,18 @@ export function TicketingPage() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="ticket-category">Categorie</label>
-                <input id="ticket-category" value={ticketForm.category ?? ""} onChange={(event) => setTicketForm((prev) => ({ ...prev, category: event.target.value }))} />
+                <label htmlFor="ticket-category">Categorie (ex. HR, concediu)</label>
+                <input
+                  id="ticket-category"
+                  list="ticket-category-options"
+                  value={ticketForm.category ?? ""}
+                  onChange={(event) => setTicketForm((prev) => ({ ...prev, category: event.target.value }))}
+                />
+                <datalist id="ticket-category-options">
+                  {TICKET_CATEGORIES.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               </div>
               <div className="field">
                 <label htmlFor="ticket-priority">Prioritate</label>
@@ -218,7 +241,7 @@ export function TicketingPage() {
                 >
                   {PRIORITIES.map((priority) => (
                     <option key={priority} value={priority}>
-                      {priority}
+                      {PRIORITY_LABELS[priority]}
                     </option>
                   ))}
                 </select>
@@ -278,10 +301,55 @@ export function TicketingPage() {
             <div className="ssm-card-header">
               <div>
                 <h3 className="card-title">Filtre și operatori</h3>
-                <p className="field-hint">Filtrează board-ul după status, prioritate, operator sau text.</p>
+                <p className="field-hint">
+                  Subiect = titlu tichet; destinatar = nume operator asignat; operator = ID utilizator. Opțional: status,
+                  prioritate, solicitant, căutare în descriere.
+                </p>
               </div>
             </div>
             <div className="ssm-form-grid">
+              <div className="field">
+                <label htmlFor="filter-subject">Subiect (titlu)</label>
+                <input
+                  id="filter-subject"
+                  value={filters.subject ?? ""}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, subject: event.target.value || undefined }))}
+                  placeholder="ex: concediu"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="filter-recipient-name">Destinatar (nume operator)</label>
+                <input
+                  id="filter-recipient-name"
+                  value={filters.assignedToName ?? ""}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, assignedToName: event.target.value || undefined }))}
+                  placeholder="conține în numele operatorului"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="filter-operator">Operator (ID user)</label>
+                <input
+                  id="filter-operator"
+                  value={filters.assignedToUserId ?? ""}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, assignedToUserId: event.target.value || undefined }))}
+                  placeholder="userId"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="filter-reporter">Solicitant (angajat)</label>
+                <select
+                  id="filter-reporter"
+                  value={filters.reporterEmployeeId ?? ""}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, reporterEmployeeId: event.target.value || undefined }))}
+                >
+                  <option value="">Toți</option>
+                  {(employeesQuery.data ?? []).map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="field">
                 <label htmlFor="filter-status">Status</label>
                 <select id="filter-status" value={filters.status ?? ""} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value as HelpdeskTicketStatus || undefined }))}>
@@ -299,17 +367,13 @@ export function TicketingPage() {
                   <option value="">Toate</option>
                   {PRIORITIES.map((priority) => (
                     <option key={priority} value={priority}>
-                      {priority}
+                      {PRIORITY_LABELS[priority]}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="field">
-                <label htmlFor="filter-operator">Operator</label>
-                <input id="filter-operator" value={filters.assignedToUserId ?? ""} onChange={(event) => setFilters((prev) => ({ ...prev, assignedToUserId: event.target.value || undefined }))} />
-              </div>
-              <div className="field">
-                <label htmlFor="filter-search">Căutare</label>
+              <div className="field wide">
+                <label htmlFor="filter-search">Căutare în descriere / solicitant</label>
                 <input id="filter-search" value={filters.search ?? ""} onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value || undefined }))} />
               </div>
             </div>
@@ -325,11 +389,42 @@ export function TicketingPage() {
           </div>
         </div>
 
+        {stats?.byStatus?.length ? (
+          <div className="card ssm-doc-card" style={{ marginBottom: "1rem" }}>
+            <h3 className="card-title">Statistici pe stare</h3>
+            <div className="sss-summary-strip">
+              {stats.byStatus.map((row) => (
+                <div key={row.status} className="sss-stat-card">
+                  <span>{STATUS_LABELS[row.status]}</span>
+                  <strong>{row.count}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {stats?.byCategory?.length ? (
+          <div className="card ssm-doc-card" style={{ marginBottom: "1rem" }}>
+            <h3 className="card-title">Statistici pe categorie</h3>
+            <ul className="static-page-links" style={{ margin: 0 }}>
+              {stats.byCategory.map((row) => (
+                <li key={row.category || "__none__"}>
+                  <strong>{row.category || "Fără categorie"}</strong>
+                  <span className="text-muted"> — {row.count} tichete</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <section className="card ssm-doc-card ssm-documents" aria-label="Kanban helpdesk">
           <div className="ssm-card-header">
             <div>
-              <h3 className="card-title">Kanban stări</h3>
-              <p className="field-hint">Trage tichetele între coloane sau alege direct statusul dorit din card.</p>
+                <h3 className="card-title">Kanban — stări (4.4)</h3>
+                <p className="field-hint">
+                  Deschis · În așteptare operator · În așteptare utilizator · În așteptare informații · Închis. Trage
+                  cardurile între coloane.
+                </p>
             </div>
           </div>
           <div className="ssm-overview-tabs ticket-kanban-board">
@@ -359,7 +454,7 @@ export function TicketingPage() {
                       <strong>{ticket.title}</strong>
                       <span>{ticket.category ?? "General"} · scadență {formatDate(ticket.dueAt)}</span>
                       <div className="ssm-badge-row ticket-card-meta">
-                        <span className={`ssm-chip ${priorityChip(ticket.priority)}`}>{ticket.priority}</span>
+                        <span className={`ssm-chip ${priorityChip(ticket.priority)}`}>{PRIORITY_LABELS[ticket.priority]}</span>
                         <span className="ssm-chip">{ticket.assignedToName || ticket.assignedToUserId || "Neasignat"}</span>
                       </div>
                       <div className="ssm-inline-actions">
@@ -398,7 +493,7 @@ export function TicketingPage() {
               <div className="ticket-detail-grid">
                 <div>
                   <span>Prioritate</span>
-                  <strong>{openedTicket.priority}</strong>
+                  <strong>{PRIORITY_LABELS[openedTicket.priority]}</strong>
                 </div>
                 <div>
                   <span>Scadență</span>

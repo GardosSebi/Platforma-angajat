@@ -55,6 +55,15 @@ export class AuthService {
 
     const accessToken = await this.jwt.signAsync(payload);
 
+    const linkedEmployee = await this.prisma.employee.findFirst({
+      where: {
+        tenantId,
+        active: true,
+        email: { equals: user.email, mode: "insensitive" }
+      },
+      select: { id: true }
+    });
+
     return {
       accessToken,
       expiresIn: "365d",
@@ -63,7 +72,8 @@ export class AuthService {
         email: user.email,
         tenantId: user.tenantId,
         roles: user.roles
-      }
+      },
+      linkedEmployeeId: linkedEmployee?.id ?? null
     };
   }
 }

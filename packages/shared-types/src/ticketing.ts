@@ -1,4 +1,10 @@
-export const HELPDESK_TICKET_STATUSES = ["NEW", "TRIAGE", "IN_PROGRESS", "WAITING_REQUESTER", "RESOLVED", "CLOSED"] as const;
+export const HELPDESK_TICKET_STATUSES = [
+  "OPEN",
+  "WAITING_OPERATOR",
+  "WAITING_USER",
+  "WAITING_INFO",
+  "CLOSED"
+] as const;
 export type HelpdeskTicketStatus = (typeof HELPDESK_TICKET_STATUSES)[number];
 
 export const HELPDESK_TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -86,5 +92,6 @@ export interface HelpdeskStatsResponse {
   overdue: number;
   byStatus: Array<{ status: HelpdeskTicketStatus; count: number }>;
   byPriority: Array<{ priority: HelpdeskTicketPriority; count: number }>;
+  byCategory: Array<{ category: string; count: number }>;
   operators: Array<{ assignedToUserId: string; assignedToName?: string | null; count: number }>;
 }

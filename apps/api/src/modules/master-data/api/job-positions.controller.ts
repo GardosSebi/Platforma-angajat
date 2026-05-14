@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { TenantId } from "../../../common/decorators/tenant-id.decorator";
@@ -7,6 +7,7 @@ import { PermissionsGuard } from "../../../common/guards/permissions.guard";
 import { Permission } from "../../../common/constants/permissions";
 import { MasterDataService } from "../master-data.service";
 import { CreateJobPositionDto } from "../dto/create-job-position.dto";
+import { UpdateJobPositionDto } from "../dto/update-job-position.dto";
 
 @Controller("master-data/job-positions")
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
@@ -23,5 +24,11 @@ export class JobPositionsController {
   @RequirePermissions(Permission.MASTER_DATA_WRITE)
   create(@TenantId() tenantId: string, @Body() dto: CreateJobPositionDto) {
     return this.masterData.createJobPosition(tenantId, dto);
+  }
+
+  @Patch(":id")
+  @RequirePermissions(Permission.MASTER_DATA_WRITE)
+  update(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: UpdateJobPositionDto) {
+    return this.masterData.updateJobPosition(tenantId, id, dto);
   }
 }

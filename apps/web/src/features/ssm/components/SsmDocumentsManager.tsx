@@ -3,6 +3,8 @@ import {
   type CreateSsmDocumentRequest,
   type SsmDocumentStatus
 } from "@repo/shared-types/ssm";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import {
   useAddSsmDocumentVersion,
   useArchiveSsmDocument,
@@ -54,6 +56,11 @@ function mutationErrorMessage(error: unknown): string {
 }
 
 export function SsmDocumentsManager() {
+  const session = useAuthSession();
+  const canUploadDocuments =
+    hasPermission(session?.roles, "ssm:documents:edit") && hasPermission(session?.roles, "files:upload");
+  const canApproveDocuments = hasPermission(session?.roles, "ssm:documents:approve");
+
   const [filters, setFilters] = useState({
     q: "",
     type: "",
@@ -125,7 +132,8 @@ export function SsmDocumentsManager() {
       </h2>
 
       <div className="ssm-doc-grid">
-        <form onSubmit={onCreate} className="card form-stack ssm-doc-card">
+        {canUploadDocuments ? (
+          <form onSubmit={onCreate} className="card form-stack ssm-doc-card">
           <h3 className="card-title">Upload document nou</h3>
           <div className="field">
             <label htmlFor="doc-title">Titlu document</label>
@@ -231,6 +239,12 @@ export function SsmDocumentsManager() {
             </p>
           ) : null}
         </form>
+        ) : (
+          <p className="card ssm-doc-card field-hint">
+            Încărcarea documentelor noi este disponibilă pentru rolurile cu drept de editare documente SSM și upload
+            fișiere.
+          </p>
+        )}
 
         <div className="card ssm-doc-card ssm-doc-list">
           <h3 className="card-title">Căutare și filtrare</h3>
@@ -308,65 +322,71 @@ export function SsmDocumentsManager() {
               <p className="field-hint">
                 Activ: <strong>{selectedDoc.title}</strong> (v{selectedDoc.activeVersion.versionNumber})
               </p>
-              <form onSubmit={onUploadVersion} className="form-stack">
-                <div className="field">
-                  <label htmlFor="version-file">Upload versiune nouă</label>
-                  <input
-                    id="version-file"
-                    type="file"
-                    onChange={(event) => setVersionFile(event.target.files?.[0] ?? null)}
-                  />
+              {canUploadDocuments ? (
+                <form onSubmit={onUploadVersion} className="form-stack">
+                  <div className="field">
+                    <label htmlFor="version-file">Upload versiune nouă</label>
+                    <input
+                      id="version-file"
+                      type="file"
+                      onChange={(event) => setVersionFile(event.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="version-note">Notă versiune</label>
+                    <input id="version-note" value={versionNote} onChange={(event) => setVersionNote(event.target.value)} />
+                  </div>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={addVersionMutation.isPending || !versionFile || !selectedDocumentId}
+                  >
+                    {addVersionMutation.isPending ? "Se salvează..." : "Adaugă versiune"}
+                  </button>
+                  {addVersionMutation.isSuccess ? (
+                    <p className="feedback success" role="status">
+                      Versiune nouă adăugată.
+                    </p>
+                  ) : null}
+                  {addVersionMutation.isError ? (
+                    <p className="feedback error" role="alert">
+                      {mutationErrorMessage(addVersionMutation.error)}
+                    </p>
+                  ) : null}
+                </form>
+              ) : null}
+              {canApproveDocuments ? (
+                <div className="form-stack">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => selectedDocumentId && archiveMutation.mutate(selectedDocumentId)}
+                    disabled={archiveMutation.isPending || !selectedDocumentId}
+                  >
+                    Arhivează document
+                  </button>
+                  {revertMutation.isSuccess ? (
+                    <p className="feedback success" role="status">
+                      Versiunea activă a fost actualizată.
+                    </p>
+                  ) : null}
+                  {revertMutation.isError ? (
+                    <p className="feedback error" role="alert">
+                      {mutationErrorMessage(revertMutation.error)}
+                    </p>
+                  ) : null}
+                  {archiveMutation.isSuccess ? (
+                    <p className="feedback success" role="status">
+                      Document arhivat.
+                    </p>
+                  ) : null}
+                  {archiveMutation.isError ? (
+                    <p className="feedback error" role="alert">
+                      {mutationErrorMessage(archiveMutation.error)}
+                    </p>
+                  ) : null}
                 </div>
-                <div className="field">
-                  <label htmlFor="version-note">Notă versiune</label>
-                  <input id="version-note" value={versionNote} onChange={(event) => setVersionNote(event.target.value)} />
-                </div>
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={addVersionMutation.isPending || !versionFile || !selectedDocumentId}
-                >
-                  {addVersionMutation.isPending ? "Se salvează..." : "Adaugă versiune"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => selectedDocumentId && archiveMutation.mutate(selectedDocumentId)}
-                  disabled={archiveMutation.isPending || !selectedDocumentId}
-                >
-                  Arhivează document
-                </button>
-                {addVersionMutation.isSuccess ? (
-                  <p className="feedback success" role="status">
-                    Versiune nouă adăugată.
-                  </p>
-                ) : null}
-                {addVersionMutation.isError ? (
-                  <p className="feedback error" role="alert">
-                    {mutationErrorMessage(addVersionMutation.error)}
-                  </p>
-                ) : null}
-                {revertMutation.isSuccess ? (
-                  <p className="feedback success" role="status">
-                    Versiunea activă a fost actualizată.
-                  </p>
-                ) : null}
-                {revertMutation.isError ? (
-                  <p className="feedback error" role="alert">
-                    {mutationErrorMessage(revertMutation.error)}
-                  </p>
-                ) : null}
-                {archiveMutation.isSuccess ? (
-                  <p className="feedback success" role="status">
-                    Document arhivat.
-                  </p>
-                ) : null}
-                {archiveMutation.isError ? (
-                  <p className="feedback error" role="alert">
-                    {mutationErrorMessage(archiveMutation.error)}
-                  </p>
-                ) : null}
-              </form>
+              ) : null}
 
               <div className="ssm-history-list">
                 {historyQuery.data?.versions.map((version) => (
@@ -374,14 +394,18 @@ export function SsmDocumentsManager() {
                     <div>
                       <strong>v{version.versionNumber}</strong> {version.fileName}
                     </div>
-                    <button
-                      type="button"
-                      className="btn-text"
-                      onClick={() => selectedDocumentId && revertMutation.mutate({ documentId: selectedDocumentId, versionId: version.id })}
-                      disabled={revertMutation.isPending}
-                    >
-                      Setează activă
-                    </button>
+                    {canApproveDocuments ? (
+                      <button
+                        type="button"
+                        className="btn-text"
+                        onClick={() =>
+                          selectedDocumentId && revertMutation.mutate({ documentId: selectedDocumentId, versionId: version.id })
+                        }
+                        disabled={revertMutation.isPending}
+                      >
+                        Setează activă
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>

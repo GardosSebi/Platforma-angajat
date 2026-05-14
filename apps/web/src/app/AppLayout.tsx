@@ -3,18 +3,23 @@ import { authStore } from "../shared/auth/auth-store";
 import { canAccessTenantAdmin } from "../shared/auth/roles";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 
-const nav = [
+const navBase = [
   { to: "/ssm", label: "SSM" },
-  { to: "/master-data", label: "Master Data" },
   { to: "/chatbot", label: "Chatbot" },
   { to: "/surveys", label: "Surveys" },
   { to: "/ticketing", label: "Ticketing" },
   { to: "/informatii", label: "Informații" }
-];
+] as const;
 
 export function AppLayout() {
   const session = useAuthSession();
   const navigate = useNavigate();
+
+  const nav = [
+    navBase[0],
+    ...(canAccessTenantAdmin(session) ? ([{ to: "/master-data", label: "Master Data" }] as const) : []),
+    ...navBase.slice(1)
+  ];
 
   return (
     <div className="app-shell">

@@ -15,8 +15,10 @@ export interface TicketFilters {
   status?: HelpdeskTicketStatus;
   priority?: HelpdeskTicketPriority;
   assignedToUserId?: string;
+  assignedToName?: string;
   reporterEmployeeId?: string;
   category?: string;
+  subject?: string;
   search?: string;
 }
 

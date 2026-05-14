@@ -1,5 +1,5 @@
 import { readFile } from "fs/promises";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   Prisma,
   SsmTrainingPlanStatus
@@ -9,6 +9,9 @@ import JSZip from "jszip";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
+import { JwtPayload } from "../../../../auth/jwt.strategy";
+import { hasAllPermissions, Permission } from "../../../../common/constants/permissions";
+import { findEmployeeIdForUserEmail, resolveSsmViewerScope } from "../../api/ssm-viewer-scope";
 import {
   CompleteTestDto,
   CreateTrainingPlanDto,
@@ -244,7 +247,8 @@ export class SsmTrainingSuiteService {
     return created;
   }
 
-  async markMaterialCompleted(tenantId: string, actorId: string, trainingPlanId: string) {
+  async markMaterialCompleted(tenantId: string, actorId: string, trainingPlanId: string, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
     const updated = await this.prisma.ssmTrainingPlan.updateMany({
       where: { id: trainingPlanId, tenantId },
       data: { materialCompletedAt: new Date() }
@@ -263,7 +267,8 @@ export class SsmTrainingSuiteService {
     return { trainingPlanId, materialCompleted: true };
   }
 
-  async startTestAttempt(tenantId: string, actorId: string, trainingPlanId: string) {
+  async startTestAttempt(tenantId: string, actorId: string, trainingPlanId: string, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
     const plan = await this.prisma.ssmTrainingPlan.findFirst({
       where: { id: trainingPlanId, tenantId }
     });
@@ -287,7 +292,8 @@ export class SsmTrainingSuiteService {
     return attempt;
   }
 
-  async completeTest(tenantId: string, actorId: string, dto: CompleteTestDto) {
+  async completeTest(tenantId: string, actorId: string, dto: CompleteTestDto, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, dto.trainingPlanId, viewer);
     const plan = await (this.prisma as PrismaWithTrainingPlanLegal).ssmTrainingPlan.findFirst({
       where: { id: dto.trainingPlanId, tenantId },
       include: {
@@ -355,12 +361,31 @@ export class SsmTrainingSuiteService {
     return { trainingPlanId: plan.id, passed: dto.passed, score: dto.score };
   }
 
-  async signTrainingPlan(tenantId: string, actorId: string, trainingPlanId: string, dto: SignPlanDto) {
+  async signTrainingPlan(
+    tenantId: string,
+    actorId: string,
+    trainingPlanId: string,
+    dto: SignPlanDto,
+    viewer: JwtPayload
+  ) {
     const plan = await this.prisma.ssmTrainingPlan.findFirst({
       where: { id: trainingPlanId, tenantId }
     });
     if (!plan) {
       throw new NotFoundException("Training plan not found.");
+    }
+    if (dto.role === "EMPLOYEE") {
+      if (!hasAllPermissions(viewer.roles, [Permission.SSM_TRAINING_EDIT])) {
+        throw new ForbiddenException("Semnătura angajatului necesită dreptul de parcurgere/finalizare instruire.");
+      }
+      const selfId = await findEmployeeIdForUserEmail(this.prisma, tenantId, viewer.email);
+      if (!selfId || selfId !== plan.employeeId) {
+        throw new ForbiddenException("Semnătura angajatului este permisă doar pentru propriul plan de instruire.");
+      }
+    } else {
+      if (!hasAllPermissions(viewer.roles, [Permission.SSM_TRAINING_APPROVE])) {
+        throw new ForbiddenException("Semnătura responsabilului necesită dreptul de aprobare instruire.");
+      }
     }
     const now = new Date();
     const signature = await this.prisma.ssmTrainingSignature.upsert({
@@ -391,7 +416,7 @@ export class SsmTrainingSuiteService {
     return signature;
   }
 
-  async signPlansBatch(tenantId: string, actorId: string, dto: SignPlansBatchDto) {
+  async signPlansBatch(tenantId: string, actorId: string, dto: SignPlansBatchDto, viewer: JwtPayload) {
     const uniquePlanIds = Array.from(new Set(dto.planIds));
     if (!uniquePlanIds.length) {
       throw new BadRequestException("planIds is empty.");
@@ -402,7 +427,7 @@ export class SsmTrainingSuiteService {
         await this.signTrainingPlan(tenantId, actorId, planId, {
           role: dto.role,
           signatureData: dto.signatureData
-        });
+        }, viewer);
         signedCount += 1;
       } catch {
         // continue with remaining plans
@@ -415,10 +440,17 @@ export class SsmTrainingSuiteService {
     };
   }
 
-  async listPlans(tenantId: string) {
+  async listPlans(tenantId: string, viewer: JwtPayload) {
     await this.syncOverdue(tenantId);
+    const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+    if (scope.mode === "empty") {
+      return { items: [] };
+    }
     const rows = await this.prisma.ssmTrainingPlan.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ...(scope.mode === "self" ? { employeeId: scope.employeeId } : {})
+      },
       include: {
         employee: { select: { fullName: true } },
         trainingType: { select: { code: true, name: true } }
@@ -444,11 +476,12 @@ export class SsmTrainingSuiteService {
     };
   }
 
-  private async trainingReminders(tenantId: string) {
+  private async trainingReminders(tenantId: string, employeeId?: string) {
     await this.syncOverdue(tenantId);
     const rows = await this.prisma.ssmTrainingPlan.findMany({
       where: {
         tenantId,
+        ...(employeeId ? { employeeId } : {}),
         status: { in: [SsmTrainingPlanStatus.PENDING, SsmTrainingPlanStatus.OVERDUE] }
       },
       include: {
@@ -470,8 +503,15 @@ export class SsmTrainingSuiteService {
       .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
   }
 
-  async remindersPreview(tenantId: string) {
-    const reminders = await this.trainingReminders(tenantId);
+  async remindersPreview(tenantId: string, viewer: JwtPayload) {
+    const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+    if (scope.mode === "empty") {
+      return { reminders: [] };
+    }
+    const reminders = await this.trainingReminders(
+      tenantId,
+      scope.mode === "self" ? scope.employeeId : undefined
+    );
     return {
       reminders: reminders.map(({ employeeEmail: _ignored, ...item }) => item)
     };
@@ -523,10 +563,17 @@ export class SsmTrainingSuiteService {
     return { sent };
   }
 
-  async calendar(tenantId: string) {
+  async calendar(tenantId: string, viewer: JwtPayload) {
     await this.syncOverdue(tenantId);
+    const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+    if (scope.mode === "empty") {
+      return { events: [] };
+    }
     const plans = await this.prisma.ssmTrainingPlan.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ...(scope.mode === "self" ? { employeeId: scope.employeeId } : {})
+      },
       include: {
         employee: { select: { fullName: true } },
         trainingType: { select: { name: true } }
@@ -544,10 +591,18 @@ export class SsmTrainingSuiteService {
     };
   }
 
-  async complianceReport(tenantId: string) {
+  async complianceReport(tenantId: string, viewer: JwtPayload) {
     await this.syncOverdue(tenantId);
+    const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+    if (scope.mode === "empty") {
+      return { items: [] };
+    }
     const employees = await this.prisma.employee.findMany({
-      where: { tenantId, active: true },
+      where: {
+        tenantId,
+        active: true,
+        ...(scope.mode === "self" ? { id: scope.employeeId } : {})
+      },
       select: {
         id: true,
         fullName: true,
@@ -581,7 +636,8 @@ export class SsmTrainingSuiteService {
     return { items };
   }
 
-  async digitalFile(tenantId: string, employeeId: string) {
+  async digitalFile(tenantId: string, employeeId: string, viewer: JwtPayload) {
+    await this.assertDigitalFileEmployeeAccess(tenantId, employeeId, viewer);
     await this.syncOverdue(tenantId);
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, tenantId },
@@ -685,8 +741,8 @@ export class SsmTrainingSuiteService {
     };
   }
 
-  async exportDigitalFileZip(tenantId: string, employeeId: string) {
-    const dossier = await this.digitalFile(tenantId, employeeId);
+  async exportDigitalFileZip(tenantId: string, employeeId: string, viewer: JwtPayload) {
+    const dossier = await this.digitalFile(tenantId, employeeId, viewer);
     const zip = new JSZip();
     zip.file("dossier.json", JSON.stringify(dossier, null, 2));
 
@@ -713,7 +769,8 @@ export class SsmTrainingSuiteService {
     return zip.generateAsync({ type: "nodebuffer" });
   }
 
-  async generateIndividualSheetPdf(tenantId: string, trainingPlanId: string) {
+  async generateIndividualSheetPdf(tenantId: string, trainingPlanId: string, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
     const plan = await this.prisma.ssmTrainingPlan.findFirst({
       where: { id: trainingPlanId, tenantId },
       include: {
@@ -757,6 +814,47 @@ export class SsmTrainingSuiteService {
     });
 
     return buffer;
+  }
+
+  private async assertTrainingPlanVisibleToViewer(
+    tenantId: string,
+    trainingPlanId: string,
+    viewer: JwtPayload
+  ): Promise<void> {
+    const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+    if (scope.mode === "tenant") {
+      return;
+    }
+    if (scope.mode === "empty") {
+      throw new ForbiddenException("Contul nu este asociat unui angajat pentru acces SSM individual.");
+    }
+    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId },
+      select: { employeeId: true }
+    });
+    if (!plan) {
+      throw new NotFoundException("Training plan not found.");
+    }
+    if (plan.employeeId !== scope.employeeId) {
+      throw new ForbiddenException("Nu aveți acces la acest plan de instruire.");
+    }
+  }
+
+  private async assertDigitalFileEmployeeAccess(
+    tenantId: string,
+    employeeId: string,
+    viewer: JwtPayload
+  ): Promise<void> {
+    const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+    if (scope.mode === "tenant") {
+      return;
+    }
+    if (scope.mode === "empty") {
+      throw new ForbiddenException("Contul nu este asociat unui angajat pentru acces SSM individual.");
+    }
+    if (employeeId !== scope.employeeId) {
+      throw new ForbiddenException("Puteți consulta doar propriul dosar personal SSM.");
+    }
   }
 
   async generateCollectiveSheetPdf(dto: GenerateCollectiveSheetDto) {

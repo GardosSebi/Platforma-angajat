@@ -4,6 +4,7 @@ import { httpErrorFromResponse } from "../../../shared/api/http-error";
 export interface LoginResponse {
   accessToken: string;
   expiresIn: string;
+  linkedEmployeeId?: string | null;
   user: {
     id: string;
     email: string;

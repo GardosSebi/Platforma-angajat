@@ -170,11 +170,10 @@ enum SurveyAudienceType {
 }
 
 enum HelpdeskTicketStatus {
-  NEW
-  TRIAGE
-  IN_PROGRESS
-  WAITING_REQUESTER
-  RESOLVED
+  OPEN
+  WAITING_OPERATOR
+  WAITING_USER
+  WAITING_INFO
   CLOSED
 }
 
@@ -1085,7 +1084,7 @@ model HelpdeskTicket {
   title                  String
   description            String
   category               String?
-  status                 HelpdeskTicketStatus   @default(NEW)
+  status                 HelpdeskTicketStatus   @default(OPEN)
   priority               HelpdeskTicketPriority @default(MEDIUM)
   source                 HelpdeskTicketSource   @default(PORTAL)
   reporterEmployeeId     String?

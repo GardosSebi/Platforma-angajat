@@ -34,6 +34,8 @@ export interface EmployeeItem {
   worksiteId?: string | null;
   departmentId?: string | null;
   jobPositionId?: string | null;
+  hireDate?: string | null;
+  leaveDate?: string | null;
   active: boolean;
 }
 
@@ -80,6 +82,22 @@ export interface CreateEmployeePayload {
   active?: boolean;
 }
 
+export type UpdateWorksitePayload = Partial<CreateWorksitePayload>;
+export type UpdateDepartmentPayload = Partial<CreateDepartmentPayload>;
+export type UpdateJobPositionPayload = Partial<CreateJobPositionPayload>;
+
+export interface UpdateEmployeePayload {
+  email?: string;
+  fullName?: string;
+  cnp?: string;
+  worksiteId?: string;
+  departmentId?: string;
+  jobPositionId?: string;
+  hireDate?: string;
+  leaveDate?: string;
+  active?: boolean;
+}
+
 export const masterDataApi = {
   listWorksites() {
     return httpClient<WorksiteItem[]>("/master-data/worksites");
@@ -87,6 +105,12 @@ export const masterDataApi = {
   createWorksite(payload: CreateWorksitePayload) {
     return httpClient<WorksiteItem>("/master-data/worksites", {
       method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateWorksite(id: string, payload: UpdateWorksitePayload) {
+    return httpClient<WorksiteItem>(`/master-data/worksites/${encodeURIComponent(id)}`, {
+      method: "PATCH",
       body: JSON.stringify(payload)
     });
   },
@@ -99,6 +123,12 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
+  updateDepartment(id: string, payload: UpdateDepartmentPayload) {
+    return httpClient<DepartmentItem>(`/master-data/departments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
   listJobPositions() {
     return httpClient<JobPositionItem[]>("/master-data/job-positions");
   },
@@ -108,12 +138,24 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
+  updateJobPosition(id: string, payload: UpdateJobPositionPayload) {
+    return httpClient<JobPositionItem>(`/master-data/job-positions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
   listEmployees() {
     return httpClient<EmployeeItem[]>("/master-data/employees");
   },
   createEmployee(payload: CreateEmployeePayload) {
     return httpClient<EmployeeItem>("/master-data/employees", {
       method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateEmployee(id: string, payload: UpdateEmployeePayload) {
+    return httpClient<EmployeeItem>(`/master-data/employees/${encodeURIComponent(id)}`, {
+      method: "PATCH",
       body: JSON.stringify(payload)
     });
   },

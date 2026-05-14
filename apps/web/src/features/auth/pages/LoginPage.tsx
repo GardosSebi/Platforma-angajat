@@ -31,7 +31,8 @@ export function LoginPage() {
       authStore.set({
         accessToken: data.accessToken,
         tenantId: data.user.tenantId,
-        roles: data.user.roles
+        roles: data.user.roles,
+        linkedEmployeeId: data.linkedEmployeeId ?? null
       });
       navigate(returnUrl ?? "/ssm", { replace: true });
     } catch (e) {

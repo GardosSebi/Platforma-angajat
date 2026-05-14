@@ -10,6 +10,7 @@ import {
   type CreateTenantUserPayload
 } from "../api/platform-admin.api";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
+import { AdminOrganizationTab } from "../components/AdminOrganizationTab";
 
 const ALL_SYSTEM_ROLES = [
   "PLATFORM_ADMIN",
@@ -22,14 +23,14 @@ const ALL_SYSTEM_ROLES = [
 
 const ROLE_LABELS_RO: Record<string, string> = {
   PLATFORM_ADMIN: "Administrator platformă (toate tenanturile)",
-  TENANT_ADMIN: "Administrator organizație (tenant)",
-  SSM_ADMIN: "Administrator SSM",
-  SSM_ENTITY_RESPONSIBLE: "Responsabil SSM pe entitate",
-  DEPARTMENT_MANAGER: "Manager departament",
-  EMPLOYEE: "Angajat"
+  TENANT_ADMIN: "Administrator organizație (tenant) — acces complet",
+  SSM_ADMIN: "Administrator SSM — toate entitățile SSM, configurare modul, rapoarte globale",
+  SSM_ENTITY_RESPONSIBLE: "Responsabil SSM pe entitate — administrare completă (documente, instruiri, EIP, accidente, calendar)",
+  DEPARTMENT_MANAGER: "Manager / șef departament — vizualizare echipă, aprobare instruiri, alerte neconformități",
+  EMPLOYEE: "Angajat — documente și instruiri proprii, e-learning, dosar personal"
 };
 
-type Tab = "users" | "static" | "usage";
+type Tab = "users" | "organization" | "static" | "usage";
 
 function toDateInput(iso: string) {
   const d = new Date(iso);
@@ -97,7 +98,8 @@ export function AdminPage() {
     enabled: tab === "static"
   });
 
-  const worksitesQuery = useWorksites();
+  const worksitesQuery = useWorksites({ enabled: tab === "users" });
+
   const groupsQuery = useQuery({
     queryKey: ["master-data", "groups"],
     queryFn: masterDataApi.listGroups
@@ -237,12 +239,14 @@ export function AdminPage() {
       scopedQuery.error ??
       staticQuery.error ??
       usageQuery.error ??
-      createUser.error) instanceof Error
+      createUser.error ??
+      worksitesQuery.error) instanceof Error
       ? (usersQuery.error ??
           scopedQuery.error ??
           staticQuery.error ??
           usageQuery.error ??
-          createUser.error) as Error
+          createUser.error ??
+          worksitesQuery.error) as Error
       : null;
 
   return (
@@ -250,7 +254,8 @@ export function AdminPage() {
       <header className="page-header">
         <h1>Administrare platformă</h1>
         <p className="page-lead">
-          Roluri și drepturi pe companie (worksite) sau grup, pagini statice pentru angajați, statistici de utilizare.
+          Roluri și drepturi, structură organizațională (puncte de lucru, departamente, posturi, angajați), pagini
+          statice pentru angajați, statistici de utilizare.
         </p>
       </header>
 
@@ -258,6 +263,7 @@ export function AdminPage() {
         {(
           [
             ["users", "Utilizatori & roluri"],
+            ["organization", "Puncte de lucru & organizație"],
             ["static", "Conținut static"],
             ["usage", "Statistici"]
           ] as const
@@ -520,6 +526,8 @@ export function AdminPage() {
         </div>
         </>
       ) : null}
+
+      {tab === "organization" ? <AdminOrganizationTab /> : null}
 
       {tab === "static" ? (
         <div className="admin-static">

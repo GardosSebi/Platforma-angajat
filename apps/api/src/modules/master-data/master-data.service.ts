@@ -10,6 +10,9 @@ import { AuditLogService } from "../../infrastructure/logging/audit-log.service"
 import { CreateWorksiteDto } from "./dto/create-worksite.dto";
 import { CreateDepartmentDto } from "./dto/create-department.dto";
 import { CreateJobPositionDto } from "./dto/create-job-position.dto";
+import { UpdateWorksiteDto } from "./dto/update-worksite.dto";
+import { UpdateDepartmentDto } from "./dto/update-department.dto";
+import { UpdateJobPositionDto } from "./dto/update-job-position.dto";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 import { UpdatePlacementDto } from "./dto/update-placement.dto";
@@ -216,6 +219,30 @@ export class MasterDataService {
     }
   }
 
+  async updateWorksite(tenantId: string, id: string, dto: UpdateWorksiteDto) {
+    const existing = await this.prisma.worksite.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Punct de lucru negăsit.");
+
+    const data: {
+      code?: string;
+      name?: string;
+      address?: string | null;
+      active?: boolean;
+    } = {};
+    if (dto.code !== undefined) data.code = dto.code.trim();
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.address !== undefined) data.address = dto.address.trim() ? dto.address.trim() : null;
+    if (dto.active !== undefined) data.active = dto.active;
+
+    if (Object.keys(data).length === 0) return existing;
+
+    try {
+      return await this.prisma.worksite.update({ where: { id }, data });
+    } catch {
+      throw new ConflictException("Codul punctului de lucru există deja pentru acest tenant.");
+    }
+  }
+
   // --- Departamente ---
   listDepartments(tenantId: string) {
     return this.prisma.department.findMany({
@@ -241,6 +268,39 @@ export class MasterDataService {
           active: dto.active ?? true
         }
       });
+    } catch {
+      throw new ConflictException("Codul departamentului există deja pentru acest tenant.");
+    }
+  }
+
+  async updateDepartment(tenantId: string, id: string, dto: UpdateDepartmentDto) {
+    const existing = await this.prisma.department.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Departament negăsit.");
+
+    if (dto.worksiteId !== undefined && dto.worksiteId.trim()) {
+      const ws = await this.prisma.worksite.findFirst({
+        where: { id: dto.worksiteId.trim(), tenantId }
+      });
+      if (!ws) throw new BadRequestException("worksiteId nevalid pentru acest tenant.");
+    }
+
+    const data: {
+      code?: string;
+      name?: string;
+      worksiteId?: string | null;
+      active?: boolean;
+    } = {};
+    if (dto.code !== undefined) data.code = dto.code.trim();
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.worksiteId !== undefined) {
+      data.worksiteId = dto.worksiteId.trim() ? dto.worksiteId.trim() : null;
+    }
+    if (dto.active !== undefined) data.active = dto.active;
+
+    if (Object.keys(data).length === 0) return existing;
+
+    try {
+      return await this.prisma.department.update({ where: { id }, data });
     } catch {
       throw new ConflictException("Codul departamentului există deja pentru acest tenant.");
     }
@@ -273,6 +333,45 @@ export class MasterDataService {
           active: dto.active ?? true
         }
       });
+    } catch {
+      throw new ConflictException("Codul postului există deja pentru acest tenant.");
+    }
+  }
+
+  async updateJobPosition(tenantId: string, id: string, dto: UpdateJobPositionDto) {
+    const existing = await this.prisma.jobPosition.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Post negăsit.");
+
+    if (dto.departmentId !== undefined && dto.departmentId.trim()) {
+      const dep = await this.prisma.department.findFirst({
+        where: { id: dto.departmentId.trim(), tenantId }
+      });
+      if (!dep) throw new BadRequestException("departmentId nevalid pentru acest tenant.");
+    }
+
+    const data: {
+      code?: string;
+      name?: string;
+      departmentId?: string | null;
+      corCode?: string | null;
+      description?: string | null;
+      active?: boolean;
+    } = {};
+    if (dto.code !== undefined) data.code = dto.code.trim();
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.departmentId !== undefined) {
+      data.departmentId = dto.departmentId.trim() ? dto.departmentId.trim() : null;
+    }
+    if (dto.corCode !== undefined) data.corCode = dto.corCode.trim() ? dto.corCode.trim() : null;
+    if (dto.description !== undefined) {
+      data.description = dto.description.trim() ? dto.description.trim() : null;
+    }
+    if (dto.active !== undefined) data.active = dto.active;
+
+    if (Object.keys(data).length === 0) return existing;
+
+    try {
+      return await this.prisma.jobPosition.update({ where: { id }, data });
     } catch {
       throw new ConflictException("Codul postului există deja pentru acest tenant.");
     }

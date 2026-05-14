@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
   CompleteSsmTestRequest,
   CreateSsmTrainingPlanRequest,
@@ -6,6 +6,8 @@ import type {
   SsmTrainingCategory
 } from "@repo/shared-types/ssm";
 import { downloadWithAuth } from "../../../shared/api/http-download";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import {
   useCompleteTest,
   useCreateTrainingPlan,
@@ -54,6 +56,12 @@ function mutationErrorMessage(error: unknown): string {
 }
 
 export function SsmTrainingSuiteManager() {
+  const session = useAuthSession();
+  const resolvedEmployeeId = session?.linkedEmployeeId ?? DEMO_EMPLOYEE_ID;
+  const showCatalogForms = hasPermission(session?.roles, "ssm:training:assign");
+  const canApproveTraining = hasPermission(session?.roles, "ssm:training:approve");
+  const canSignAsEmployee = hasPermission(session?.roles, "ssm:training:edit");
+
   const typesQuery = useTrainingTypes();
   const plansQuery = useTrainingPlans();
   const remindersQuery = useTrainingReminders();
@@ -69,6 +77,11 @@ export function SsmTrainingSuiteManager() {
 
   const [typeForm, setTypeForm] = useState<CreateSsmTrainingTypeRequest>(DEFAULT_TYPE);
   const [planForm, setPlanForm] = useState<CreateSsmTrainingPlanRequest>(defaultPlan());
+
+  useEffect(() => {
+    setDigitalEmployeeId(resolvedEmployeeId);
+    setPlanForm((prev) => ({ ...prev, employeeId: resolvedEmployeeId }));
+  }, [resolvedEmployeeId]);
   const [testForm, setTestForm] = useState<CompleteSsmTestRequest>({
     trainingPlanId: "",
     score: 80,
@@ -76,7 +89,7 @@ export function SsmTrainingSuiteManager() {
     passed: true
   });
   const [signature, setSignature] = useState("Semnatura olografa - canvas MVP");
-  const [digitalEmployeeId, setDigitalEmployeeId] = useState(DEMO_EMPLOYEE_ID);
+  const [digitalEmployeeId, setDigitalEmployeeId] = useState(resolvedEmployeeId);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [dossierData, setDossierData] = useState<{
     trainings: Array<{ id: string; type: string; status: string; score?: number | null }>;
@@ -114,8 +127,9 @@ export function SsmTrainingSuiteManager() {
         Instruire + teste + fișe (3.3-3.4)
       </h2>
 
-      <div className="ssm-doc-grid">
-        <form className="card form-stack ssm-doc-card" onSubmit={onCreateType}>
+      {showCatalogForms ? (
+        <div className="ssm-doc-grid">
+          <form className="card form-stack ssm-doc-card" onSubmit={onCreateType}>
           <h3 className="card-title">Catalog instruiri + recurență</h3>
           <div className="field">
             <label htmlFor="training-code">Cod tip instruire</label>
@@ -261,7 +275,13 @@ export function SsmTrainingSuiteManager() {
             </p>
           ) : null}
         </form>
-      </div>
+        </div>
+      ) : (
+        <p className="field-hint" style={{ marginBottom: "1rem" }}>
+          Catalogul de tipuri de instruire și planificarea centralizată sunt disponibile pentru administrator SSM /
+          responsabil pe entitate.
+        </p>
+      )}
 
       <div className="ssm-doc-grid second">
         <form className="card form-stack ssm-doc-card" onSubmit={onCompleteTest}>
@@ -355,41 +375,48 @@ export function SsmTrainingSuiteManager() {
             <input id="signature-data" value={signature} onChange={(event) => setSignature(event.target.value)} />
           </div>
           <div className="ssm-inline-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() =>
-                testForm.trainingPlanId && signPlan.mutate({ planId: testForm.trainingPlanId, role: "EMPLOYEE", signatureData: signature })
-              }
-              disabled={!testForm.trainingPlanId}
-            >
-              Semnează angajat
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() =>
-                testForm.trainingPlanId &&
-                signPlan.mutate({ planId: testForm.trainingPlanId, role: "RESPONSIBLE", signatureData: signature })
-              }
-              disabled={!testForm.trainingPlanId}
-            >
-              Semnează responsabil SSM
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() =>
-                signBatch.mutate({
-                  planIds: planOptions.map((plan) => plan.id),
-                  role: "RESPONSIBLE",
-                  signatureData: signature
-                })
-              }
-              disabled={!planOptions.length}
-            >
-              Semnează în pachet (toate)
-            </button>
+            {canSignAsEmployee ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() =>
+                  testForm.trainingPlanId &&
+                  signPlan.mutate({ planId: testForm.trainingPlanId, role: "EMPLOYEE", signatureData: signature })
+                }
+                disabled={!testForm.trainingPlanId}
+              >
+                Semnează angajat
+              </button>
+            ) : null}
+            {canApproveTraining ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() =>
+                  testForm.trainingPlanId &&
+                  signPlan.mutate({ planId: testForm.trainingPlanId, role: "RESPONSIBLE", signatureData: signature })
+                }
+                disabled={!testForm.trainingPlanId}
+              >
+                Semnează responsabil SSM
+              </button>
+            ) : null}
+            {canApproveTraining ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() =>
+                  signBatch.mutate({
+                    planIds: planOptions.map((plan) => plan.id),
+                    role: "RESPONSIBLE",
+                    signatureData: signature
+                  })
+                }
+                disabled={!planOptions.length}
+              >
+                Semnează în pachet (toate)
+              </button>
+            ) : null}
           </div>
           {testForm.trainingPlanId ? (
             <button
@@ -420,6 +447,8 @@ export function SsmTrainingSuiteManager() {
               id="digital-employee"
               value={digitalEmployeeId}
               onChange={(event) => setDigitalEmployeeId(event.target.value)}
+              readOnly={Boolean(session?.linkedEmployeeId)}
+              aria-readonly={Boolean(session?.linkedEmployeeId)}
             />
           </div>
           <div className="ssm-inline-actions">

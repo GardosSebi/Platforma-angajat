@@ -112,6 +112,7 @@ const masterDataReadWrite: string[] = [
 export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
   [SystemRole.PLATFORM_ADMIN]: [Permission.WILDCARD],
   [SystemRole.TENANT_ADMIN]: allPermissions,
+  /** 3.12 — Administrator SSM: acces complet entități SSM, configurare, rapoarte globale (fără alte module tenant). */
   [SystemRole.SSM_ADMIN]: [
     Permission.SSM_TRAINING_ASSIGN,
     Permission.SSM_DOCUMENT_VIEW,
@@ -138,61 +139,45 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.SSM_DASHBOARD_VIEW,
     Permission.SSM_REPORT_VIEW,
     Permission.SSM_REPORT_EXPORT,
-    Permission.COMMUNICATIONS_DASHBOARD_VIEW,
-    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
-    Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT,
-    Permission.COMMUNICATIONS_TEMPLATES_EDIT,
-    Permission.SURVEYS_VIEW,
-    Permission.SURVEYS_EDIT,
-    Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT,
-    Permission.TICKETS_VIEW,
-    Permission.TICKETS_EDIT,
-    Permission.TICKETS_ASSIGN,
-    Permission.TICKETS_STATS,
     Permission.FILES_UPLOAD,
     Permission.AUDIT_READ,
-    ...masterDataReadWrite
+    Permission.MASTER_DATA_READ
   ],
+  /** 3.12 — Responsabil SSM pe entitate: administrare completă pe perimetrul SSM (inclusiv aprobări), alocare instruire. */
   [SystemRole.SSM_ENTITY_RESPONSIBLE]: [
     Permission.SSM_TRAINING_ASSIGN,
     Permission.SSM_DOCUMENT_VIEW,
     Permission.SSM_DOCUMENT_EDIT,
+    Permission.SSM_DOCUMENT_APPROVE,
     Permission.SSM_TRAINING_VIEW,
     Permission.SSM_TRAINING_EDIT,
+    Permission.SSM_TRAINING_APPROVE,
     Permission.SSM_EIP_VIEW,
     Permission.SSM_EIP_EDIT,
+    Permission.SSM_EIP_APPROVE,
     Permission.SSM_ACCIDENT_VIEW,
     Permission.SSM_ACCIDENT_EDIT,
+    Permission.SSM_ACCIDENT_APPROVE,
     Permission.SSM_MEDICAL_VIEW,
     Permission.SSM_MEDICAL_EDIT,
+    Permission.SSM_MEDICAL_APPROVE,
     Permission.SSM_RISK_VIEW,
     Permission.SSM_RISK_EDIT,
+    Permission.SSM_RISK_APPROVE,
     Permission.SSM_PSI_VIEW,
     Permission.SSM_PSI_EDIT,
+    Permission.SSM_PSI_APPROVE,
     Permission.SSM_DASHBOARD_VIEW,
     Permission.SSM_REPORT_VIEW,
     Permission.SSM_REPORT_EXPORT,
-    Permission.COMMUNICATIONS_DASHBOARD_VIEW,
-    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
-    Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT,
-    Permission.SURVEYS_VIEW,
-    Permission.SURVEYS_EDIT,
-    Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT,
-    Permission.TICKETS_VIEW,
-    Permission.TICKETS_EDIT,
-    Permission.TICKETS_ASSIGN,
-    Permission.TICKETS_STATS,
     Permission.FILES_UPLOAD,
-    Permission.MASTER_DATA_READ,
-    Permission.MASTER_DATA_WRITE,
-    Permission.MASTER_DATA_IMPORT
+    Permission.MASTER_DATA_READ
   ],
+  /** 3.12 — Manager / șef departament: vizualizare echipă, aprobare instruiri la locul de muncă, alerte neconformități (fără export rapoarte globale). */
   [SystemRole.DEPARTMENT_MANAGER]: [
-    Permission.SSM_TRAINING_ASSIGN,
     Permission.SSM_DOCUMENT_VIEW,
     Permission.SSM_TRAINING_VIEW,
+    Permission.SSM_TRAINING_APPROVE,
     Permission.SSM_EIP_VIEW,
     Permission.SSM_ACCIDENT_VIEW,
     Permission.SSM_MEDICAL_VIEW,
@@ -200,15 +185,15 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.SSM_PSI_VIEW,
     Permission.SSM_DASHBOARD_VIEW,
     Permission.SSM_REPORT_VIEW,
-    Permission.COMMUNICATIONS_DASHBOARD_VIEW,
-    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
-    Permission.SURVEYS_VIEW,
-    Permission.SURVEYS_RESPOND,
-    Permission.TICKETS_VIEW,
-    Permission.TICKETS_EDIT,
     Permission.MASTER_DATA_READ
   ],
-  [SystemRole.EMPLOYEE]: [Permission.SURVEYS_RESPOND]
+  /** 3.12 — Angajat: documente și instruiri proprii, e-learning, chestionare (API filtrează la datele proprii după e-mail ↔ angajat). */
+  [SystemRole.EMPLOYEE]: [
+    Permission.SURVEYS_RESPOND,
+    Permission.SSM_DOCUMENT_VIEW,
+    Permission.SSM_TRAINING_VIEW,
+    Permission.SSM_TRAINING_EDIT
+  ]
 };
 
 export function permissionsForRoles(roles: SystemRole[]): Set<string> {
@@ -231,4 +216,16 @@ export function hasAllPermissions(rolesFromJwt: string[], required: string[]): b
     return true;
   }
   return required.every((p) => granted.has(p));
+}
+
+export function hasAnyPermission(rolesFromJwt: string[], required: string[]): boolean {
+  if (required.length === 0) {
+    return true;
+  }
+  const roles = rolesFromJwt as unknown as SystemRole[];
+  const granted = permissionsForRoles(roles);
+  if (granted.has(Permission.WILDCARD)) {
+    return true;
+  }
+  return required.some((p) => granted.has(p));
 }

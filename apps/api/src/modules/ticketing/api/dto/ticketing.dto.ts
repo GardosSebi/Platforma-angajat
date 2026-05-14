@@ -1,6 +1,6 @@
 import { IsBoolean, IsDateString, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
-const TICKET_STATUSES = ["NEW", "TRIAGE", "IN_PROGRESS", "WAITING_REQUESTER", "RESOLVED", "CLOSED"] as const;
+const TICKET_STATUSES = ["OPEN", "WAITING_OPERATOR", "WAITING_USER", "WAITING_INFO", "CLOSED"] as const;
 const TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const TICKET_SOURCES = ["PORTAL", "SURVEY", "CHATBOT", "EMAIL", "MANUAL"] as const;
 
@@ -31,6 +31,16 @@ export class ListTicketsDto {
   @IsString()
   @MaxLength(120)
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  subject?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  assignedToName?: string;
 
   @IsOptional()
   @IsString()
