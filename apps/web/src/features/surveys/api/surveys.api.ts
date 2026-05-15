@@ -31,6 +31,9 @@ export const surveysApi = {
   getForRespond(surveyId: string) {
     return httpClient<SurveyItem>(`/surveys/${surveyId}/for-respond`);
   },
+  respondedSurveyIds() {
+    return httpClient<{ surveyIds: string[] }>("/surveys/responded-ids");
+  },
   createSurvey(payload: CreateSurveyRequest) {
     return httpClient<SurveyItem>("/surveys", {
       method: "POST",

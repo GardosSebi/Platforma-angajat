@@ -1,20 +1,25 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EmployeeStaticPageRow, TenantUserSummary, UserScopedRoleRow } from "@repo/shared-types";
-import { useWorksites } from "../../master-data/hooks/useMasterData";
-import { masterDataApi, type EmployeeGroupItem } from "../../master-data/api/master-data.api";
+import type { EmployeeStaticPageRow, TenantUserSummary } from "@repo/shared-types";
+import {
+  useCreateEmployee,
+  useDepartments,
+  useEmployees,
+  useJobPositions,
+  useUpdateEmployee,
+  useWorksites
+} from "../../master-data/hooks/useMasterData";
+import type { UpdateEmployeePayload } from "../../master-data/api/master-data.api";
 import {
   platformAdminApi,
-  type CreateScopedRolePayload,
   type CreateStaticPagePayload,
   type CreateTenantUserPayload
 } from "../api/platform-admin.api";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { AdminOrganizationTab } from "../components/AdminOrganizationTab";
 
+/** 3.12 — Roluri SSM (singurele roluri de sistem). */
 const ALL_SYSTEM_ROLES = [
-  "PLATFORM_ADMIN",
-  "TENANT_ADMIN",
   "SSM_ADMIN",
   "SSM_ENTITY_RESPONSIBLE",
   "DEPARTMENT_MANAGER",
@@ -22,12 +27,13 @@ const ALL_SYSTEM_ROLES = [
 ] as const;
 
 const ROLE_LABELS_RO: Record<string, string> = {
-  PLATFORM_ADMIN: "Administrator platformă (toate tenanturile)",
-  TENANT_ADMIN: "Administrator organizație (tenant) — acces complet",
-  SSM_ADMIN: "Administrator SSM — toate entitățile SSM, configurare modul, rapoarte globale",
-  SSM_ENTITY_RESPONSIBLE: "Responsabil SSM pe entitate — administrare completă (documente, instruiri, EIP, accidente, calendar)",
-  DEPARTMENT_MANAGER: "Manager / șef departament — vizualizare echipă, aprobare instruiri, alerte neconformități",
-  EMPLOYEE: "Angajat — documente și instruiri proprii, e-learning, dosar personal"
+  SSM_ADMIN: "Administrator SSM — acces complet la toate entitățile; configurare modul; rapoarte globale",
+  SSM_ENTITY_RESPONSIBLE:
+    "Responsabil SSM (per entitate) — administrare completă pentru entitatea sa: documente, instruiri, EIP, accidente, calendar",
+  DEPARTMENT_MANAGER:
+    "Manager / șef de departament — vizualizare situație echipă proprie; aprobare instruiri la locul de muncă; alertă la neconformități",
+  EMPLOYEE:
+    "Angajat — acces la propriile documente și fișe de instruire; parcurgere instruiri online; vizualizare dosar personal"
 };
 
 type Tab = "users" | "organization" | "static" | "usage";
@@ -43,29 +49,102 @@ function fromDateInput(value: string) {
   return new Date(`${value}T00:00:00.000Z`).toISOString();
 }
 
+function dateInputToIsoUtc(date: string): string | undefined {
+  if (!date.trim()) return undefined;
+  return new Date(`${date}T00:00:00.000Z`).toISOString();
+}
+
+function mutationErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "A apărut o eroare neașteptată.";
+}
+
+type OrgOption = { id: string; code: string; name: string };
+
+function orgOptionsWithSaved(
+  items: OrgOption[],
+  selectedId: string | null | undefined,
+  allItems: OrgOption[],
+  savedFallback?: OrgOption | null
+): OrgOption[] {
+  if (!selectedId) return items;
+  if (items.some((i) => i.id === selectedId)) return items;
+  const fromCatalog = allItems.find((i) => i.id === selectedId);
+  if (fromCatalog) return [...items, fromCatalog];
+  if (savedFallback) return [...items, savedFallback];
+  return [...items, { id: selectedId, code: "—", name: "Valoare salvată" }];
+}
+
 const NEW_USER_EMPTY = {
   email: "",
   password: "",
   fullName: "",
-  roles: ["EMPLOYEE"] as string[]
+  role: "EMPLOYEE",
+  cnp: "",
+  worksiteId: "",
+  departmentId: "",
+  jobPositionId: "",
+  hireDate: ""
 };
+
+const EMPTY_EMPLOYEE_DRAFT = {
+  cnp: "",
+  worksiteId: "",
+  departmentId: "",
+  jobPositionId: "",
+  hireDate: ""
+};
+
+function PasswordToggleButton({
+  visible,
+  onToggle
+}: {
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="password-toggle-btn"
+      onClick={onToggle}
+      aria-label={visible ? "Ascunde parola" : "Afișează parola"}
+      title={visible ? "Ascunde parola" : "Afișează parola"}
+    >
+      {visible ? (
+        <svg className="password-toggle-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+          <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+          <line x1="1" y1="1" x2="23" y2="23" />
+        </svg>
+      ) : (
+        <svg className="password-toggle-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 export function AdminPage() {
   const queryClient = useQueryClient();
   const session = useAuthSession();
   const [tab, setTab] = useState<Tab>("users");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [roleDraft, setRoleDraft] = useState<string[]>([]);
+  const [editRole, setEditRole] = useState("EMPLOYEE");
+  const [editFullName, setEditFullName] = useState("");
   const [usageFrom, setUsageFrom] = useState("");
   const [usageTo, setUsageTo] = useState(toDateInput(new Date().toISOString()));
 
   const [newUserForm, setNewUserForm] = useState(NEW_USER_EMPTY);
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
+  const [employeeDraft, setEmployeeDraft] = useState(EMPTY_EMPLOYEE_DRAFT);
 
-  const assignableRolesForCreate = useMemo(
+  const assignableRoles = useMemo(
     () =>
-      session?.roles?.includes("PLATFORM_ADMIN")
+      session?.roles?.includes("SSM_ADMIN")
         ? [...ALL_SYSTEM_ROLES]
-        : ALL_SYSTEM_ROLES.filter((r) => r !== "PLATFORM_ADMIN"),
+        : ALL_SYSTEM_ROLES.filter((r) => r !== "SSM_ADMIN"),
     [session?.roles]
   );
 
@@ -80,37 +159,128 @@ export function AdminPage() {
     [usersQuery.data, selectedUserId]
   );
 
-  useEffect(() => {
-    if (selectedUser) {
-      setRoleDraft([...selectedUser.roles]);
-    }
-  }, [selectedUser]);
+  const worksitesQuery = useWorksites({ enabled: tab === "users" });
+  const departmentsQuery = useDepartments({ enabled: tab === "users" });
+  const positionsQuery = useJobPositions({ enabled: tab === "users" });
+  const employeesQuery = useEmployees({ enabled: tab === "users" });
 
-  const scopedQuery = useQuery({
-    queryKey: ["admin", "scoped-roles", selectedUserId],
-    queryFn: () => platformAdminApi.listScopedRoles(selectedUserId!),
-    enabled: tab === "users" && !!selectedUserId
-  });
+  const selectedEmployee = useMemo(() => {
+    if (!selectedUser) return null;
+    const email = selectedUser.email.toLowerCase();
+    return (employeesQuery.data ?? []).find((e) => e.email.toLowerCase() === email) ?? null;
+  }, [selectedUser, employeesQuery.data]);
+
+  const filteredDepartmentsForNewUser = useMemo(() => {
+    const deps = departmentsQuery.data ?? [];
+    if (!newUserForm.worksiteId) return deps;
+    return deps.filter((d) => d.worksiteId === newUserForm.worksiteId || !d.worksiteId);
+  }, [departmentsQuery.data, newUserForm.worksiteId]);
+
+  const filteredPositionsForNewUser = useMemo(() => {
+    const positions = positionsQuery.data ?? [];
+    if (!newUserForm.departmentId) return positions;
+    return positions.filter((p) => p.departmentId === newUserForm.departmentId || !p.departmentId);
+  }, [positionsQuery.data, newUserForm.departmentId]);
+
+  const detailWorksiteId =
+    employeeDraft.worksiteId || selectedEmployee?.worksiteId || "";
+
+  const detailDepartmentId =
+    employeeDraft.departmentId || selectedEmployee?.departmentId || "";
+
+  const savedOrgFromEmployee = useMemo(() => {
+    if (!selectedEmployee) return { worksite: null, department: null, position: null };
+    const emp = selectedEmployee as typeof selectedEmployee & {
+      worksite?: OrgOption | null;
+      department?: OrgOption | null;
+      jobPosition?: OrgOption | null;
+    };
+    return {
+      worksite: emp.worksite ?? null,
+      department: emp.department ?? null,
+      position: emp.jobPosition ?? null
+    };
+  }, [selectedEmployee]);
+
+  const detailWorksites = useMemo(() => {
+    const all = worksitesQuery.data ?? [];
+    const savedId = employeeDraft.worksiteId || selectedEmployee?.worksiteId;
+    return orgOptionsWithSaved(all, savedId, all, savedOrgFromEmployee.worksite);
+  }, [
+    worksitesQuery.data,
+    employeeDraft.worksiteId,
+    selectedEmployee?.worksiteId,
+    savedOrgFromEmployee.worksite
+  ]);
+
+  const detailDepartments = useMemo(() => {
+    const all = departmentsQuery.data ?? [];
+    const filtered = detailWorksiteId
+      ? all.filter((d) => !d.worksiteId || d.worksiteId === detailWorksiteId)
+      : all;
+    const savedId = employeeDraft.departmentId || selectedEmployee?.departmentId;
+    return orgOptionsWithSaved(filtered, savedId, all, savedOrgFromEmployee.department);
+  }, [
+    departmentsQuery.data,
+    detailWorksiteId,
+    employeeDraft.departmentId,
+    selectedEmployee?.departmentId,
+    savedOrgFromEmployee.department
+  ]);
+
+  const detailPositions = useMemo(() => {
+    const all = positionsQuery.data ?? [];
+    const filtered = detailDepartmentId
+      ? all.filter((p) => !p.departmentId || p.departmentId === detailDepartmentId)
+      : all;
+    const savedId = employeeDraft.jobPositionId || selectedEmployee?.jobPositionId;
+    return orgOptionsWithSaved(filtered, savedId, all, savedOrgFromEmployee.position);
+  }, [
+    positionsQuery.data,
+    detailDepartmentId,
+    employeeDraft.jobPositionId,
+    selectedEmployee?.jobPositionId,
+    savedOrgFromEmployee.position
+  ]);
+
+  const detailFormLoading =
+    Boolean(selectedUser) && employeesQuery.isLoading && !employeesQuery.data;
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setEditRole("EMPLOYEE");
+      setEditFullName("");
+      setEmployeeDraft(EMPTY_EMPLOYEE_DRAFT);
+      return;
+    }
+    setEditRole(selectedUser.roles[0] ?? "EMPLOYEE");
+    setEditFullName(selectedUser.fullName ?? "");
+
+    if (employeesQuery.isLoading && !employeesQuery.data) {
+      return;
+    }
+
+    if (selectedEmployee) {
+      setEmployeeDraft({
+        cnp: selectedEmployee.cnp === "***" ? "" : (selectedEmployee.cnp ?? ""),
+        worksiteId: selectedEmployee.worksiteId ?? "",
+        departmentId: selectedEmployee.departmentId ?? "",
+        jobPositionId: selectedEmployee.jobPositionId ?? "",
+        hireDate: selectedEmployee.hireDate ? toDateInput(selectedEmployee.hireDate) : ""
+      });
+      if (selectedEmployee.fullName?.trim()) {
+        setEditFullName(selectedEmployee.fullName);
+      }
+    } else {
+      setEmployeeDraft(EMPTY_EMPLOYEE_DRAFT);
+    }
+  }, [selectedUser, selectedEmployee, employeesQuery.isLoading, employeesQuery.data]);
 
   const staticQuery = useQuery({
     queryKey: ["admin", "static-pages"],
     queryFn: platformAdminApi.listStaticPages,
     enabled: tab === "static"
   });
-
-  const worksitesQuery = useWorksites({ enabled: tab === "users" });
-
-  const groupsQuery = useQuery({
-    queryKey: ["master-data", "groups"],
-    queryFn: masterDataApi.listGroups
-  });
-
-  const [scopedForm, setScopedForm] = useState<{
-    role: string;
-    scope: "WORKSITE" | "EMPLOYEE_GROUP";
-    worksiteId: string;
-    employeeGroupId: string;
-  }>({ role: "DEPARTMENT_MANAGER", scope: "WORKSITE", worksiteId: "", employeeGroupId: "" });
 
   const [staticForm, setStaticForm] = useState<CreateStaticPagePayload>({
     slug: "",
@@ -129,26 +299,17 @@ export function AdminPage() {
     }
   });
 
+  const updateEmployee = useUpdateEmployee();
+  const createEmployee = useCreateEmployee();
+
   const createUser = useMutation({
     mutationFn: (payload: CreateTenantUserPayload) => platformAdminApi.createUser(payload),
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-      setNewUserForm({ email: "", password: "", fullName: "", roles: ["EMPLOYEE"] });
+      await queryClient.invalidateQueries({ queryKey: ["master-data", "employees"] });
+      setNewUserForm({ ...NEW_USER_EMPTY });
+      setShowNewUserPassword(false);
       setSelectedUserId(created.id);
-    }
-  });
-
-  const createScoped = useMutation({
-    mutationFn: (payload: CreateScopedRolePayload) => platformAdminApi.createScopedRole(payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "scoped-roles", selectedUserId] });
-    }
-  });
-
-  const deleteScoped = useMutation({
-    mutationFn: (id: string) => platformAdminApi.deleteScopedRole(id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "scoped-roles", selectedUserId] });
     }
   });
 
@@ -184,33 +345,63 @@ export function AdminPage() {
     enabled: tab === "usage"
   });
 
+  const buildEmployeePayload = (): UpdateEmployeePayload => {
+    const payload: UpdateEmployeePayload = {
+      worksiteId: employeeDraft.worksiteId || undefined,
+      departmentId: employeeDraft.departmentId || undefined,
+      jobPositionId: employeeDraft.jobPositionId || undefined,
+      hireDate: dateInputToIsoUtc(employeeDraft.hireDate)
+    };
+    if (employeeDraft.cnp.trim() && employeeDraft.cnp !== "***") {
+      payload.cnp = employeeDraft.cnp.trim();
+    }
+    return payload;
+  };
+
   const onCreateUser = (event: FormEvent) => {
     event.preventDefault();
     createUser.mutate({
       email: newUserForm.email.trim(),
       password: newUserForm.password,
-      fullName: newUserForm.fullName.trim() || undefined,
-      roles: newUserForm.roles.length > 0 ? newUserForm.roles : undefined
+      fullName: newUserForm.fullName.trim(),
+      roles: [newUserForm.role],
+      cnp: newUserForm.cnp.trim() || undefined,
+      worksiteId: newUserForm.worksiteId || undefined,
+      departmentId: newUserForm.departmentId || undefined,
+      jobPositionId: newUserForm.jobPositionId || undefined,
+      hireDate: dateInputToIsoUtc(newUserForm.hireDate)
     });
   };
 
-  const onSaveRoles = (event: FormEvent) => {
+  const onSaveUserDetail = async (event: FormEvent) => {
     event.preventDefault();
-    if (!selectedUserId) return;
-    patchUser.mutate({ id: selectedUserId, roles: roleDraft });
-  };
-
-  const onAddScoped = (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedUserId) return;
-    const payload: CreateScopedRolePayload = {
-      userId: selectedUserId,
-      role: scopedForm.role,
-      scope: scopedForm.scope,
-      worksiteId: scopedForm.scope === "WORKSITE" ? scopedForm.worksiteId : undefined,
-      employeeGroupId: scopedForm.scope === "EMPLOYEE_GROUP" ? scopedForm.employeeGroupId : undefined
-    };
-    createScoped.mutate(payload);
+    if (!selectedUserId || !selectedUser) return;
+    try {
+      await patchUser.mutateAsync({ id: selectedUserId, roles: [editRole] });
+      const empPayload = buildEmployeePayload();
+      const displayName = editFullName.trim() || selectedUser.email;
+      if (selectedEmployee) {
+        await updateEmployee.mutateAsync({
+          id: selectedEmployee.id,
+          payload: {
+            ...empPayload,
+            fullName: displayName,
+            email: selectedUser.email
+          }
+        });
+      } else {
+        await createEmployee.mutateAsync({
+          email: selectedUser.email,
+          fullName: displayName,
+          ...empPayload,
+          active: true
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["master-data", "employees"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    } catch {
+      /* erori afișate de mutații */
+    }
   };
 
   const onCreateStatic = (event: FormEvent) => {
@@ -236,17 +427,13 @@ export function AdminPage() {
 
   const err =
     (usersQuery.error ??
-      scopedQuery.error ??
       staticQuery.error ??
       usageQuery.error ??
-      createUser.error ??
-      worksitesQuery.error) instanceof Error
+      createUser.error) instanceof Error
       ? (usersQuery.error ??
-          scopedQuery.error ??
           staticQuery.error ??
           usageQuery.error ??
-          createUser.error ??
-          worksitesQuery.error) as Error
+          createUser.error) as Error
       : null;
 
   return (
@@ -292,8 +479,8 @@ export function AdminPage() {
           <section className="card">
             <h2>Utilizator nou</h2>
             <p className="text-muted small">
-              Creează un cont de autentificare pentru tenantul curent. Parola: minim 8 caractere. Rolul
-              PLATFORM_ADMIN poate fi atribuit doar de un utilizator care are deja acest rol.
+              Creează un cont de autentificare pentru tenantul curent. Parola: minim 8 caractere. Rolul SSM_ADMIN poate fi
+              atribuit doar de un administrator SSM.
             </p>
             <form onSubmit={onCreateUser} className="form-stack">
               <div className="field">
@@ -309,43 +496,117 @@ export function AdminPage() {
               </div>
               <div className="field">
                 <label htmlFor="new-user-password">Parolă</label>
-                <input
-                  id="new-user-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={newUserForm.password}
-                  onChange={(e) => setNewUserForm((f) => ({ ...f, password: e.target.value }))}
-                  minLength={8}
-                  required
-                />
+                <div className="password-field-row">
+                  <input
+                    id="new-user-password"
+                    type={showNewUserPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={newUserForm.password}
+                    onChange={(e) => setNewUserForm((f) => ({ ...f, password: e.target.value }))}
+                    minLength={8}
+                    required
+                  />
+                  <PasswordToggleButton visible={showNewUserPassword} onToggle={() => setShowNewUserPassword((v) => !v)} />
+                </div>
               </div>
               <div className="field">
-                <label htmlFor="new-user-name">Nume afișat (opțional)</label>
+                <label htmlFor="new-user-name">Nume afișat</label>
                 <input
                   id="new-user-name"
                   value={newUserForm.fullName}
                   onChange={(e) => setNewUserForm((f) => ({ ...f, fullName: e.target.value }))}
+                  maxLength={200}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="new-user-cnp">CNP (opțional)</label>
+                <input
+                  id="new-user-cnp"
+                  value={newUserForm.cnp}
+                  onChange={(e) => setNewUserForm((f) => ({ ...f, cnp: e.target.value }))}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="new-user-worksite">Punct de lucru</label>
+                <select
+                  id="new-user-worksite"
+                  value={newUserForm.worksiteId}
+                  onChange={(e) =>
+                    setNewUserForm((f) => ({
+                      ...f,
+                      worksiteId: e.target.value,
+                      departmentId: "",
+                      jobPositionId: ""
+                    }))
+                  }
+                >
+                  <option value="">— Neselectat —</option>
+                  {(worksitesQuery.data ?? []).map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.code} — {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="new-user-department">Departament</label>
+                <select
+                  id="new-user-department"
+                  value={newUserForm.departmentId}
+                  onChange={(e) =>
+                    setNewUserForm((f) => ({
+                      ...f,
+                      departmentId: e.target.value,
+                      jobPositionId: ""
+                    }))
+                  }
+                >
+                  <option value="">— Neselectat —</option>
+                  {filteredDepartmentsForNewUser.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.code} — {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="new-user-position">Post</label>
+                <select
+                  id="new-user-position"
+                  value={newUserForm.jobPositionId}
+                  onChange={(e) => setNewUserForm((f) => ({ ...f, jobPositionId: e.target.value }))}
+                >
+                  <option value="">— Neselectat —</option>
+                  {filteredPositionsForNewUser.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} — {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="new-user-hire-date">Data angajării</label>
+                <input
+                  id="new-user-hire-date"
+                  type="date"
+                  value={newUserForm.hireDate}
+                  onChange={(e) => setNewUserForm((f) => ({ ...f, hireDate: e.target.value }))}
                 />
               </div>
               <fieldset className="role-fieldset-create">
-                <legend>Roluri la creare</legend>
-                <p className="text-muted small role-fieldset-hint">
-                  Bifează unul sau mai multe roluri. Implicit, dacă la trimitere nu e bifat niciunul, se folosește
-                  EMPLOYEE.
-                </p>
-                <div className="checkbox-grid--stacked-roles" role="group" aria-label="Roluri utilizator nou">
-                  {assignableRolesForCreate.map((r) => (
+                <legend>Rol la creare</legend>
+                <p className="text-muted small role-fieldset-hint">Alege un singur rol pentru utilizatorul nou.</p>
+                <div className="checkbox-grid--stacked-roles" role="radiogroup" aria-label="Rol utilizator nou">
+                  {assignableRoles.map((r) => (
                     <label key={r} className="checkbox-label checkbox-label--role-row">
                       <input
-                        type="checkbox"
-                        checked={newUserForm.roles.includes(r)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setNewUserForm((f) => ({ ...f, roles: [...new Set([...f.roles, r])] }));
-                          } else {
-                            setNewUserForm((f) => ({ ...f, roles: f.roles.filter((x) => x !== r) }));
-                          }
-                        }}
+                        type="radio"
+                        name="new-user-role"
+                        value={r}
+                        checked={newUserForm.role === r}
+                        onChange={() => setNewUserForm((f) => ({ ...f, role: r }))}
                       />
                       <span className="role-row-text">
                         <span className="role-code">{r}</span>
@@ -358,6 +619,11 @@ export function AdminPage() {
               <button type="submit" className="btn-primary" disabled={createUser.isPending}>
                 {createUser.isPending ? "Se creează…" : "Creează utilizator"}
               </button>
+              {createUser.isError ? (
+                <p className="feedback error" role="alert">
+                  {mutationErrorMessage(createUser.error)}
+                </p>
+              ) : null}
             </form>
           </section>
 
@@ -396,24 +662,128 @@ export function AdminPage() {
             <h2>Detaliu utilizator</h2>
             {!selectedUser ? (
               <p className="text-muted">Selectează un utilizator din listă.</p>
+            ) : detailFormLoading ? (
+              <p className="text-muted">Se încarcă datele salvate…</p>
             ) : (
               <>
-                <p>
-                  <strong>{selectedUser.email}</strong>
-                </p>
-                <form onSubmit={onSaveRoles} className="form-stack">
+                {!selectedEmployee ? (
+                  <p className="text-muted small">
+                    Nu există încă fișă de angajat pentru acest e-mail. La salvare se creează automat.
+                  </p>
+                ) : null}
+                <form
+                  key={selectedUserId ?? undefined}
+                  onSubmit={onSaveUserDetail}
+                  className="form-stack"
+                >
                   <fieldset>
-                    <legend>Roluri globale (JWT)</legend>
-                    <div className="checkbox-grid--stacked-roles">
-                      {ALL_SYSTEM_ROLES.map((r) => (
+                    <legend>Cont utilizator</legend>
+                    <div className="field">
+                      <label htmlFor="detail-user-email">E-mail</label>
+                      <input id="detail-user-email" type="email" value={selectedUser.email} readOnly />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="detail-user-fullname">Nume afișat</label>
+                      <input
+                        id="detail-user-fullname"
+                        value={editFullName}
+                        onChange={(e) => setEditFullName(e.target.value)}
+                        required
+                        autoComplete="name"
+                      />
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Date angajat</legend>
+                    <div className="field">
+                      <label htmlFor="detail-user-cnp">CNP (opțional)</label>
+                      <input
+                        id="detail-user-cnp"
+                        value={employeeDraft.cnp}
+                        onChange={(e) => setEmployeeDraft((d) => ({ ...d, cnp: e.target.value }))}
+                        placeholder={selectedEmployee?.cnp === "***" ? "Lăsați gol pentru a păstra valoarea" : undefined}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="detail-user-worksite">Punct de lucru</label>
+                      <select
+                        id="detail-user-worksite"
+                        value={detailWorksiteId}
+                        onChange={(e) =>
+                          setEmployeeDraft((d) => ({
+                            ...d,
+                            worksiteId: e.target.value,
+                            departmentId: "",
+                            jobPositionId: ""
+                          }))
+                        }
+                      >
+                        <option value="">— Neselectat —</option>
+                        {detailWorksites.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.code} — {w.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="detail-user-department">Departament</label>
+                      <select
+                        id="detail-user-department"
+                        value={detailDepartmentId}
+                        onChange={(e) =>
+                          setEmployeeDraft((d) => ({
+                            ...d,
+                            departmentId: e.target.value,
+                            jobPositionId: ""
+                          }))
+                        }
+                      >
+                        <option value="">— Neselectat —</option>
+                        {detailDepartments.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.code} — {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="detail-user-position">Post</label>
+                      <select
+                        id="detail-user-position"
+                        value={employeeDraft.jobPositionId || selectedEmployee?.jobPositionId || ""}
+                        onChange={(e) => setEmployeeDraft((d) => ({ ...d, jobPositionId: e.target.value }))}
+                      >
+                        <option value="">— Neselectat —</option>
+                        {detailPositions.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.code} — {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="detail-user-hire-date">Data angajării</label>
+                      <input
+                        id="detail-user-hire-date"
+                        type="date"
+                        value={employeeDraft.hireDate}
+                        onChange={(e) => setEmployeeDraft((d) => ({ ...d, hireDate: e.target.value }))}
+                      />
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Rol</legend>
+                    <div className="checkbox-grid--stacked-roles" role="radiogroup" aria-label="Rol utilizator">
+                      {assignableRoles.map((r) => (
                         <label key={r} className="checkbox-label checkbox-label--role-row">
                           <input
-                            type="checkbox"
-                            checked={roleDraft.includes(r)}
-                            onChange={(e) => {
-                              if (e.target.checked) setRoleDraft((d) => [...new Set([...d, r])]);
-                              else setRoleDraft((d) => d.filter((x) => x !== r));
-                            }}
+                            type="radio"
+                            name="edit-user-role"
+                            value={r}
+                            checked={editRole === r}
+                            onChange={() => setEditRole(r)}
                           />
                           <span className="role-row-text">
                             <span className="role-code">{r}</span>
@@ -423,103 +793,22 @@ export function AdminPage() {
                       ))}
                     </div>
                   </fieldset>
-                  <button type="submit" className="btn-primary" disabled={patchUser.isPending}>
-                    Salvează roluri
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={patchUser.isPending || updateEmployee.isPending || createEmployee.isPending}
+                  >
+                    {patchUser.isPending || updateEmployee.isPending || createEmployee.isPending
+                      ? "Se salvează…"
+                      : "Salvează"}
                   </button>
+                  {patchUser.isError || updateEmployee.isError || createEmployee.isError ? (
+                    <p className="feedback error" role="alert">
+                      {mutationErrorMessage(patchUser.error ?? updateEmployee.error ?? createEmployee.error)}
+                    </p>
+                  ) : null}
                 </form>
 
-                <hr className="section-rule" />
-
-                <h3>Roluri pe companie / grup</h3>
-                <p className="text-muted small">
-                  Complementar față de rolurile globale: același rol poate fi limitat la un worksite sau la un grup de
-                  angajați (date pentru rapoarte și UI viitoare).
-                </p>
-                {scopedQuery.isLoading ? <p>Se încarcă…</p> : null}
-                <ul className="scoped-list">
-                  {(scopedQuery.data ?? []).map((row: UserScopedRoleRow) => (
-                    <li key={row.id}>
-                      <span>
-                        {row.role} · {row.scope}
-                        {row.worksite ? ` · ${row.worksite.name}` : ""}
-                        {row.employeeGroup ? ` · ${row.employeeGroup.name}` : ""}
-                      </span>
-                      <button
-                        type="button"
-                        className="btn-text danger"
-                        onClick={() => deleteScoped.mutate(row.id)}
-                        disabled={deleteScoped.isPending}
-                      >
-                        Șterge
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-
-                <form onSubmit={onAddScoped} className="form-stack">
-                  <div className="field">
-                    <label>Rol</label>
-                    <select
-                      value={scopedForm.role}
-                      onChange={(e) => setScopedForm((f) => ({ ...f, role: e.target.value }))}
-                    >
-                      {ALL_SYSTEM_ROLES.filter((r) => r !== "PLATFORM_ADMIN").map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>Tip domeniu</label>
-                    <select
-                      value={scopedForm.scope}
-                      onChange={(e) =>
-                        setScopedForm((f) => ({
-                          ...f,
-                          scope: e.target.value as "WORKSITE" | "EMPLOYEE_GROUP"
-                        }))
-                      }
-                    >
-                      <option value="WORKSITE">Worksite (companie / locație)</option>
-                      <option value="EMPLOYEE_GROUP">Grup angajați</option>
-                    </select>
-                  </div>
-                  {scopedForm.scope === "WORKSITE" ? (
-                    <div className="field">
-                      <label>Worksite</label>
-                      <select
-                        value={scopedForm.worksiteId}
-                        onChange={(e) => setScopedForm((f) => ({ ...f, worksiteId: e.target.value }))}
-                      >
-                        <option value="">—</option>
-                        {(worksitesQuery.data ?? []).map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="field">
-                      <label>Grup</label>
-                      <select
-                        value={scopedForm.employeeGroupId}
-                        onChange={(e) => setScopedForm((f) => ({ ...f, employeeGroupId: e.target.value }))}
-                      >
-                        <option value="">—</option>
-                        {(groupsQuery.data ?? []).map((g: EmployeeGroupItem) => (
-                          <option key={g.id} value={g.id}>
-                            {g.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <button type="submit" className="btn-secondary" disabled={createScoped.isPending}>
-                    Adaugă asignare
-                  </button>
-                </form>
               </>
             )}
           </section>

@@ -1,6 +1,7 @@
 export interface SessionData {
   accessToken: string;
   tenantId: string;
+  userId: string;
   roles?: string[];
   /** Employee row matched by login email (same tenant); used for SSM self-service UI. */
   linkedEmployeeId?: string | null;
@@ -8,6 +9,7 @@ export interface SessionData {
 
 const TOKEN_KEY = "access_token";
 const TENANT_KEY = "tenant_id";
+const USER_ID_KEY = "auth_user_id";
 const ROLES_KEY = "auth_roles";
 const LINKED_EMPLOYEE_KEY = "auth_linked_employee_id";
 export const AUTH_CHANGED_EVENT = "employee-platform-auth-changed";
@@ -40,11 +42,14 @@ export const authStore = {
     } else if (linkedRaw) {
       linkedEmployeeId = linkedRaw;
     }
-    return { accessToken, tenantId, roles, linkedEmployeeId };
+    const userId = localStorage.getItem(USER_ID_KEY) ?? parseAccessTokenUserId(accessToken);
+    if (!userId) return null;
+    return { accessToken, tenantId, userId, roles, linkedEmployeeId };
   },
   set(session: SessionData) {
     localStorage.setItem(TOKEN_KEY, session.accessToken);
     localStorage.setItem(TENANT_KEY, session.tenantId);
+    localStorage.setItem(USER_ID_KEY, session.userId);
     if (session.roles?.length) {
       localStorage.setItem(ROLES_KEY, JSON.stringify(session.roles));
     } else {
@@ -62,8 +67,21 @@ export const authStore = {
   clear() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TENANT_KEY);
+    localStorage.removeItem(USER_ID_KEY);
     localStorage.removeItem(ROLES_KEY);
     localStorage.removeItem(LINKED_EMPLOYEE_KEY);
     notifyAuthChanged();
   }
 };
+
+/** JWT `sub` — used when older sessions lack stored userId. */
+export function parseAccessTokenUserId(accessToken: string): string | null {
+  try {
+    const segment = accessToken.split(".")[1];
+    if (!segment) return null;
+    const payload = JSON.parse(atob(segment.replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: unknown };
+    return typeof payload.sub === "string" && payload.sub.length > 0 ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}

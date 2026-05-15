@@ -269,6 +269,44 @@ button {
   box-shadow: 0 0 0 3px var(--color-primary-muted);
 }
 
+.password-field-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.password-field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.password-toggle-btn {
+  flex-shrink: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-muted);
+  cursor: pointer;
+  line-height: 1;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.password-toggle-btn:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-muted);
+}
+
+.password-toggle-icon {
+  display: block;
+}
+
 .field-hint {
   margin: 0.35rem 0 0;
   font-size: 0.75rem;

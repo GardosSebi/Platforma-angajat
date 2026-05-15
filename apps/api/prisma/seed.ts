@@ -60,7 +60,7 @@ async function main() {
       passwordHash,
       active: true,
       fullName: "Administrator seed",
-      roles: [SystemRole.TENANT_ADMIN, SystemRole.SSM_ADMIN]
+      roles: [SystemRole.SSM_ADMIN]
     },
     create: {
       tenantId: primaryTenantId,
@@ -68,7 +68,7 @@ async function main() {
       passwordHash,
       fullName: "Administrator seed",
       active: true,
-      roles: [SystemRole.TENANT_ADMIN, SystemRole.SSM_ADMIN]
+      roles: [SystemRole.SSM_ADMIN]
     }
   });
 

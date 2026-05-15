@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { authStore } from "../shared/auth/auth-store";
+import { clearUserScopedQueryCache } from "../shared/auth/clear-user-query-cache";
 import { canAccessTenantAdmin } from "../shared/auth/roles";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 
@@ -58,6 +59,7 @@ export function AppLayout() {
                   type="button"
                   className="btn-text"
                   onClick={() => {
+                    clearUserScopedQueryCache();
                     authStore.clear();
                     navigate("/login");
                   }}

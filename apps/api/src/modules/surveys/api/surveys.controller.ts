@@ -3,6 +3,7 @@ import { Request } from "express";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
+import { RequireAnyPermissions } from "../../../common/decorators/require-any-permissions.decorator";
 import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
 import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { Permission } from "../../../common/constants/permissions";
@@ -32,10 +33,16 @@ export class SurveysController {
     return this.surveys.list(tenantId);
   }
 
+  @Get("responded-ids")
+  @RequireAnyPermissions(Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
+  respondedIds(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
+    return this.surveys.getRespondedSurveyIds(tenantId, user.sub);
+  }
+
   @Get(":id/for-respond")
-  @RequirePermissions(Permission.SURVEYS_RESPOND)
-  forRespond(@TenantId() tenantId: string, @Param("id") id: string) {
-    return this.surveys.getForRespond(tenantId, id);
+  @RequireAnyPermissions(Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
+  forRespond(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string) {
+    return this.surveys.getForRespond(tenantId, id, user.sub);
   }
 
   @Post()
@@ -75,7 +82,7 @@ export class SurveysController {
   }
 
   @Post(":id/responses")
-  @RequirePermissions(Permission.SURVEYS_RESPOND)
+  @RequireAnyPermissions(Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
   respond(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string, @Body() dto: SubmitSurveyResponseDto) {
     return this.surveys.submitPrivateResponse(tenantId, user.sub, id, dto);
   }

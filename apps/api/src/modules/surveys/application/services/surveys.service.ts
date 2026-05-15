@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "crypto";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, Survey, SurveyAudienceType, SurveyStatus } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
@@ -196,7 +196,7 @@ export class SurveysService {
     return this.get(tenantId, id);
   }
 
-  async getForRespond(tenantId: string, id: string) {
+  async getForRespond(tenantId: string, id: string, userId: string) {
     const survey = await this.assertSurvey(tenantId, id);
     if (!survey.privateLinkEnabled) {
       throw new BadRequestException("Private survey link is disabled for this survey.");
@@ -204,7 +204,21 @@ export class SurveysService {
     if (survey.status !== SurveyStatus.ACTIVE) {
       throw new BadRequestException("Survey is not active.");
     }
-    return this.serializeSurvey(survey, { responseCount: 0, privateResponses: 0, publicResponses: 0 });
+    const existing = await this.findUserSurveyResponse(tenantId, id, userId);
+    return {
+      ...this.serializeSurvey(survey, { responseCount: 0, privateResponses: 0, publicResponses: 0 }),
+      alreadyResponded: Boolean(existing),
+      respondedAt: existing?.submittedAt.toISOString() ?? null
+    };
+  }
+
+  async getRespondedSurveyIds(tenantId: string, userId: string) {
+    const rows = await this.prisma.surveyResponse.findMany({
+      where: { tenantId, respondentUserId: userId },
+      select: { surveyId: true },
+      distinct: ["surveyId"]
+    });
+    return { surveyIds: rows.map((row) => row.surveyId) };
   }
 
   async privateLink(tenantId: string, id: string) {
@@ -257,16 +271,27 @@ export class SurveysService {
     const survey = await this.assertSurvey(tenantId, surveyId);
     this.assertCanRespond(survey);
     await this.assertEmployee(tenantId, dto.employeeId);
-    const response = await this.prisma.surveyResponse.create({
-      data: {
-        tenantId,
-        surveyId,
-        employeeId: clean(dto.employeeId),
-        respondentUserId: actorId,
-        answersJson: jsonValue(dto.answers)
+    const existing = await this.findUserSurveyResponse(tenantId, surveyId, actorId);
+    if (existing) {
+      throw new ConflictException("Ați completat deja acest sondaj.");
+    }
+    try {
+      const response = await this.prisma.surveyResponse.create({
+        data: {
+          tenantId,
+          surveyId,
+          employeeId: clean(dto.employeeId),
+          respondentUserId: actorId,
+          answersJson: jsonValue(dto.answers)
+        }
+      });
+      return { responseId: response.id };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictException("Ați completat deja acest sondaj.");
       }
-    });
-    return { responseId: response.id };
+      throw error;
+    }
   }
 
   async submitPublicResponse(token: string, dto: SubmitSurveyResponseDto, meta: { ip?: string; userAgent?: string }) {
@@ -337,6 +362,13 @@ export class SurveysService {
     if (survey.status !== SurveyStatus.ACTIVE) {
       throw new BadRequestException("Survey is not active.");
     }
+  }
+
+  private findUserSurveyResponse(tenantId: string, surveyId: string, userId: string) {
+    return this.prisma.surveyResponse.findFirst({
+      where: { tenantId, surveyId, respondentUserId: userId },
+      select: { id: true, submittedAt: true }
+    });
   }
 
   private async assertEmployee(tenantId: string, employeeId?: string) {

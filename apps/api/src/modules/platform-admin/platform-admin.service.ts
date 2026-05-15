@@ -6,8 +6,10 @@ import {
   NotFoundException
 } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
-import { EmployeeStaticAudienceType, Prisma, RoleAssignmentScope, SystemRole } from "@prisma/client";
+import { EmployeeStaticAudienceType, Prisma, RoleAssignmentScope } from "@prisma/client";
+import { SystemRole } from "../../common/prisma-enums";
 import { PrismaService } from "../../infrastructure/prisma/prisma.service";
+import { MasterDataService } from "../master-data/master-data.service";
 import { CreateScopedRoleDto } from "./api/dto/create-scoped-role.dto";
 import { CreateStaticPageDto, UpdateStaticPageDto } from "./api/dto/create-static-page.dto";
 import { CreateTenantUserDto } from "./api/dto/create-tenant-user.dto";
@@ -15,7 +17,10 @@ import { PatchTenantUserDto } from "./api/dto/patch-tenant-user.dto";
 
 @Injectable()
 export class PlatformAdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly masterData: MasterDataService
+  ) {}
 
   listTenantUsers(tenantId: string) {
     return this.prisma.user.findMany({
@@ -33,23 +38,29 @@ export class PlatformAdminService {
     });
   }
 
-  async createTenantUser(tenantId: string, actorRoles: string[], dto: CreateTenantUserDto) {
+  async createTenantUser(
+    tenantId: string,
+    actorUserId: string,
+    actorRoles: string[],
+    dto: CreateTenantUserDto
+  ) {
     const email = dto.email.toLowerCase().trim();
     const roles: SystemRole[] =
       dto.roles && dto.roles.length > 0 ? dto.roles : [SystemRole.EMPLOYEE];
 
-    if (roles.includes(SystemRole.PLATFORM_ADMIN) && !actorRoles.includes(SystemRole.PLATFORM_ADMIN)) {
-      throw new ForbiddenException("Doar un administrator de platformă poate atribui rolul PLATFORM_ADMIN.");
+    if (roles.includes(SystemRole.SSM_ADMIN) && !actorRoles.includes(SystemRole.SSM_ADMIN as string)) {
+      throw new ForbiddenException("Doar un administrator SSM poate atribui rolul SSM_ADMIN.");
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    let userId: string | undefined;
     try {
-      return await this.prisma.user.create({
+      const user = await this.prisma.user.create({
         data: {
           tenantId,
           email,
           passwordHash,
-          fullName: dto.fullName?.trim() || null,
+          fullName: dto.fullName.trim(),
           roles,
           active: true
         },
@@ -63,20 +74,48 @@ export class PlatformAdminService {
           updatedAt: true
         }
       });
+      userId = user.id;
+
+      await this.masterData.createEmployee(
+        tenantId,
+        {
+          email,
+          fullName: dto.fullName.trim(),
+          cnp: dto.cnp,
+          worksiteId: dto.worksiteId,
+          departmentId: dto.departmentId,
+          jobPositionId: dto.jobPositionId,
+          hireDate: dto.hireDate,
+          active: true
+        },
+        actorUserId
+      );
+
+      return user;
     } catch (e) {
+      if (userId) {
+        await this.prisma.user.delete({ where: { id: userId } }).catch(() => undefined);
+      }
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const target = Array.isArray(e.meta?.target) ? e.meta.target.join(",") : "";
+        if (target.includes("Employee")) {
+          throw new ConflictException("Există deja un angajat cu acest e-mail în tenant.");
+        }
         throw new ConflictException("Există deja un utilizator cu acest e-mail în tenant.");
       }
       throw e;
     }
   }
 
-  async patchTenantUser(tenantId: string, userId: string, dto: PatchTenantUserDto) {
+  async patchTenantUser(tenantId: string, actorRoles: string[], userId: string, dto: PatchTenantUserDto) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId }
     });
     if (!user) {
       throw new NotFoundException("User not found");
+    }
+    if (dto.roles?.includes(SystemRole.SSM_ADMIN) && !actorRoles.includes(SystemRole.SSM_ADMIN as string)) {
+      throw new ForbiddenException("Doar un administrator SSM poate atribui rolul SSM_ADMIN.");
     }
     return this.prisma.user.update({
       where: { id: userId },

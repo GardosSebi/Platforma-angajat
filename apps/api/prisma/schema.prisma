@@ -8,8 +8,6 @@ datasource db {
 }
 
 enum SystemRole {
-  PLATFORM_ADMIN
-  TENANT_ADMIN
   SSM_ADMIN
   SSM_ENTITY_RESPONSIBLE
   DEPARTMENT_MANAGER
@@ -1073,6 +1071,7 @@ model SurveyResponse {
   employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   helpdeskTickets HelpdeskTicket[]
 
+  @@unique([surveyId, respondentUserId])
   @@index([tenantId, surveyId, submittedAt])
   @@index([tenantId, employeeId, submittedAt])
   @@index([publicToken, submittedAt])

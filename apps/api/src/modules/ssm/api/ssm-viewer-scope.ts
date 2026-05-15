@@ -3,8 +3,6 @@ import { JwtPayload } from "../../../auth/jwt.strategy";
 import { PrismaService } from "../../../infrastructure/prisma/prisma.service";
 
 const SSM_ELEVATED_ROLES = new Set([
-  "PLATFORM_ADMIN",
-  "TENANT_ADMIN",
   "SSM_ADMIN",
   "SSM_ENTITY_RESPONSIBLE",
   "DEPARTMENT_MANAGER"

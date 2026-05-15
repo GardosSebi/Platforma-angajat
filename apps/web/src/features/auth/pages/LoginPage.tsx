@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getApiBaseUrl } from "../../../shared/api/api-base";
 import { loginRequest } from "../api/auth.api";
 import { authStore } from "../../../shared/auth/auth-store";
+import { clearUserScopedQueryCache } from "../../../shared/auth/clear-user-query-cache";
 
 function safeReturnPath(raw: string | null): string | null {
   if (!raw || !raw.startsWith("/")) return null;
@@ -28,9 +29,11 @@ export function LoginPage() {
     setPending(true);
     try {
       const data = await loginRequest(tenantId.trim(), email.trim(), password);
+      clearUserScopedQueryCache();
       authStore.set({
         accessToken: data.accessToken,
         tenantId: data.user.tenantId,
+        userId: data.user.id,
         roles: data.user.roles,
         linkedEmployeeId: data.linkedEmployeeId ?? null
       });

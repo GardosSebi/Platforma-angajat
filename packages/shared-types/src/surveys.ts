@@ -78,6 +78,9 @@ export interface SurveyItem {
     privateResponses: number;
     publicResponses: number;
   };
+  /** Present on GET .../for-respond when the current user already submitted. */
+  alreadyResponded?: boolean;
+  respondedAt?: string | null;
 }
 
 export interface SubmitSurveyResponseRequest {

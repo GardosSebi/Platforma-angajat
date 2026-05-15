@@ -17,7 +17,7 @@ async function bootstrap() {
   app.setGlobalPrefix("api/v1");
   app.enableCors({
     origin: true,
-    allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id"]
+    allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id", "x-worksite-id"]
   });
   app.useGlobalPipes(
     new ValidationPipe({

@@ -1,17 +1,14 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import type {
   CreateDepartmentPayload,
-  CreateEmployeePayload,
   CreateJobPositionPayload,
   CreateWorksitePayload
 } from "../api/master-data.api";
 import {
   useCreateDepartment,
-  useCreateEmployee,
   useCreateJobPosition,
   useCreateWorksite,
   useDepartments,
-  useEmployees,
   useJobPositions,
   useWorksites
 } from "../hooks/useMasterData";
@@ -39,17 +36,6 @@ const EMPTY_JOB: CreateJobPositionPayload = {
   active: true
 };
 
-const EMPTY_EMPLOYEE: CreateEmployeePayload = {
-  email: "",
-  fullName: "",
-  cnp: "",
-  worksiteId: "",
-  departmentId: "",
-  jobPositionId: "",
-  hireDate: "",
-  active: true
-};
-
 function mutationErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "A apărut o eroare neașteptată.";
 }
@@ -58,35 +44,14 @@ export function MasterDataPage() {
   const worksitesQuery = useWorksites();
   const departmentsQuery = useDepartments();
   const positionsQuery = useJobPositions();
-  const employeesQuery = useEmployees();
 
   const createWorksite = useCreateWorksite();
   const createDepartment = useCreateDepartment();
   const createJobPosition = useCreateJobPosition();
-  const createEmployee = useCreateEmployee();
 
   const [worksiteForm, setWorksiteForm] = useState<CreateWorksitePayload>(EMPTY_WORKSITE);
   const [departmentForm, setDepartmentForm] = useState<CreateDepartmentPayload>(EMPTY_DEPARTMENT);
   const [jobForm, setJobForm] = useState<CreateJobPositionPayload>(EMPTY_JOB);
-  const [employeeForm, setEmployeeForm] = useState<CreateEmployeePayload>(EMPTY_EMPLOYEE);
-
-  const filteredDepartments = useMemo(
-    () =>
-      (departmentsQuery.data ?? []).filter((dep) =>
-        employeeForm.worksiteId
-          ? (worksitesQuery.data ?? []).find((w) => w.id === dep.worksiteId)?.id === employeeForm.worksiteId
-          : true
-      ),
-    [departmentsQuery.data, employeeForm.worksiteId, worksitesQuery.data]
-  );
-
-  const filteredPositions = useMemo(
-    () =>
-      (positionsQuery.data ?? []).filter((pos) =>
-        employeeForm.departmentId ? pos.departmentId === employeeForm.departmentId : true
-      ),
-    [positionsQuery.data, employeeForm.departmentId]
-  );
 
   const onCreateWorksite = (event: FormEvent) => {
     event.preventDefault();
@@ -121,27 +86,10 @@ export function MasterDataPage() {
     );
   };
 
-  const onCreateEmployee = (event: FormEvent) => {
-    event.preventDefault();
-    createEmployee.mutate(
-      {
-        ...employeeForm,
-        cnp: employeeForm.cnp || undefined,
-        worksiteId: employeeForm.worksiteId || undefined,
-        departmentId: employeeForm.departmentId || undefined,
-        jobPositionId: employeeForm.jobPositionId || undefined,
-        hireDate: employeeForm.hireDate || undefined
-      },
-      {
-        onSuccess: () => setEmployeeForm(EMPTY_EMPLOYEE)
-      }
-    );
-  };
-
   return (
     <>
       <h1 className="page-title">Master Data</h1>
-      <p className="page-lead">Configurează structura organizațională: puncte de lucru, departamente, posturi și angajați.</p>
+      <p className="page-lead">Configurează structura organizațională: puncte de lucru, departamente și posturi.</p>
 
       <div className="ssm-doc-grid">
         <form className="card form-stack ssm-doc-card" onSubmit={onCreateWorksite}>
@@ -222,9 +170,7 @@ export function MasterDataPage() {
           {createDepartment.isError ? <p className="feedback error">{mutationErrorMessage(createDepartment.error)}</p> : null}
           <p className="field-hint">Total: {departmentsQuery.data?.length ?? 0}</p>
         </form>
-      </div>
 
-      <div className="ssm-doc-grid second">
         <form className="card form-stack ssm-doc-card" onSubmit={onCreateJobPosition}>
           <h2 className="card-title">Post</h2>
           <div className="field">
@@ -267,115 +213,7 @@ export function MasterDataPage() {
           {createJobPosition.isError ? <p className="feedback error">{mutationErrorMessage(createJobPosition.error)}</p> : null}
           <p className="field-hint">Total: {positionsQuery.data?.length ?? 0}</p>
         </form>
-
-        <form className="card form-stack ssm-doc-card" onSubmit={onCreateEmployee}>
-          <h2 className="card-title">Angajat</h2>
-          <div className="field">
-            <label htmlFor="md-employee-email">Email</label>
-            <input
-              id="md-employee-email"
-              type="email"
-              value={employeeForm.email}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, email: event.target.value }))}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="md-employee-name">Nume complet</label>
-            <input
-              id="md-employee-name"
-              value={employeeForm.fullName}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, fullName: event.target.value }))}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="md-employee-cnp">CNP (opțional)</label>
-            <input
-              id="md-employee-cnp"
-              value={employeeForm.cnp ?? ""}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, cnp: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="md-employee-worksite">Punct de lucru</label>
-            <select
-              id="md-employee-worksite"
-              value={employeeForm.worksiteId ?? ""}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, worksiteId: event.target.value }))}
-            >
-              <option value="">Neselectat</option>
-              {(worksitesQuery.data ?? []).map((worksite) => (
-                <option key={worksite.id} value={worksite.id}>
-                  {worksite.code} - {worksite.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="md-employee-department">Departament</label>
-            <select
-              id="md-employee-department"
-              value={employeeForm.departmentId ?? ""}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, departmentId: event.target.value }))}
-            >
-              <option value="">Neselectat</option>
-              {filteredDepartments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.code} - {department.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="md-employee-position">Post</label>
-            <select
-              id="md-employee-position"
-              value={employeeForm.jobPositionId ?? ""}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, jobPositionId: event.target.value }))}
-            >
-              <option value="">Neselectat</option>
-              {filteredPositions.map((position) => (
-                <option key={position.id} value={position.id}>
-                  {position.code} - {position.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="md-employee-hire-date">Data angajare (ISO)</label>
-            <input
-              id="md-employee-hire-date"
-              placeholder="2026-05-08T09:00:00.000Z"
-              value={employeeForm.hireDate ?? ""}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, hireDate: event.target.value }))}
-            />
-          </div>
-          <button className="btn-primary" type="submit" disabled={createEmployee.isPending}>
-            {createEmployee.isPending ? "Se salvează..." : "Adaugă angajat"}
-          </button>
-          {createEmployee.isSuccess ? <p className="feedback success">Angajatul a fost adăugat.</p> : null}
-          {createEmployee.isError ? <p className="feedback error">{mutationErrorMessage(createEmployee.error)}</p> : null}
-        </form>
       </div>
-
-      <section className="card ssm-doc-card ssm-documents">
-        <h2 className="card-title">Angajați existenți</h2>
-        <div className="ssm-history-list">
-          {(employeesQuery.data ?? []).slice(0, 30).map((employee) => (
-            <div key={employee.id} className="ssm-history-item">
-              <div>
-                <strong>{employee.fullName}</strong>
-                <div className="field-hint">
-                  {employee.email} | {employee.active ? "activ" : "inactiv"} | id: {employee.id}
-                </div>
-              </div>
-              <span className={employee.active ? "badge-good" : "badge-bad"}>{employee.active ? "Activ" : "Inactiv"}</span>
-            </div>
-          ))}
-        </div>
-        {!employeesQuery.data?.length ? <p className="field-hint">Nu există angajați în tenantul curent.</p> : null}
-      </section>
     </>
   );
 }

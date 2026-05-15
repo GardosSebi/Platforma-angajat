@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateSurveyPublicLinkRequest, CreateSurveyRequest } from "@repo/shared-types/surveys";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { fetchPublicSurvey, surveysApi } from "../api/surveys.api";
 
 export function useSurveysOverview() {
@@ -68,10 +69,23 @@ export function useCreatePublicSurveyLink() {
 }
 
 export function useSurveyForRespond(surveyId: string | undefined, enabled: boolean) {
+  const session = useAuthSession();
+  const userId = session?.userId;
   return useQuery({
-    queryKey: ["surveys", "for-respond", surveyId],
+    queryKey: ["surveys", "for-respond", userId, surveyId],
     queryFn: () => surveysApi.getForRespond(surveyId!),
-    enabled: Boolean(surveyId && enabled)
+    enabled: Boolean(surveyId && enabled && userId)
+  });
+}
+
+export function useRespondedSurveyIds(enabled: boolean) {
+  const session = useAuthSession();
+  const userId = session?.userId;
+  return useQuery({
+    queryKey: ["surveys", "responded-ids", userId],
+    queryFn: surveysApi.respondedSurveyIds,
+    enabled: enabled && Boolean(userId),
+    select: (data) => new Set(data.surveyIds)
   });
 }
 

@@ -1,4 +1,7 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import type {
   CreateSurveyRequest,
   SurveyAudienceType,
@@ -15,6 +18,7 @@ import {
   useCreatePublicSurveyLink,
   useCreateSurvey,
   useSurveyStats,
+  useRespondedSurveyIds,
   useSurveys,
   useSurveysOverview
 } from "../hooks/useSurveys";
@@ -96,11 +100,17 @@ function cleanOptions(options: SurveyQuestionOption[]) {
     .map((label) => ({ value: label, label }));
 }
 
+function canOpenSurveyToComplete(roles: string[] | undefined): boolean {
+  return hasPermission(roles, "surveys:respond") || hasPermission(roles, "surveys:edit");
+}
+
 function questionNeedsOptions(type: SurveyQuestionType): boolean {
   return type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE";
 }
 
 export function SurveysPage() {
+  const navigate = useNavigate();
+  const session = useAuthSession();
   const overviewQuery = useSurveysOverview();
   const surveysQuery = useSurveys();
   const worksitesQuery = useWorksites();
@@ -122,8 +132,12 @@ export function SurveysPage() {
   const [publicResponseLimit, setPublicResponseLimit] = useState("100");
   const [formError, setFormError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [openingSurveyId, setOpeningSurveyId] = useState<string | null>(null);
 
   const statsQuery = useSurveyStats(selectedSurveyId);
+  const canComplete = canOpenSurveyToComplete(session?.roles);
+  const respondedIdsQuery = useRespondedSurveyIds(canComplete);
+  const respondedSurveyIds = respondedIdsQuery.data ?? new Set<string>();
   const kpi = overviewQuery.data?.kpi;
   const selectedSurvey = surveys.find((survey) => survey.id === selectedSurveyId);
   const currentQuestionOptions = cleanOptions(questionForm.options);
@@ -219,9 +233,41 @@ export function SurveysPage() {
         setSelectedSurveyId(created.id);
         setQuestions([]);
         setQuestionForm(EMPTY_QUESTION);
+        setFormError(null);
       }
     });
   };
+
+  const openSurveyForRespond = useCallback(
+    async (surveyId: string) => {
+      const survey = surveys.find((item) => item.id === surveyId);
+      if (!survey) {
+        setFormError("Selectați un sondaj din listă.");
+        return;
+      }
+      if (respondedSurveyIds.has(surveyId)) {
+        setFormError("Ați completat deja acest sondaj.");
+        return;
+      }
+      if (survey.status === "CLOSED" || survey.status === "ARCHIVED") {
+        setFormError("Sondajul este închis sau arhivat și nu mai poate fi completat.");
+        return;
+      }
+      setFormError(null);
+      setOpeningSurveyId(surveyId);
+      try {
+        if (survey.status === "DRAFT") {
+          await activateSurvey.mutateAsync(surveyId);
+        }
+        navigate(`/surveys/respond/${surveyId}`);
+      } catch (error) {
+        setFormError(mutationErrorMessage(error));
+      } finally {
+        setOpeningSurveyId(null);
+      }
+    },
+    [surveys, respondedSurveyIds, activateSurvey, navigate]
+  );
 
   const generatePublicLink = () => {
     if (!selectedSurveyId || !publicExpiresAt) {
@@ -445,6 +491,11 @@ export function SurveysPage() {
               </button>
             </div>
             {formError ? <div className="feedback error">{formError}</div> : null}
+            {createSurvey.isSuccess ? (
+              <p className="feedback success" role="status">
+                Sondaj salvat. Din lista din dreapta apasă <strong>Completează</strong> sau „Activează și completează”.
+              </p>
+            ) : null}
             {createSurvey.isError ? <div className="feedback error">{mutationErrorMessage(createSurvey.error)}</div> : null}
           </form>
 
@@ -470,6 +521,21 @@ export function SurveysPage() {
                   </span>
                   <div className="ssm-badge-row">
                     <span className={`ssm-chip ${survey.status === "ACTIVE" ? "good" : "warn"}`}>{AUDIENCE_LABELS[survey.audienceType]}</span>
+                    {canComplete && !respondedSurveyIds.has(survey.id) ? (
+                      <button
+                        type="button"
+                        className="ssm-chip survey-list-complete-btn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void openSurveyForRespond(survey.id);
+                        }}
+                      >
+                        Completează
+                      </button>
+                    ) : null}
+                    {canComplete && respondedSurveyIds.has(survey.id) ? (
+                      <span className="ssm-chip good">Completat</span>
+                    ) : null}
                   </div>
                 </button>
               ))}
@@ -493,6 +559,25 @@ export function SurveysPage() {
               </div>
             ) : null}
             <div className="ssm-inline-actions">
+              {canComplete && selectedSurvey && respondedSurveyIds.has(selectedSurvey.id) ? (
+                <span className="ssm-chip good" role="status">
+                  Ați completat deja acest sondaj
+                </span>
+              ) : null}
+              {canComplete && (!selectedSurvey || !respondedSurveyIds.has(selectedSurvey.id)) ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={!selectedSurvey || openingSurveyId !== null}
+                  onClick={() => selectedSurvey && void openSurveyForRespond(selectedSurvey.id)}
+                >
+                  {openingSurveyId === selectedSurvey?.id
+                    ? "Se pregătește…"
+                    : selectedSurvey?.status === "DRAFT"
+                      ? "Activează și completează"
+                      : "Deschide și completează"}
+                </button>
+              ) : null}
               <button type="button" className="btn-secondary" disabled={!selectedSurveyId} onClick={() => selectedSurveyId && activateSurvey.mutate(selectedSurveyId)}>
                 Activează
               </button>

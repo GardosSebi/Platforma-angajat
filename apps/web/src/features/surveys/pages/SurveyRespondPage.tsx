@@ -1,14 +1,20 @@
 import { useEffect } from "react";
 import type { SurveyAnswerValue } from "@repo/shared-types/surveys";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { surveysApi } from "../api/surveys.api";
 import { SurveyFormFiller } from "../components/SurveyFormFiller";
 import { useSurveyForRespond } from "../hooks/useSurveys";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 
+function formatRespondedAt(value?: string | null): string {
+  return value ? new Date(value).toLocaleString() : "";
+}
+
 export function SurveyRespondPage() {
   const { surveyId } = useParams<{ surveyId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const session = useAuthSession();
 
   useEffect(() => {
@@ -71,8 +77,29 @@ export function SurveyRespondPage() {
   const survey = query.data;
   if (!survey) return null;
 
+  if (survey.alreadyResponded) {
+    return (
+      <div className="survey-fill-page">
+        <div className="survey-fill-card card">
+          <h1 className="card-title">Sondaj deja completat</h1>
+          <p className="field-hint" role="status">
+            Ați trimis deja răspunsurile pentru acest sondaj
+            {survey.respondedAt ? ` (${formatRespondedAt(survey.respondedAt)})` : ""}.
+            Fiecare utilizator poate completa sondajul o singură dată.
+          </p>
+          <Link to="/surveys" className="btn-text-link">
+            Înapoi la sondaje
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const handleSubmit = async (answers: Record<string, SurveyAnswerValue>) => {
     await surveysApi.submitResponse(surveyId, { answers });
+    const userId = session?.userId;
+    await queryClient.invalidateQueries({ queryKey: ["surveys", "responded-ids", userId] });
+    await queryClient.invalidateQueries({ queryKey: ["surveys", "for-respond", userId, surveyId] });
   };
 
   return (
@@ -92,7 +119,9 @@ export function SurveyRespondPage() {
           onSubmit={handleSubmit}
         />
         <p className="survey-fill-footer-hint">
-          <Link to="/">Înapoi la platformă</Link>
+          <Link to="/surveys">Înapoi la sondaje</Link>
+          {" · "}
+          <Link to="/">Platformă</Link>
         </p>
       </div>
     </div>

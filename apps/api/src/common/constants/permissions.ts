@@ -53,66 +53,8 @@ export const Permission = {
 
 export type PermissionCode = (typeof Permission)[keyof typeof Permission];
 
-const allPermissions: string[] = [
-  Permission.SSM_TRAINING_ASSIGN,
-  Permission.SSM_DOCUMENT_VIEW,
-  Permission.SSM_DOCUMENT_EDIT,
-  Permission.SSM_DOCUMENT_APPROVE,
-  Permission.SSM_TRAINING_VIEW,
-  Permission.SSM_TRAINING_EDIT,
-  Permission.SSM_TRAINING_APPROVE,
-  Permission.SSM_EIP_VIEW,
-  Permission.SSM_EIP_EDIT,
-  Permission.SSM_EIP_APPROVE,
-  Permission.SSM_ACCIDENT_VIEW,
-  Permission.SSM_ACCIDENT_EDIT,
-  Permission.SSM_ACCIDENT_APPROVE,
-  Permission.SSM_MEDICAL_VIEW,
-  Permission.SSM_MEDICAL_EDIT,
-  Permission.SSM_MEDICAL_APPROVE,
-  Permission.SSM_RISK_VIEW,
-  Permission.SSM_RISK_EDIT,
-  Permission.SSM_RISK_APPROVE,
-  Permission.SSM_PSI_VIEW,
-  Permission.SSM_PSI_EDIT,
-  Permission.SSM_PSI_APPROVE,
-  Permission.SSM_DASHBOARD_VIEW,
-  Permission.SSM_REPORT_VIEW,
-  Permission.SSM_REPORT_EXPORT,
-  Permission.COMMUNICATIONS_DASHBOARD_VIEW,
-  Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
-  Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT,
-  Permission.COMMUNICATIONS_TEMPLATES_EDIT,
-  Permission.SURVEYS_VIEW,
-  Permission.SURVEYS_EDIT,
-  Permission.SURVEYS_RESPOND,
-  Permission.SURVEYS_EXPORT,
-  Permission.TICKETS_VIEW,
-  Permission.TICKETS_EDIT,
-  Permission.TICKETS_ASSIGN,
-  Permission.TICKETS_STATS,
-  Permission.FILES_UPLOAD,
-  Permission.AUDIT_READ,
-  Permission.MASTER_DATA_READ,
-  Permission.MASTER_DATA_WRITE,
-  Permission.MASTER_DATA_IMPORT,
-  Permission.ADMIN_USERS_VIEW,
-  Permission.ADMIN_USERS_EDIT,
-  Permission.ADMIN_ROLE_SCOPE_MANAGE,
-  Permission.STATIC_PAGES_MANAGE,
-  Permission.USAGE_STATS_VIEW
-];
-
-const masterDataReadWrite: string[] = [
-  Permission.MASTER_DATA_READ,
-  Permission.MASTER_DATA_WRITE,
-  Permission.MASTER_DATA_IMPORT
-];
-
 export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
-  [SystemRole.PLATFORM_ADMIN]: [Permission.WILDCARD],
-  [SystemRole.TENANT_ADMIN]: allPermissions,
-  /** 3.12 — Administrator SSM: acces complet entități SSM, configurare, rapoarte globale (fără alte module tenant). */
+  /** 3.12 — Administrator SSM: acces complet entități SSM, configurare modul, rapoarte globale, administrare utilizatori. */
   [SystemRole.SSM_ADMIN]: [
     Permission.SSM_TRAINING_ASSIGN,
     Permission.SSM_DOCUMENT_VIEW,
@@ -141,7 +83,18 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.SSM_REPORT_EXPORT,
     Permission.FILES_UPLOAD,
     Permission.AUDIT_READ,
-    Permission.MASTER_DATA_READ
+    Permission.MASTER_DATA_READ,
+    Permission.MASTER_DATA_WRITE,
+    Permission.MASTER_DATA_IMPORT,
+    Permission.ADMIN_USERS_VIEW,
+    Permission.ADMIN_USERS_EDIT,
+    Permission.ADMIN_ROLE_SCOPE_MANAGE,
+    Permission.STATIC_PAGES_MANAGE,
+    Permission.USAGE_STATS_VIEW,
+    Permission.SURVEYS_VIEW,
+    Permission.SURVEYS_EDIT,
+    Permission.SURVEYS_RESPOND,
+    Permission.SURVEYS_EXPORT
   ],
   /** 3.12 — Responsabil SSM pe entitate: administrare completă pe perimetrul SSM (inclusiv aprobări), alocare instruire. */
   [SystemRole.SSM_ENTITY_RESPONSIBLE]: [
@@ -171,7 +124,11 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.SSM_REPORT_VIEW,
     Permission.SSM_REPORT_EXPORT,
     Permission.FILES_UPLOAD,
-    Permission.MASTER_DATA_READ
+    Permission.MASTER_DATA_READ,
+    Permission.SURVEYS_VIEW,
+    Permission.SURVEYS_EDIT,
+    Permission.SURVEYS_RESPOND,
+    Permission.SURVEYS_EXPORT
   ],
   /** 3.12 — Manager / șef departament: vizualizare echipă, aprobare instruiri la locul de muncă, alerte neconformități (fără export rapoarte globale). */
   [SystemRole.DEPARTMENT_MANAGER]: [
@@ -185,7 +142,10 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.SSM_PSI_VIEW,
     Permission.SSM_DASHBOARD_VIEW,
     Permission.SSM_REPORT_VIEW,
-    Permission.MASTER_DATA_READ
+    Permission.MASTER_DATA_READ,
+    Permission.SURVEYS_VIEW,
+    Permission.SURVEYS_RESPOND,
+    Permission.SURVEYS_EXPORT
   ],
   /** 3.12 — Angajat: documente și instruiri proprii, e-learning, chestionare (API filtrează la datele proprii după e-mail ↔ angajat). */
   [SystemRole.EMPLOYEE]: [

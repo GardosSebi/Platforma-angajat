@@ -15,8 +15,13 @@ export interface PatchUserPayload {
 export interface CreateTenantUserPayload {
   email: string;
   password: string;
-  fullName?: string;
+  fullName: string;
   roles?: string[];
+  cnp?: string;
+  worksiteId?: string;
+  departmentId?: string;
+  jobPositionId?: string;
+  hireDate?: string;
 }
 
 export interface CreateScopedRolePayload {

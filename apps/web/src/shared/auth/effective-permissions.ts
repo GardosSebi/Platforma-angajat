@@ -29,15 +29,16 @@ const Permission = {
   SSM_DASHBOARD_VIEW: "ssm:dashboard:view",
   SSM_REPORT_VIEW: "ssm:reports:view",
   SSM_REPORT_EXPORT: "ssm:reports:export",
+  SURVEYS_VIEW: "surveys:view",
+  SURVEYS_EDIT: "surveys:edit",
   SURVEYS_RESPOND: "surveys:respond",
+  SURVEYS_EXPORT: "surveys:export",
   FILES_UPLOAD: "files:upload",
   AUDIT_READ: "audit:read",
   MASTER_DATA_READ: "master-data:read"
 } as const;
 
 const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
-  PLATFORM_ADMIN: [Permission.WILDCARD],
-  TENANT_ADMIN: [Permission.WILDCARD],
   SSM_ADMIN: [
     Permission.SSM_TRAINING_ASSIGN,
     Permission.SSM_DOCUMENT_VIEW,
@@ -66,7 +67,11 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     Permission.SSM_REPORT_EXPORT,
     Permission.FILES_UPLOAD,
     Permission.AUDIT_READ,
-    Permission.MASTER_DATA_READ
+    Permission.MASTER_DATA_READ,
+    Permission.SURVEYS_VIEW,
+    Permission.SURVEYS_EDIT,
+    Permission.SURVEYS_RESPOND,
+    Permission.SURVEYS_EXPORT
   ],
   SSM_ENTITY_RESPONSIBLE: [
     Permission.SSM_TRAINING_ASSIGN,
@@ -95,7 +100,11 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     Permission.SSM_REPORT_VIEW,
     Permission.SSM_REPORT_EXPORT,
     Permission.FILES_UPLOAD,
-    Permission.MASTER_DATA_READ
+    Permission.MASTER_DATA_READ,
+    Permission.SURVEYS_VIEW,
+    Permission.SURVEYS_EDIT,
+    Permission.SURVEYS_RESPOND,
+    Permission.SURVEYS_EXPORT
   ],
   DEPARTMENT_MANAGER: [
     Permission.SSM_DOCUMENT_VIEW,
@@ -108,7 +117,10 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     Permission.SSM_PSI_VIEW,
     Permission.SSM_DASHBOARD_VIEW,
     Permission.SSM_REPORT_VIEW,
-    Permission.MASTER_DATA_READ
+    Permission.MASTER_DATA_READ,
+    Permission.SURVEYS_VIEW,
+    Permission.SURVEYS_RESPOND,
+    Permission.SURVEYS_EXPORT
   ],
   EMPLOYEE: [Permission.SURVEYS_RESPOND, Permission.SSM_DOCUMENT_VIEW, Permission.SSM_TRAINING_VIEW, Permission.SSM_TRAINING_EDIT]
 };
