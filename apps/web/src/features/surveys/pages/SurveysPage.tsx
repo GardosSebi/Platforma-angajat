@@ -332,7 +332,7 @@ export function SurveysPage() {
         </div>
 
         <div className="survey-workspace">
-          <form className="card form-stack ssm-doc-card survey-builder-card" onSubmit={onSurveySubmit}>
+          <form className="card form-stack ssm-doc-card survey-builder-card survey-builder-layout" onSubmit={onSurveySubmit}>
             <div className="ssm-card-header">
               <div>
                 <h3 className="card-title">Editor chestionar</h3>
@@ -341,6 +341,7 @@ export function SurveysPage() {
               <span className="ssm-chip">{questions.length} întrebări</span>
             </div>
 
+            <div className="survey-builder-scroll">
             <div className="survey-section">
               <div className="survey-section-title">
                 <span>1</span>
@@ -473,6 +474,7 @@ export function SurveysPage() {
                   <p className="field-hint">Poți salva direct cu întrebarea completată acum sau poți adăuga mai multe întrebări.</p>
                 ) : null}
               </div>
+            </div>
             </div>
 
             <div className="survey-save-bar">

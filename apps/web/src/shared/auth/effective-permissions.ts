@@ -33,6 +33,14 @@ const Permission = {
   SURVEYS_EDIT: "surveys:edit",
   SURVEYS_RESPOND: "surveys:respond",
   SURVEYS_EXPORT: "surveys:export",
+  COMMUNICATIONS_DASHBOARD_VIEW: "communications:dashboard:view",
+  COMMUNICATIONS_ANNOUNCEMENTS_VIEW: "communications:announcements:view",
+  COMMUNICATIONS_ANNOUNCEMENTS_EDIT: "communications:announcements:edit",
+  COMMUNICATIONS_TEMPLATES_EDIT: "communications:templates:edit",
+  TICKETS_VIEW: "ticketing:tickets:view",
+  TICKETS_EDIT: "ticketing:tickets:edit",
+  TICKETS_ASSIGN: "ticketing:tickets:assign",
+  TICKETS_STATS: "ticketing:stats:view",
   FILES_UPLOAD: "files:upload",
   AUDIT_READ: "audit:read",
   MASTER_DATA_READ: "master-data:read"
@@ -71,7 +79,15 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     Permission.SURVEYS_VIEW,
     Permission.SURVEYS_EDIT,
     Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT
+    Permission.SURVEYS_EXPORT,
+    Permission.COMMUNICATIONS_DASHBOARD_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT,
+    Permission.COMMUNICATIONS_TEMPLATES_EDIT,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT,
+    Permission.TICKETS_ASSIGN,
+    Permission.TICKETS_STATS
   ],
   SSM_ENTITY_RESPONSIBLE: [
     Permission.SSM_TRAINING_ASSIGN,
@@ -104,7 +120,15 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     Permission.SURVEYS_VIEW,
     Permission.SURVEYS_EDIT,
     Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT
+    Permission.SURVEYS_EXPORT,
+    Permission.COMMUNICATIONS_DASHBOARD_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT,
+    Permission.COMMUNICATIONS_TEMPLATES_EDIT,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT,
+    Permission.TICKETS_ASSIGN,
+    Permission.TICKETS_STATS
   ],
   DEPARTMENT_MANAGER: [
     Permission.SSM_DOCUMENT_VIEW,
@@ -120,9 +144,20 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     Permission.MASTER_DATA_READ,
     Permission.SURVEYS_VIEW,
     Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT
+    Permission.SURVEYS_EXPORT,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT
   ],
-  EMPLOYEE: [Permission.SURVEYS_RESPOND, Permission.SSM_DOCUMENT_VIEW, Permission.SSM_TRAINING_VIEW, Permission.SSM_TRAINING_EDIT]
+  EMPLOYEE: [
+    Permission.SURVEYS_RESPOND,
+    Permission.SSM_DOCUMENT_VIEW,
+    Permission.SSM_TRAINING_VIEW,
+    Permission.SSM_TRAINING_EDIT,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT
+  ]
 };
 
 function permissionsForRoles(roles: string[]): Set<string> {

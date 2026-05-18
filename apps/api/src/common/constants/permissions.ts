@@ -94,7 +94,15 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.SURVEYS_VIEW,
     Permission.SURVEYS_EDIT,
     Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT
+    Permission.SURVEYS_EXPORT,
+    Permission.COMMUNICATIONS_DASHBOARD_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT,
+    Permission.COMMUNICATIONS_TEMPLATES_EDIT,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT,
+    Permission.TICKETS_ASSIGN,
+    Permission.TICKETS_STATS
   ],
   /** 3.12 — Responsabil SSM pe entitate: administrare completă pe perimetrul SSM (inclusiv aprobări), alocare instruire. */
   [SystemRole.SSM_ENTITY_RESPONSIBLE]: [
@@ -128,7 +136,15 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.SURVEYS_VIEW,
     Permission.SURVEYS_EDIT,
     Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT
+    Permission.SURVEYS_EXPORT,
+    Permission.COMMUNICATIONS_DASHBOARD_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT,
+    Permission.COMMUNICATIONS_TEMPLATES_EDIT,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT,
+    Permission.TICKETS_ASSIGN,
+    Permission.TICKETS_STATS
   ],
   /** 3.12 — Manager / șef departament: vizualizare echipă, aprobare instruiri la locul de muncă, alerte neconformități (fără export rapoarte globale). */
   [SystemRole.DEPARTMENT_MANAGER]: [
@@ -145,14 +161,20 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.MASTER_DATA_READ,
     Permission.SURVEYS_VIEW,
     Permission.SURVEYS_RESPOND,
-    Permission.SURVEYS_EXPORT
+    Permission.SURVEYS_EXPORT,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT
   ],
   /** 3.12 — Angajat: documente și instruiri proprii, e-learning, chestionare (API filtrează la datele proprii după e-mail ↔ angajat). */
   [SystemRole.EMPLOYEE]: [
     Permission.SURVEYS_RESPOND,
     Permission.SSM_DOCUMENT_VIEW,
     Permission.SSM_TRAINING_VIEW,
-    Permission.SSM_TRAINING_EDIT
+    Permission.SSM_TRAINING_EDIT,
+    Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW,
+    Permission.TICKETS_VIEW,
+    Permission.TICKETS_EDIT
   ]
 };
 

@@ -143,9 +143,20 @@ export function ChatbotPage() {
   const [announcementFeedback, setAnnouncementFeedback] = useState<FeedbackState | null>(null);
   const [templateFeedback, setTemplateFeedback] = useState<FeedbackState | null>(null);
   const [actionFeedback, setActionFeedback] = useState<FeedbackState | null>(null);
+  const [openedAnnouncementId, setOpenedAnnouncementId] = useState("");
 
   const latest = dashboardQuery.data?.latestAnnouncements ?? [];
   const announcements = announcementsQuery.data?.items ?? [];
+
+  const announcementById = useMemo(() => {
+    const map = new Map<string, CommunicationAnnouncementItem>();
+    for (const item of [...announcements, ...latest]) {
+      map.set(item.id, item);
+    }
+    return map;
+  }, [announcements, latest]);
+
+  const openedAnnouncement = openedAnnouncementId ? announcementById.get(openedAnnouncementId) : undefined;
   const reminders = remindersQuery.data ?? [];
   const kpi = dashboardQuery.data?.kpi;
 
@@ -297,22 +308,28 @@ export function ChatbotPage() {
             <div className="ssm-card-header">
               <div>
                 <h3 className="card-title">Ultimele anunțuri</h3>
-                <p className="field-hint">KPI rapid pentru publicări recente și citire.</p>
+                <p className="field-hint">Apasă pe un anunț pentru a-l deschide. KPI rapid pentru publicări recente și citire.</p>
               </div>
               <span className="ssm-chip">{kpi?.activeAnnouncements ?? 0} publicate</span>
             </div>
             <div className="ssm-doc-items">
               {dashboardQuery.isLoading ? <p className="field-hint">Se încarcă dashboard-ul...</p> : null}
               {latest.map((item) => (
-                <article key={item.id} className="ssm-doc-item">
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`ssm-doc-item ${openedAnnouncementId === item.id ? "selected" : ""}`}
+                  onClick={() => setOpenedAnnouncementId(item.id)}
+                >
                   <strong>{item.title}</strong>
                   <span>
-                    {AUDIENCE_LABELS[item.audienceType]} · {STATUS_LABELS[item.status]} · citire {item.stats.readRate}%
+                    {formatDate(item.publishAt ?? item.createdAt)} · {AUDIENCE_LABELS[item.audienceType]} ·{" "}
+                    {STATUS_LABELS[item.status]} · citire {item.stats.readRate}%
                   </span>
                   <div className="ssm-progress" aria-label={`Citire ${item.stats.readRate}%`}>
                     <span style={{ width: `${Math.max(0, Math.min(item.stats.readRate, 100))}%` }} />
                   </div>
-                </article>
+                </button>
               ))}
               {!dashboardQuery.isLoading && latest.length === 0 ? <p className="field-hint">Nu există anunțuri încă.</p> : null}
             </div>
@@ -492,13 +509,16 @@ export function ChatbotPage() {
                 </div>
               ) : null}
               {announcements.map((item) => (
-                <article key={item.id} className="ssm-doc-item">
+                <article key={item.id} className={`ssm-doc-item ${openedAnnouncementId === item.id ? "selected" : ""}`}>
                   <strong>{item.title}</strong>
                   <span>
                     {formatDate(item.publishAt)} · {AUDIENCE_LABELS[item.audienceType]} · {item.stats.readCount}/{item.stats.targetCount} citiri
                   </span>
                   <div className="ssm-badge-row">
                     <span className={`ssm-chip ${statusChip(item.status)}`}>{STATUS_LABELS[item.status]}</span>
+                    <button className="btn-secondary" type="button" onClick={() => setOpenedAnnouncementId(item.id)}>
+                      Deschide
+                    </button>
                     <button className="btn-secondary" type="button" onClick={() => runAnnouncementAction("publish", item.id)}>
                       Publică
                     </button>
@@ -587,6 +607,97 @@ export function ChatbotPage() {
           ) : null}
         </form>
       </section>
+
+      {openedAnnouncement ? (
+        <div className="ticket-detail-backdrop" role="presentation" onClick={() => setOpenedAnnouncementId("")}>
+          <div
+            className="ticket-detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="announcement-detail-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="ssm-card-header">
+              <div>
+                <p className="ssm-card-eyebrow">Anunț</p>
+                <h4 id="announcement-detail-title" className="card-title">
+                  {openedAnnouncement.title}
+                </h4>
+                <p className="field-hint">
+                  <span className={`ssm-chip ${statusChip(openedAnnouncement.status)}`}>
+                    {STATUS_LABELS[openedAnnouncement.status]}
+                  </span>{" "}
+                  · {CONTENT_TYPE_LABELS[openedAnnouncement.contentType]} · {AUDIENCE_LABELS[openedAnnouncement.audienceType]}
+                  {openedAnnouncement.audienceLabel ? ` · ${openedAnnouncement.audienceLabel}` : ""}
+                </p>
+              </div>
+              <button type="button" className="btn-secondary" onClick={() => setOpenedAnnouncementId("")}>
+                Închide
+              </button>
+            </div>
+
+            <p className="ticket-detail-description announcement-detail-body">{openedAnnouncement.body}</p>
+
+            {openedAnnouncement.contentUrl ? (
+              <p className="field-hint">
+                Link / document:{" "}
+                <a href={openedAnnouncement.contentUrl} target="_blank" rel="noreferrer">
+                  {openedAnnouncement.contentUrl}
+                </a>
+              </p>
+            ) : null}
+
+            <div className="ticket-detail-grid announcement-detail-grid">
+              <div>
+                <span>Publicat / programat</span>
+                <strong>{formatDate(openedAnnouncement.publishAt)}</strong>
+              </div>
+              <div>
+                <span>Expiră</span>
+                <strong>{formatDate(openedAnnouncement.expiresAt)}</strong>
+              </div>
+              <div>
+                <span>Memento</span>
+                <strong>{formatDate(openedAnnouncement.reminderAt)}</strong>
+              </div>
+              <div>
+                <span>Citiri</span>
+                <strong>
+                  {openedAnnouncement.stats.readCount}/{openedAnnouncement.stats.targetCount} ({openedAnnouncement.stats.readRate}%)
+                </strong>
+              </div>
+            </div>
+
+            <div className="ssm-progress" aria-label={`Citire ${openedAnnouncement.stats.readRate}%`}>
+              <span style={{ width: `${Math.max(0, Math.min(openedAnnouncement.stats.readRate, 100))}%` }} />
+            </div>
+
+            <div className="ssm-badge-row" style={{ marginTop: "1rem" }}>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => runAnnouncementAction("publish", openedAnnouncement.id)}
+              >
+                Publică
+              </button>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => runAnnouncementAction("retract", openedAnnouncement.id)}
+              >
+                Retrage
+              </button>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => runAnnouncementAction("duplicate", openedAnnouncement.id)}
+              >
+                Duplică
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

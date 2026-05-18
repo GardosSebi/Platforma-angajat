@@ -7,7 +7,7 @@ import { useAuthSession } from "../shared/auth/use-auth-session";
 const navBase = [
   { to: "/ssm", label: "SSM" },
   { to: "/chatbot", label: "Chatbot" },
-  { to: "/surveys", label: "Surveys" },
+  { to: "/surveys", label: "Sondaje" },
   { to: "/ticketing", label: "Ticketing" },
   { to: "/informatii", label: "Informații" }
 ] as const;

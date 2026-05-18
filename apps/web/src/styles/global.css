@@ -891,6 +891,23 @@ button.ssm-doc-item:hover {
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
 }
 
+.survey-builder-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: min(78vh, 920px);
+}
+
+.survey-builder-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-right: 0.15rem;
+}
+
 .survey-section {
   border: 1px solid #cbd5e1;
   border-radius: 14px;
@@ -1054,6 +1071,14 @@ button.ssm-doc-item:hover {
   line-height: 1.55;
 }
 
+.announcement-detail-body {
+  white-space: pre-wrap;
+}
+
+.announcement-detail-grid {
+  margin-top: 0.5rem;
+}
+
 .ticket-detail-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1085,19 +1110,19 @@ button.ssm-doc-item:hover {
 }
 
 .survey-save-bar {
-  position: sticky;
-  bottom: 0.75rem;
-  z-index: 5;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
   padding: 0.9rem 1rem;
+  margin-top: 0.15rem;
   border: 1px solid rgba(15, 118, 110, 0.28);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(8px);
+  background: #fff;
+  box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.06);
 }
 
 .survey-save-bar strong,
@@ -1296,8 +1321,11 @@ button.ssm-doc-item:hover {
     grid-template-columns: 1fr;
   }
 
+  .survey-builder-layout {
+    max-height: none;
+  }
+
   .survey-save-bar {
-    position: static;
     align-items: stretch;
     flex-direction: column;
   }
