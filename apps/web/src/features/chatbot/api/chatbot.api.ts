@@ -8,14 +8,18 @@ import type {
   MarkCommunicationReadRequest,
   UpdateCommunicationAnnouncementRequest
 } from "@repo/shared-types/communications";
+import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
+import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
 
 export const chatbotApi = {
   dashboard() {
     return httpClient<CommunicationDashboardResponse>("/chatbot/overview");
   },
-  listAnnouncements() {
-    return httpClient<{ items: CommunicationAnnouncementItem[] }>("/chatbot/announcements");
+  listAnnouncements(params?: PaginationParams) {
+    return httpClient<PaginatedResult<CommunicationAnnouncementItem>>(
+      `/chatbot/announcements${buildPaginationQuery(params)}`
+    );
   },
   createAnnouncement(payload: CreateCommunicationAnnouncementRequest) {
     return httpClient<CommunicationAnnouncementItem>("/chatbot/announcements", {

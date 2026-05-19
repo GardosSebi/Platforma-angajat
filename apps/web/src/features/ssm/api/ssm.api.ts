@@ -19,7 +19,6 @@ import type {
   CreateSsmTrainingTypeRequest,
   CreateSsmDocumentRequest,
   AddSsmRiskAssessmentVersionRequest,
-  ListSsmDocumentsResponse,
   SsmComplianceEmployee,
   SsmEipDueNotification,
   SsmEipMovementItem,
@@ -45,11 +44,14 @@ import type {
   SsmReminderItem,
   SsmDocumentControlFoldersResponse,
   SsmDocumentHistoryResponse,
+  SsmDocumentListItem,
   SsmTrainingPlanItem,
   SignSsmTrainingBatchRequest,
   SsmTrainingTypeItem,
   UploadSsmDocumentResponse
 } from "@repo/shared-types/ssm";
+import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
+import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
 
 export const ssmApi = {
@@ -61,7 +63,7 @@ export const ssmApi = {
   },
   listDocuments(query: URLSearchParams) {
     const q = query.toString();
-    return httpClient<ListSsmDocumentsResponse>(`/ssm/documents${q ? `?${q}` : ""}`);
+    return httpClient<PaginatedResult<SsmDocumentListItem>>(`/ssm/documents${q ? `?${q}` : ""}`);
   },
   getDocumentHistory(documentId: string) {
     return httpClient<SsmDocumentHistoryResponse>(`/ssm/documents/${documentId}/history`);
@@ -114,8 +116,10 @@ export const ssmApi = {
       body: JSON.stringify(payload)
     });
   },
-  listTrainingPlans() {
-    return httpClient<{ items: SsmTrainingPlanItem[] }>("/ssm/training-suite/plans");
+  listTrainingPlans(params?: PaginationParams) {
+    return httpClient<PaginatedResult<SsmTrainingPlanItem>>(
+      `/ssm/training-suite/plans${buildPaginationQuery(params)}`
+    );
   },
   createTrainingPlan(payload: CreateSsmTrainingPlanRequest) {
     return httpClient<{ id: string }>("/ssm/training-suite/plans", {
@@ -225,8 +229,8 @@ export const ssmApi = {
   eipStockGapReport() {
     return httpClient<{ items: SsmEipStockGapItem[] }>("/ssm/eip/reports/stock-gap");
   },
-  listAccidentCases() {
-    return httpClient<{ items: SsmAccidentCaseItem[] }>("/ssm/accidents");
+  listAccidentCases(params?: PaginationParams) {
+    return httpClient<PaginatedResult<SsmAccidentCaseItem>>(`/ssm/accidents${buildPaginationQuery(params)}`);
   },
   createAccidentCase(payload: CreateSsmAccidentCaseRequest) {
     return httpClient<{ id: string }>("/ssm/accidents", {

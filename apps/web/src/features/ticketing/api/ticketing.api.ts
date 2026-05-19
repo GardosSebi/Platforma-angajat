@@ -9,9 +9,11 @@ import type {
   HelpdeskTicketStatus,
   UpdateHelpdeskTicketRequest
 } from "@repo/shared-types/ticketing";
+import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
+import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
 
-export interface TicketFilters {
+export interface TicketFilters extends PaginationParams {
   status?: HelpdeskTicketStatus;
   priority?: HelpdeskTicketPriority;
   assignedToUserId?: string;
@@ -25,7 +27,9 @@ export interface TicketFilters {
 function queryString(filters?: TicketFilters): string {
   const params = new URLSearchParams();
   Object.entries(filters ?? {}).forEach(([key, value]) => {
-    if (value) params.set(key, value);
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
   });
   const q = params.toString();
   return q ? `?${q}` : "";
@@ -36,7 +40,7 @@ export const ticketingApi = {
     return httpClient<HelpdeskKanbanResponse>(`/ticketing/kanban${queryString(filters)}`);
   },
   listTickets(filters?: TicketFilters) {
-    return httpClient<{ items: HelpdeskTicketItem[] }>(`/ticketing/tickets${queryString(filters)}`);
+    return httpClient<PaginatedResult<HelpdeskTicketItem>>(`/ticketing/tickets${queryString(filters)}`);
   },
   createTicket(payload: CreateHelpdeskTicketRequest) {
     return httpClient<HelpdeskTicketItem>("/ticketing/tickets", {

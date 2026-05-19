@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { EmployeeStaticPageListItem } from "@repo/shared-types";
-import { useWorksites } from "../../master-data/hooks/useMasterData";
+import { useWorksitesLookup } from "../../master-data/hooks/useMasterData";
 import { employeeStaticApi } from "../api/employee-static.api";
 
 export function EmployeeStaticListPage() {
-  const worksitesQuery = useWorksites();
+  const worksitesLookup = useWorksitesLookup();
   const [worksiteId, setWorksiteId] = useState("");
   const [groupIdsText, setGroupIdsText] = useState("");
 
@@ -53,7 +53,7 @@ export function EmployeeStaticListPage() {
             aria-label="Filtru worksite"
           >
             <option value="">Toate</option>
-            {(worksitesQuery.data ?? []).map((w) => (
+            {(worksitesLookup.data?.items ?? []).map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
               </option>

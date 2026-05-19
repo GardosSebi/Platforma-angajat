@@ -14,6 +14,8 @@ import { CreateScopedRoleDto } from "./api/dto/create-scoped-role.dto";
 import { CreateStaticPageDto, UpdateStaticPageDto } from "./api/dto/create-static-page.dto";
 import { CreateTenantUserDto } from "./api/dto/create-tenant-user.dto";
 import { PatchTenantUserDto } from "./api/dto/patch-tenant-user.dto";
+import { PaginationQueryDto, resolvePagination } from "../../common/dto/pagination-query.dto";
+import { paginatedResult } from "../../common/pagination";
 
 @Injectable()
 export class PlatformAdminService {
@@ -22,20 +24,29 @@ export class PlatformAdminService {
     private readonly masterData: MasterDataService
   ) {}
 
-  listTenantUsers(tenantId: string) {
-    return this.prisma.user.findMany({
-      where: { tenantId },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        active: true,
-        roles: true,
-        createdAt: true,
-        updatedAt: true
-      },
-      orderBy: { email: "asc" }
-    });
+  async listTenantUsers(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const select = {
+      id: true,
+      email: true,
+      fullName: true,
+      active: true,
+      roles: true,
+      createdAt: true,
+      updatedAt: true
+    } as const;
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select,
+        orderBy: { email: "asc" },
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.user.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createTenantUser(
@@ -284,11 +295,19 @@ export class PlatformAdminService {
     }
   }
 
-  listStaticPagesAdmin(tenantId: string) {
-    return this.prisma.employeeStaticPage.findMany({
-      where: { tenantId },
-      orderBy: [{ sortOrder: "asc" }, { title: "asc" }]
-    });
+  async listStaticPagesAdmin(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [items, total] = await Promise.all([
+      this.prisma.employeeStaticPage.findMany({
+        where,
+        orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.employeeStaticPage.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async updateStaticPage(tenantId: string, pageId: string, dto: UpdateStaticPageDto) {

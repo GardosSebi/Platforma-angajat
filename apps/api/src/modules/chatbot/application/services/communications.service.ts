@@ -7,6 +7,8 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { PaginationQueryDto, resolvePagination } from "../../../../common/dto/pagination-query.dto";
+import { paginatedResult } from "../../../../common/pagination";
 import {
   CreateAnnouncementDto,
   CreateTemplateDto,
@@ -103,13 +105,20 @@ export class CommunicationsService {
     };
   }
 
-  async listAnnouncements(tenantId: string) {
-    const rows = await this.prisma.communicationAnnouncement.findMany({
-      where: { tenantId },
-      orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }],
-      take: 200
-    });
-    return { items: await this.withStats(tenantId, rows) };
+  async listAnnouncements(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [rows, total] = await Promise.all([
+      this.prisma.communicationAnnouncement.findMany({
+        where,
+        orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }],
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.communicationAnnouncement.count({ where })
+    ]);
+    const items = await this.withStats(tenantId, rows);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createAnnouncement(tenantId: string, actorId: string, dto: CreateAnnouncementDto) {

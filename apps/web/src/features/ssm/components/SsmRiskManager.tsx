@@ -4,7 +4,11 @@ import type {
   CreateSsmRiskAssessmentRequest,
   SsmRiskTargetType
 } from "@repo/shared-types/ssm";
-import { useDepartments, useJobPositions, useWorksites } from "../../master-data/hooks/useMasterData";
+import {
+  useDepartmentsLookup,
+  useJobPositionsLookup,
+  useWorksitesLookup
+} from "../../master-data/hooks/useMasterData";
 import {
   useAddRiskAssessmentVersion,
   useArchiveRiskAssessment,
@@ -82,9 +86,9 @@ export function SsmRiskManager() {
 
   const assessmentsQuery = useRiskAssessments(filters);
   const historyQuery = useRiskAssessmentHistory(selectedAssessmentId);
-  const jobsQuery = useJobPositions();
-  const worksitesQuery = useWorksites();
-  const departmentsQuery = useDepartments();
+  const jobsLookup = useJobPositionsLookup();
+  const worksitesLookup = useWorksitesLookup();
+  const departmentsLookup = useDepartmentsLookup();
 
   const createAssessment = useCreateRiskAssessment();
   const addVersion = useAddRiskAssessmentVersion();
@@ -95,13 +99,19 @@ export function SsmRiskManager() {
 
   const targetOptions = useMemo(() => {
     if (form.targetType === "JOB_POSITION") {
-      return (jobsQuery.data ?? []).map((job) => ({ id: job.id, label: `${job.code} - ${job.name}` }));
+      return (jobsLookup.data?.items ?? []).map((job) => ({ id: job.id, label: `${job.code} - ${job.name}` }));
     }
     if (form.targetType === "WORKSITE") {
-      return (worksitesQuery.data ?? []).map((worksite) => ({ id: worksite.id, label: `${worksite.code} - ${worksite.name}` }));
+      return (worksitesLookup.data?.items ?? []).map((worksite) => ({
+        id: worksite.id,
+        label: `${worksite.code} - ${worksite.name}`
+      }));
     }
-    return (departmentsQuery.data ?? []).map((department) => ({ id: department.id, label: `${department.code} - ${department.name}` }));
-  }, [departmentsQuery.data, form.targetType, jobsQuery.data, worksitesQuery.data]);
+    return (departmentsLookup.data?.items ?? []).map((department) => ({
+      id: department.id,
+      label: `${department.code} - ${department.name}`
+    }));
+  }, [departmentsLookup.data?.items, form.targetType, jobsLookup.data?.items, worksitesLookup.data?.items]);
 
   useEffect(() => {
     if (targetOptions.length === 0) return;

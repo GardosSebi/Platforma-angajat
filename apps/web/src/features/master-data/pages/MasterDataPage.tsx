@@ -9,8 +9,10 @@ import {
   useCreateJobPosition,
   useCreateWorksite,
   useDepartments,
+  useDepartmentsLookup,
   useJobPositions,
-  useWorksites
+  useWorksites,
+  useWorksitesLookup
 } from "../hooks/useMasterData";
 
 const EMPTY_WORKSITE: CreateWorksitePayload = {
@@ -44,6 +46,8 @@ export function MasterDataPage() {
   const worksitesQuery = useWorksites();
   const departmentsQuery = useDepartments();
   const positionsQuery = useJobPositions();
+  const worksitesLookup = useWorksitesLookup();
+  const departmentsLookup = useDepartmentsLookup();
 
   const createWorksite = useCreateWorksite();
   const createDepartment = useCreateDepartment();
@@ -125,7 +129,7 @@ export function MasterDataPage() {
           </button>
           {createWorksite.isSuccess ? <p className="feedback success">Punctul de lucru a fost adăugat.</p> : null}
           {createWorksite.isError ? <p className="feedback error">{mutationErrorMessage(createWorksite.error)}</p> : null}
-          <p className="field-hint">Total: {worksitesQuery.data?.length ?? 0}</p>
+          <p className="field-hint">Total: {worksitesQuery.data?.total ?? 0}</p>
         </form>
 
         <form className="card form-stack ssm-doc-card" onSubmit={onCreateDepartment}>
@@ -156,7 +160,7 @@ export function MasterDataPage() {
               onChange={(event) => setDepartmentForm((prev) => ({ ...prev, worksiteId: event.target.value }))}
             >
               <option value="">Neselectat</option>
-              {(worksitesQuery.data ?? []).map((worksite) => (
+              {(worksitesLookup.data?.items ?? []).map((worksite) => (
                 <option key={worksite.id} value={worksite.id}>
                   {worksite.code} - {worksite.name}
                 </option>
@@ -168,7 +172,7 @@ export function MasterDataPage() {
           </button>
           {createDepartment.isSuccess ? <p className="feedback success">Departamentul a fost adăugat.</p> : null}
           {createDepartment.isError ? <p className="feedback error">{mutationErrorMessage(createDepartment.error)}</p> : null}
-          <p className="field-hint">Total: {departmentsQuery.data?.length ?? 0}</p>
+          <p className="field-hint">Total: {departmentsQuery.data?.total ?? 0}</p>
         </form>
 
         <form className="card form-stack ssm-doc-card" onSubmit={onCreateJobPosition}>
@@ -199,7 +203,7 @@ export function MasterDataPage() {
               onChange={(event) => setJobForm((prev) => ({ ...prev, departmentId: event.target.value }))}
             >
               <option value="">Neselectat</option>
-              {(departmentsQuery.data ?? []).map((department) => (
+              {(departmentsLookup.data?.items ?? []).map((department) => (
                 <option key={department.id} value={department.id}>
                   {department.code} - {department.name}
                 </option>
@@ -211,7 +215,7 @@ export function MasterDataPage() {
           </button>
           {createJobPosition.isSuccess ? <p className="feedback success">Postul a fost adăugat.</p> : null}
           {createJobPosition.isError ? <p className="feedback error">{mutationErrorMessage(createJobPosition.error)}</p> : null}
-          <p className="field-hint">Total: {positionsQuery.data?.length ?? 0}</p>
+          <p className="field-hint">Total: {positionsQuery.data?.total ?? 0}</p>
         </form>
       </div>
     </>

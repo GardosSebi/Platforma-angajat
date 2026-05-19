@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PaginationParams } from "@repo/shared-types/pagination";
 import type {
   CreateDepartmentPayload,
   CreateEmployeePayload,
@@ -13,35 +14,66 @@ import { masterDataApi } from "../api/master-data.api";
 
 type QueryEnabled = { enabled?: boolean };
 
-export function useWorksites(options?: QueryEnabled) {
+export function useWorksites(params?: PaginationParams, options?: QueryEnabled) {
   return useQuery({
-    queryKey: ["master-data", "worksites"],
-    queryFn: masterDataApi.listWorksites,
+    queryKey: ["master-data", "worksites", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => masterDataApi.listWorksites(params),
     enabled: options?.enabled ?? true
   });
 }
 
-export function useDepartments(options?: QueryEnabled) {
+/** Pentru mapări id → nume în formulare (max 100 înregistrări). */
+export function useWorksitesLookup(options?: QueryEnabled) {
+  return useWorksites({ page: 1, pageSize: 100 }, options);
+}
+
+export function useDepartments(params?: PaginationParams, options?: QueryEnabled) {
   return useQuery({
-    queryKey: ["master-data", "departments"],
-    queryFn: masterDataApi.listDepartments,
+    queryKey: ["master-data", "departments", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => masterDataApi.listDepartments(params),
     enabled: options?.enabled ?? true
   });
 }
 
-export function useJobPositions(options?: QueryEnabled) {
+export function useDepartmentsLookup(options?: QueryEnabled) {
+  return useDepartments({ page: 1, pageSize: 100 }, options);
+}
+
+export function useJobPositions(params?: PaginationParams, options?: QueryEnabled) {
   return useQuery({
-    queryKey: ["master-data", "job-positions"],
-    queryFn: masterDataApi.listJobPositions,
+    queryKey: ["master-data", "job-positions", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => masterDataApi.listJobPositions(params),
     enabled: options?.enabled ?? true
   });
 }
 
-export function useEmployees(options?: QueryEnabled) {
+export function useJobPositionsLookup(options?: QueryEnabled) {
+  return useJobPositions({ page: 1, pageSize: 100 }, options);
+}
+
+export function useEmployees(params?: PaginationParams, options?: QueryEnabled) {
   return useQuery({
-    queryKey: ["master-data", "employees"],
-    queryFn: masterDataApi.listEmployees,
+    queryKey: ["master-data", "employees", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => masterDataApi.listEmployees(params),
     enabled: options?.enabled ?? true
+  });
+}
+
+export function useEmployeeOptions(search?: string, options?: QueryEnabled) {
+  return useQuery({
+    queryKey: ["master-data", "employees", "options", search ?? ""],
+    queryFn: () => masterDataApi.listEmployeeOptions(search),
+    enabled: options?.enabled ?? true,
+    staleTime: 60_000
+  });
+}
+
+export function useEmployee(employeeId: string | undefined, options?: QueryEnabled) {
+  return useQuery({
+    queryKey: ["master-data", "employees", employeeId],
+    queryFn: () => masterDataApi.getEmployee(employeeId!),
+    enabled: (options?.enabled ?? true) && Boolean(employeeId),
+    staleTime: 30_000
   });
 }
 

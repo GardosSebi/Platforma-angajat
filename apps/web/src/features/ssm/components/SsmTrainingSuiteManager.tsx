@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { usePagination } from "../../../shared/hooks/use-pagination";
 import type {
   CompleteSsmTestRequest,
   CreateSsmTrainingPlanRequest,
@@ -62,8 +64,10 @@ export function SsmTrainingSuiteManager() {
   const canApproveTraining = hasPermission(session?.roles, "ssm:training:approve");
   const canSignAsEmployee = hasPermission(session?.roles, "ssm:training:edit");
 
+  const plansPage = usePagination();
   const typesQuery = useTrainingTypes();
-  const plansQuery = useTrainingPlans();
+  const plansQuery = useTrainingPlans(plansPage.params);
+  const plansPaged = paginationFromResult(plansQuery.data, plansPage.page, plansPage.pageSize);
   const remindersQuery = useTrainingReminders();
   const complianceQuery = useTrainingCompliance();
 
@@ -99,7 +103,7 @@ export function SsmTrainingSuiteManager() {
     medicalControls?: Array<{ id: string; controlType: string; result?: string | null }>;
   } | null>(null);
 
-  const planOptions = plansQuery.data?.items ?? [];
+  const planOptions = plansPaged.items;
   const bestPlanId = useMemo(() => planOptions[0]?.id ?? "", [planOptions]);
 
   const onCreateType = (event: FormEvent) => {
@@ -504,7 +508,16 @@ export function SsmTrainingSuiteManager() {
               {dossierData.eipDecisionCopies?.length ?? 0} decizii EIP.
             </p>
           ) : null}
-          <p className="field-hint">Planuri active: {planOptions.length}. Plan implicit recomandat: {bestPlanId || "-"}</p>
+          <p className="field-hint">Planuri active: {plansPaged.total}. Plan implicit recomandat: {bestPlanId || "-"}</p>
+          <PaginationBar
+            page={plansPaged.page}
+            pageSize={plansPaged.pageSize}
+            total={plansPaged.total}
+            totalPages={plansPaged.totalPages}
+            onPageChange={plansPage.setPage}
+            onPageSizeChange={plansPage.setPageSize}
+            disabled={plansQuery.isFetching}
+          />
           {downloadError ? <p className="feedback error">{downloadError}</p> : null}
         </div>
       </div>

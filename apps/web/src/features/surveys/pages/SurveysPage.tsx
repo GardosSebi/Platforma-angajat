@@ -10,7 +10,14 @@ import type {
   SurveyQuestionType
 } from "@repo/shared-types/surveys";
 import { downloadWithAuth } from "../../../shared/api/http-download";
-import { useDepartments, useEmployees, useJobPositions, useWorksites } from "../../master-data/hooks/useMasterData";
+import {
+  useDepartmentsLookup,
+  useEmployeeOptions,
+  useJobPositionsLookup,
+  useWorksitesLookup
+} from "../../master-data/hooks/useMasterData";
+import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { usePagination } from "../../../shared/hooks/use-pagination";
 import { surveysApi } from "../api/surveys.api";
 import {
   useActivateSurvey,
@@ -111,19 +118,21 @@ function questionNeedsOptions(type: SurveyQuestionType): boolean {
 export function SurveysPage() {
   const navigate = useNavigate();
   const session = useAuthSession();
+  const surveysPage = usePagination();
   const overviewQuery = useSurveysOverview();
-  const surveysQuery = useSurveys();
-  const worksitesQuery = useWorksites();
-  const departmentsQuery = useDepartments();
-  const jobPositionsQuery = useJobPositions();
-  const employeesQuery = useEmployees();
+  const surveysQuery = useSurveys(surveysPage.params);
+  const worksitesLookup = useWorksitesLookup();
+  const departmentsLookup = useDepartmentsLookup();
+  const jobPositionsLookup = useJobPositionsLookup();
+  const employeesOptions = useEmployeeOptions();
 
   const createSurvey = useCreateSurvey();
   const activateSurvey = useActivateSurvey();
   const closeSurvey = useCloseSurvey();
   const createPublicLink = useCreatePublicSurveyLink();
 
-  const surveys = surveysQuery.data?.items ?? [];
+  const surveysPaged = paginationFromResult(surveysQuery.data, surveysPage.page, surveysPage.pageSize);
+  const surveys = surveysPaged.items;
   const [surveyForm, setSurveyForm] = useState<SurveyForm>(EMPTY_SURVEY);
   const [questionForm, setQuestionForm] = useState<QuestionForm>(EMPTY_QUESTION);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
@@ -153,19 +162,25 @@ export function SurveysPage() {
 
   const audienceOptions = useMemo(() => {
     if (surveyForm.audienceType === "WORKSITE") {
-      return (worksitesQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+      return (worksitesLookup.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
     }
     if (surveyForm.audienceType === "DEPARTMENT") {
-      return (departmentsQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+      return (departmentsLookup.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
     }
     if (surveyForm.audienceType === "JOB_POSITION") {
-      return (jobPositionsQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+      return (jobPositionsLookup.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
     }
     if (surveyForm.audienceType === "EMPLOYEE") {
-      return (employeesQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.fullName} - ${item.email}` }));
+      return (employeesOptions.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.fullName} - ${item.email}` }));
     }
     return [];
-  }, [departmentsQuery.data, employeesQuery.data, jobPositionsQuery.data, surveyForm.audienceType, worksitesQuery.data]);
+  }, [
+    departmentsLookup.data?.items,
+    employeesOptions.data?.items,
+    jobPositionsLookup.data?.items,
+    surveyForm.audienceType,
+    worksitesLookup.data?.items
+  ]);
 
   const addQuestion = () => {
     setFormError(null);
@@ -507,7 +522,7 @@ export function SurveysPage() {
                 <h3 className="card-title">Sondaje create</h3>
                 <p className="field-hint">Activează, închide și selectează pentru statistici/export.</p>
               </div>
-              <span className="ssm-chip">{surveys.length} total</span>
+              <span className="ssm-chip">{surveysPaged.total} total</span>
             </div>
             <div className="ssm-doc-items">
               {surveys.map((survey) => (
@@ -543,6 +558,15 @@ export function SurveysPage() {
               ))}
               {!surveysQuery.isLoading && surveys.length === 0 ? <p className="field-hint">Nu există sondaje încă.</p> : null}
             </div>
+            <PaginationBar
+              page={surveysPaged.page}
+              pageSize={surveysPaged.pageSize}
+              total={surveysPaged.total}
+              totalPages={surveysPaged.totalPages}
+              onPageChange={surveysPage.setPage}
+              onPageSizeChange={surveysPage.setPageSize}
+              disabled={surveysQuery.isFetching}
+            />
           </div>
         </div>
 

@@ -6,7 +6,7 @@ import type {
   RegisterSsmPsiEquipmentVerificationRequest,
   SsmPsiResponsibleRole
 } from "@repo/shared-types/ssm";
-import { useEmployees, useWorksites } from "../../master-data/hooks/useMasterData";
+import { useEmployeeOptions, useWorksitesLookup } from "../../master-data/hooks/useMasterData";
 import {
   useCreatePsiEquipment,
   useCreatePsiResponsible,
@@ -72,8 +72,8 @@ function mutationErrorMessage(error: unknown): string {
 }
 
 export function SsmPsiManager() {
-  const worksitesQuery = useWorksites();
-  const employeesQuery = useEmployees();
+  const worksitesLookup = useWorksitesLookup();
+  const employeesOptions = useEmployeeOptions();
   const docsQuery = usePsiDocumentation();
   const equipmentQuery = usePsiEquipment();
   const notificationsQuery = usePsiEquipmentNotifications();
@@ -91,12 +91,12 @@ export function SsmPsiManager() {
   const [responsibleForm, setResponsibleForm] = useState<CreateSsmPsiResponsibleRequest>(EMPTY_RESPONSIBLE);
 
   useEffect(() => {
-    const firstWorksite = worksitesQuery.data?.[0];
+    const firstWorksite = worksitesLookup.data?.items[0];
     if (!firstWorksite) return;
     setEquipmentForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: firstWorksite.id }));
     setTrainingForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: firstWorksite.id }));
     setResponsibleForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: firstWorksite.id }));
-  }, [worksitesQuery.data]);
+  }, [worksitesLookup.data?.items]);
 
   useEffect(() => {
     const firstEquipment = equipmentQuery.data?.items[0];
@@ -105,7 +105,7 @@ export function SsmPsiManager() {
   }, [equipmentQuery.data?.items]);
 
   useEffect(() => {
-    const firstEmployee = employeesQuery.data?.[0];
+    const firstEmployee = employeesOptions.data?.items[0];
     if (!firstEmployee) return;
     setTrainingForm((prev) => (prev.employeeId ? prev : { ...prev, employeeId: firstEmployee.id }));
     setResponsibleForm((prev) =>
@@ -118,7 +118,7 @@ export function SsmPsiManager() {
             email: firstEmployee.email
           }
     );
-  }, [employeesQuery.data]);
+  }, [employeesOptions.data?.items]);
 
   const onEquipmentSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -153,7 +153,7 @@ export function SsmPsiManager() {
     });
   };
 
-  const worksiteCount = worksitesQuery.data?.length ?? 0;
+  const worksiteCount = worksitesLookup.data?.items.length ?? 0;
   const equipmentCount = equipmentQuery.data?.items.length ?? 0;
   const activeResponsibleCount = (responsiblesQuery.data?.items ?? []).filter((item) => item.active).length;
 
@@ -228,13 +228,13 @@ export function SsmPsiManager() {
               <label htmlFor="psi-worksite">Punct de lucru</label>
               <select id="psi-worksite" value={equipmentForm.worksiteId} onChange={(e) => setEquipmentForm((p) => ({ ...p, worksiteId: e.target.value }))} required>
                 <option value="">Selectează punctul</option>
-                {(worksitesQuery.data ?? []).map((worksite) => (
+                {(worksitesLookup.data?.items ?? []).map((worksite) => (
                   <option key={worksite.id} value={worksite.id}>
                     {worksite.code} - {worksite.name}
                   </option>
                 ))}
               </select>
-              {(worksitesQuery.data?.length ?? 0) === 0 ? <p className="field-hint">Nu există puncte de lucru pentru tenant.</p> : null}
+              {(worksitesLookup.data?.items?.length ?? 0) === 0 ? <p className="field-hint">Nu există puncte de lucru pentru tenant.</p> : null}
             </div>
             <div className="field">
               <label htmlFor="psi-code">Cod</label>
@@ -353,7 +353,7 @@ export function SsmPsiManager() {
             <label htmlFor="psi-training-worksite">Punct de lucru</label>
             <select id="psi-training-worksite" value={trainingForm.worksiteId} onChange={(e) => setTrainingForm((p) => ({ ...p, worksiteId: e.target.value }))} required>
               <option value="">Selectează punctul</option>
-              {(worksitesQuery.data ?? []).map((worksite) => (
+              {(worksitesLookup.data?.items ?? []).map((worksite) => (
                 <option key={worksite.id} value={worksite.id}>
                   {worksite.code} - {worksite.name}
                 </option>
@@ -364,7 +364,7 @@ export function SsmPsiManager() {
             <label htmlFor="psi-training-employee">Angajat</label>
             <select id="psi-training-employee" value={trainingForm.employeeId ?? ""} onChange={(e) => setTrainingForm((p) => ({ ...p, employeeId: e.target.value }))}>
               <option value="">Instruire colectivă / fără angajat</option>
-              {(employeesQuery.data ?? []).map((employee) => (
+              {(employeesOptions.data?.items ?? []).map((employee) => (
                 <option key={employee.id} value={employee.id}>
                   {employee.fullName}
                 </option>
@@ -407,7 +407,7 @@ export function SsmPsiManager() {
             <label htmlFor="psi-resp-worksite">Punct de lucru</label>
             <select id="psi-resp-worksite" value={responsibleForm.worksiteId} onChange={(e) => setResponsibleForm((p) => ({ ...p, worksiteId: e.target.value }))} required>
               <option value="">Selectează punctul</option>
-              {(worksitesQuery.data ?? []).map((worksite) => (
+              {(worksitesLookup.data?.items ?? []).map((worksite) => (
                 <option key={worksite.id} value={worksite.id}>
                   {worksite.code} - {worksite.name}
                 </option>

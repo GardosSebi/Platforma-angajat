@@ -7,6 +7,8 @@ import { PrismaService } from "../../../../infrastructure/prisma/prisma.service"
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { resolveSsmViewerScope } from "../../api/ssm-viewer-scope";
 import { CreateSsmDocumentDto } from "../../api/dto/create-ssm-document.dto";
+import { resolvePagination } from "../../../../common/dto/pagination-query.dto";
+import { paginatedResult } from "../../../../common/pagination";
 import { ListSsmDocumentsDto } from "../../api/dto/list-ssm-documents.dto";
 
 const MAX_FILE_BYTES = 120 * 1024 * 1024;
@@ -309,53 +311,75 @@ export class SsmDocumentsService {
   async listDocuments(tenantId: string, query: ListSsmDocumentsDto, viewer: JwtPayload) {
     const ctx = await this.employeeRowForViewer(tenantId, viewer);
     if (ctx.scope === "empty") {
-      return { items: [] };
+      return paginatedResult([], 0, 1, resolvePagination(query).pageSize);
     }
-    const rows = await this.prisma.ssmDocument.findMany({
-      where: {
-        tenantId,
-        ...(query.type ? { type: query.type } : {}),
-        ...(query.status ? { status: query.status } : {}),
-        ...(query.targetType ? { targetType: query.targetType } : {}),
-        ...(query.entityName ? { entityName: { contains: query.entityName, mode: "insensitive" } } : {}),
-        ...(query.departmentName
-          ? { departmentName: { contains: query.departmentName, mode: "insensitive" } }
-          : {}),
-        ...(query.jobPositionName
-          ? { jobPositionName: { contains: query.jobPositionName, mode: "insensitive" } }
-          : {}),
-        ...(query.controlOnly && toBool(query.controlOnly) ? { isControlFolder: true } : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { title: { contains: query.q, mode: "insensitive" } },
-                { targetLabel: { contains: query.q, mode: "insensitive" } }
-              ]
-            }
-          : {})
-      },
-      include: {
-        activeVersion: true
-      },
-      orderBy: [{ updatedAt: "desc" }]
-    });
+    const p = resolvePagination(query);
+    const dbWhere = {
+      tenantId,
+      activeVersionId: { not: null },
+      ...(query.type ? { type: query.type } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.targetType ? { targetType: query.targetType } : {}),
+      ...(query.entityName ? { entityName: { contains: query.entityName, mode: "insensitive" as const } } : {}),
+      ...(query.departmentName
+        ? { departmentName: { contains: query.departmentName, mode: "insensitive" as const } }
+        : {}),
+      ...(query.jobPositionName
+        ? { jobPositionName: { contains: query.jobPositionName, mode: "insensitive" as const } }
+        : {}),
+      ...(query.controlOnly && toBool(query.controlOnly) ? { isControlFolder: true } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { title: { contains: query.q, mode: "insensitive" as const } },
+              { targetLabel: { contains: query.q, mode: "insensitive" as const } }
+            ]
+          }
+        : {})
+    };
 
-    let filtered = rows.filter((row) => row.activeVersion);
     if (ctx.scope === "self") {
-      filtered = filtered.filter((row) =>
-        ssmDocumentVisibleToEmployee(
-          { targetType: row.targetType, targetLabel: row.targetLabel, status: row.status },
-          ctx.employee
-        )
+      const rows = await this.prisma.ssmDocument.findMany({
+        where: dbWhere,
+        include: { activeVersion: true },
+        orderBy: [{ updatedAt: "desc" }]
+      });
+      const filtered = rows
+        .filter((row) => row.activeVersion)
+        .filter((row) =>
+          ssmDocumentVisibleToEmployee(
+            { targetType: row.targetType, targetLabel: row.targetLabel, status: row.status },
+            ctx.employee
+          )
+        );
+      const total = filtered.length;
+      const pageItems = filtered.slice(p.skip, p.skip + p.take);
+      return paginatedResult(
+        pageItems.map((row) => ({ ...row, activeVersion: row.activeVersion! })),
+        total,
+        p.page,
+        p.pageSize
       );
     }
 
-    return {
-      items: filtered.map((row) => ({
-        ...row,
-        activeVersion: row.activeVersion!
-      }))
-    };
+    const [rows, total] = await Promise.all([
+      this.prisma.ssmDocument.findMany({
+        where: dbWhere,
+        include: { activeVersion: true },
+        orderBy: [{ updatedAt: "desc" }],
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.ssmDocument.count({ where: dbWhere })
+    ]);
+    return paginatedResult(
+      rows
+        .filter((row) => row.activeVersion)
+        .map((row) => ({ ...row, activeVersion: row.activeVersion! })),
+      total,
+      p.page,
+      p.pageSize
+    );
   }
 
   async getDocumentHistory(tenantId: string, documentId: string, viewer: JwtPayload) {

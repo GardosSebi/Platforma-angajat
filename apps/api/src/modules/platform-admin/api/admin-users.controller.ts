@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { JwtPayload } from "../../../auth/jwt.strategy";
@@ -18,8 +19,8 @@ export class AdminUsersController {
 
   @Get()
   @RequirePermissions(Permission.ADMIN_USERS_VIEW)
-  list(@TenantId() tenantId: string) {
-    return this.platformAdmin.listTenantUsers(tenantId);
+  list(@TenantId() tenantId: string, @Query() query: PaginationQueryDto) {
+    return this.platformAdmin.listTenantUsers(tenantId, query);
   }
 
   @Post()

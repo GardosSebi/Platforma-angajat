@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
+import { ListEmployeeOptionsDto } from "../dto/list-employee-options.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -21,10 +23,20 @@ export class EmployeesController {
     return hasAllPermissions(user.roles, [Permission.MASTER_DATA_WRITE]);
   }
 
+  @Get("options")
+  @RequirePermissions(Permission.MASTER_DATA_READ)
+  listOptions(@TenantId() tenantId: string, @Query() query: ListEmployeeOptionsDto) {
+    return this.masterData.listEmployeeOptions(tenantId, query.search, query.limit);
+  }
+
   @Get()
   @RequirePermissions(Permission.MASTER_DATA_READ)
-  list(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
-    return this.masterData.listEmployees(tenantId, this.revealCnp(user));
+  list(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query() query: PaginationQueryDto
+  ) {
+    return this.masterData.listEmployees(tenantId, this.revealCnp(user), query);
   }
 
   @Get(":id")

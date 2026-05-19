@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CloseSsmAccidentCaseRequest, CreateSsmAccidentCaseRequest, CreateSsmAccidentTaskRequest } from "@repo/shared-types/ssm";
+import type { PaginationParams } from "@repo/shared-types/pagination";
 import { ssmApi } from "../api/ssm.api";
 
-export function useAccidentCases() {
+export function useAccidentCases(params?: PaginationParams) {
   return useQuery({
-    queryKey: ["ssm", "accidents", "cases"],
-    queryFn: ssmApi.listAccidentCases
+    queryKey: ["ssm", "accidents", "cases", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => ssmApi.listAccidentCases(params)
   });
 }
 

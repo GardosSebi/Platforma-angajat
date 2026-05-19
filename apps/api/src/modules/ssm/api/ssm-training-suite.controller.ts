@@ -6,9 +6,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   StreamableFile,
   UseGuards
 } from "@nestjs/common";
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { JwtPayload } from "../../../auth/jwt.strategy";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -53,8 +55,12 @@ export class SsmTrainingSuiteController {
 
   @Get("plans")
   @RequirePermissions(Permission.SSM_TRAINING_VIEW)
-  listPlans(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
-    return this.trainingSuite.listPlans(tenantId, user);
+  listPlans(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query() query: PaginationQueryDto
+  ) {
+    return this.trainingSuite.listPlans(tenantId, user, query);
   }
 
   @Post("plans")

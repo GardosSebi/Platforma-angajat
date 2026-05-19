@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateSurveyPublicLinkRequest, CreateSurveyRequest } from "@repo/shared-types/surveys";
+import type { PaginationParams } from "@repo/shared-types/pagination";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { fetchPublicSurvey, surveysApi } from "../api/surveys.api";
 
@@ -10,10 +11,10 @@ export function useSurveysOverview() {
   });
 }
 
-export function useSurveys() {
+export function useSurveys(params?: PaginationParams) {
   return useQuery({
-    queryKey: ["surveys", "list"],
-    queryFn: surveysApi.listSurveys
+    queryKey: ["surveys", "list", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => surveysApi.listSurveys(params)
   });
 }
 

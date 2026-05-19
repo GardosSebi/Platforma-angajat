@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateSsmDocumentRequest } from "@repo/shared-types/ssm";
 import { ssmApi } from "../api/ssm.api";
 
-export interface SsmDocumentFilters {
+import type { PaginationParams } from "@repo/shared-types/pagination";
+
+export interface SsmDocumentFilters extends PaginationParams {
   q?: string;
   type?: string;
   status?: string;
@@ -17,12 +19,14 @@ function toSearchParams(filters: SsmDocumentFilters): URLSearchParams {
   if (filters.status) params.set("status", filters.status);
   if (filters.targetType) params.set("targetType", filters.targetType);
   if (filters.controlOnly) params.set("controlOnly", "true");
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
   return params;
 }
 
 export function useSsmDocuments(filters: SsmDocumentFilters) {
   const params = toSearchParams(filters);
-  const queryKey = ["ssm", "documents", params.toString()];
+  const queryKey = ["ssm", "documents", params.toString(), filters.page ?? 1, filters.pageSize ?? 25];
   return useQuery({
     queryKey,
     queryFn: () => ssmApi.listDocuments(params)

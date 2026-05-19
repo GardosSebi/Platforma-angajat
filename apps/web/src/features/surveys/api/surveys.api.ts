@@ -7,6 +7,8 @@ import type {
   SurveyStatsResponse,
   UpdateSurveyRequest
 } from "@repo/shared-types/surveys";
+import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
+import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { getApiBaseUrl } from "../../../shared/api/api-base";
 import { httpClient } from "../../../shared/api/http-client";
 import { httpErrorFromResponse } from "../../../shared/api/http-error";
@@ -25,8 +27,8 @@ export const surveysApi = {
   overview() {
     return httpClient<SurveysOverviewResponse>("/surveys/overview");
   },
-  listSurveys() {
-    return httpClient<{ items: SurveyItem[] }>("/surveys");
+  listSurveys(params?: PaginationParams) {
+    return httpClient<PaginatedResult<SurveyItem>>(`/surveys${buildPaginationQuery(params)}`);
   },
   getForRespond(surveyId: string) {
     return httpClient<SurveyItem>(`/surveys/${surveyId}/for-respond`);

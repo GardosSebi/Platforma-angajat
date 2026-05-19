@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -32,8 +33,8 @@ export class CommunicationsController {
 
   @Get("announcements")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
-  listAnnouncements(@TenantId() tenantId: string) {
-    return this.communications.listAnnouncements(tenantId);
+  listAnnouncements(@TenantId() tenantId: string, @Query() query: PaginationQueryDto) {
+    return this.communications.listAnnouncements(tenantId, query);
   }
 
   @Post("announcements")

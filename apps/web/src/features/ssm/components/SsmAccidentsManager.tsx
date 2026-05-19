@@ -1,4 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
+import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { usePagination } from "../../../shared/hooks/use-pagination";
 import type {
   CloseSsmAccidentCaseRequest,
   CreateSsmAccidentCaseRequest,
@@ -90,7 +92,9 @@ function severityLabel(severity: SsmAccidentSeverity): string {
 }
 
 export function SsmAccidentsManager() {
-  const casesQuery = useAccidentCases();
+  const casesPage = usePagination();
+  const casesQuery = useAccidentCases(casesPage.params);
+  const casesPaged = paginationFromResult(casesQuery.data, casesPage.page, casesPage.pageSize);
   const statsQuery = useAccidentStats();
   const createCase = useCreateAccidentCase();
   const addTask = useAddAccidentTask();
@@ -104,8 +108,8 @@ export function SsmAccidentsManager() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const selectedCase = useMemo(
-    () => casesQuery.data?.items.find((item) => item.id === selectedCaseId),
-    [casesQuery.data?.items, selectedCaseId]
+    () => casesPaged.items.find((item) => item.id === selectedCaseId),
+    [casesPaged.items, selectedCaseId]
   );
   const occurredLocal = useMemo(() => toDatetimeLocalValue(caseForm.occurredAt), [caseForm.occurredAt]);
   const taskDueLocal = useMemo(() => toDatetimeLocalValue(taskForm.dueAt), [taskForm.dueAt]);
@@ -159,6 +163,16 @@ export function SsmAccidentsManager() {
           </span>
         </div>
       </div>
+
+      <PaginationBar
+        page={casesPaged.page}
+        pageSize={casesPaged.pageSize}
+        total={casesPaged.total}
+        totalPages={casesPaged.totalPages}
+        onPageChange={casesPage.setPage}
+        onPageSizeChange={casesPage.setPageSize}
+        disabled={casesQuery.isFetching}
+      />
 
       <div className="ssm-doc-grid">
         <form className="card form-stack ssm-doc-card" onSubmit={onCreateCase}>
@@ -253,7 +267,7 @@ export function SsmAccidentsManager() {
               }}
             >
               <option value="">Selectează caz</option>
-              {(casesQuery.data?.items ?? []).map((item) => (
+              {(casesPaged.items ?? []).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.title} ({typeLabel(item.type)} - {item.status})
                 </option>
@@ -343,7 +357,7 @@ export function SsmAccidentsManager() {
             <label htmlFor="close-case">Caz</label>
             <select id="close-case" value={selectedCaseId} onChange={(e) => setSelectedCaseId(e.target.value)}>
               <option value="">Selectează caz</option>
-              {(casesQuery.data?.items ?? []).map((item) => (
+              {(casesPaged.items ?? []).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.title} ({typeLabel(item.type)} - {item.status})
                 </option>

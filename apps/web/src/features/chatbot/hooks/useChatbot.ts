@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateCommunicationAnnouncementRequest, CreateCommunicationTemplateRequest } from "@repo/shared-types/communications";
+import type { PaginationParams } from "@repo/shared-types/pagination";
 import { chatbotApi } from "../api/chatbot.api";
 
 export function useChatbotDashboard() {
@@ -9,10 +10,10 @@ export function useChatbotDashboard() {
   });
 }
 
-export function useAnnouncements() {
+export function useAnnouncements(params?: PaginationParams) {
   return useQuery({
-    queryKey: ["chatbot", "announcements"],
-    queryFn: chatbotApi.listAnnouncements
+    queryKey: ["chatbot", "announcements", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => chatbotApi.listAnnouncements(params)
   });
 }
 

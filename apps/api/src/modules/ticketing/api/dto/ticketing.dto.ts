@@ -1,4 +1,5 @@
 import { IsBoolean, IsDateString, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { PaginationQueryDto } from "../../../../common/dto/pagination-query.dto";
 
 const TICKET_STATUSES = ["OPEN", "WAITING_OPERATOR", "WAITING_USER", "WAITING_INFO", "CLOSED"] as const;
 const TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -8,7 +9,7 @@ type TicketStatusCode = (typeof TICKET_STATUSES)[number];
 type TicketPriorityCode = (typeof TICKET_PRIORITIES)[number];
 type TicketSourceCode = (typeof TICKET_SOURCES)[number];
 
-export class ListTicketsDto {
+export class ListTicketsDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(TICKET_STATUSES)
   status?: TicketStatusCode;

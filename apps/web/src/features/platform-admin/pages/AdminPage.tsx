@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { EmployeeStaticPageRow, TenantUserSummary } from "@repo/shared-types";
 import {
   useCreateEmployee,
-  useDepartments,
-  useEmployees,
-  useJobPositions,
+  useDepartmentsLookup,
+  useEmployee,
+  useEmployeeOptions,
+  useJobPositionsLookup,
   useUpdateEmployee,
-  useWorksites
+  useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
+import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { usePagination } from "../../../shared/hooks/use-pagination";
 import type { UpdateEmployeePayload } from "../../master-data/api/master-data.api";
 import {
   platformAdminApi,
@@ -148,39 +151,53 @@ export function AdminPage() {
     [session?.roles]
   );
 
+  const usersPage = usePagination();
+  const staticPage = usePagination();
+
   const usersQuery = useQuery({
-    queryKey: ["admin", "users"],
-    queryFn: platformAdminApi.listUsers,
+    queryKey: ["admin", "users", usersPage.page, usersPage.pageSize],
+    queryFn: () => platformAdminApi.listUsers(usersPage.params),
     enabled: tab === "users"
   });
 
+  const usersPaged = paginationFromResult(usersQuery.data, usersPage.page, usersPage.pageSize);
+
   const selectedUser = useMemo(
-    () => (usersQuery.data ?? []).find((u) => u.id === selectedUserId) ?? null,
-    [usersQuery.data, selectedUserId]
+    () => usersPaged.items.find((u) => u.id === selectedUserId) ?? null,
+    [usersPaged.items, selectedUserId]
   );
 
-  const worksitesQuery = useWorksites({ enabled: tab === "users" });
-  const departmentsQuery = useDepartments({ enabled: tab === "users" });
-  const positionsQuery = useJobPositions({ enabled: tab === "users" });
-  const employeesQuery = useEmployees({ enabled: tab === "users" });
+  const worksitesLookup = useWorksitesLookup({ enabled: tab === "users" });
+  const departmentsLookup = useDepartmentsLookup({ enabled: tab === "users" });
+  const positionsLookup = useJobPositionsLookup({ enabled: tab === "users" });
+  const employeeSearch = selectedUser?.email ?? "";
+  const employeesOptionsQuery = useEmployeeOptions(employeeSearch, {
+    enabled: tab === "users" && Boolean(employeeSearch)
+  });
 
-  const selectedEmployee = useMemo(() => {
+  const matchedEmployeeOption = useMemo(() => {
     if (!selectedUser) return null;
     const email = selectedUser.email.toLowerCase();
-    return (employeesQuery.data ?? []).find((e) => e.email.toLowerCase() === email) ?? null;
-  }, [selectedUser, employeesQuery.data]);
+    return (employeesOptionsQuery.data?.items ?? []).find((e) => e.email.toLowerCase() === email) ?? null;
+  }, [selectedUser, employeesOptionsQuery.data?.items]);
+
+  const selectedEmployeeQuery = useEmployee(matchedEmployeeOption?.id, {
+    enabled: tab === "users" && Boolean(matchedEmployeeOption?.id)
+  });
+
+  const selectedEmployee = selectedEmployeeQuery.data ?? null;
 
   const filteredDepartmentsForNewUser = useMemo(() => {
-    const deps = departmentsQuery.data ?? [];
+    const deps = departmentsLookup.data?.items ?? [];
     if (!newUserForm.worksiteId) return deps;
     return deps.filter((d) => d.worksiteId === newUserForm.worksiteId || !d.worksiteId);
-  }, [departmentsQuery.data, newUserForm.worksiteId]);
+  }, [departmentsLookup.data?.items, newUserForm.worksiteId]);
 
   const filteredPositionsForNewUser = useMemo(() => {
-    const positions = positionsQuery.data ?? [];
+    const positions = positionsLookup.data?.items ?? [];
     if (!newUserForm.departmentId) return positions;
     return positions.filter((p) => p.departmentId === newUserForm.departmentId || !p.departmentId);
-  }, [positionsQuery.data, newUserForm.departmentId]);
+  }, [positionsLookup.data?.items, newUserForm.departmentId]);
 
   const detailWorksiteId =
     employeeDraft.worksiteId || selectedEmployee?.worksiteId || "";
@@ -190,38 +207,35 @@ export function AdminPage() {
 
   const savedOrgFromEmployee = useMemo(() => {
     if (!selectedEmployee) return { worksite: null, department: null, position: null };
-    const emp = selectedEmployee as typeof selectedEmployee & {
-      worksite?: OrgOption | null;
-      department?: OrgOption | null;
-      jobPosition?: OrgOption | null;
-    };
+    const toOption = (row?: { id: string; code: string; name: string } | null): OrgOption | null =>
+      row ? { id: row.id, code: row.code, name: row.name } : null;
     return {
-      worksite: emp.worksite ?? null,
-      department: emp.department ?? null,
-      position: emp.jobPosition ?? null
+      worksite: toOption(selectedEmployee.worksite ?? null),
+      department: toOption(selectedEmployee.department ?? null),
+      position: toOption(selectedEmployee.jobPosition ?? null)
     };
   }, [selectedEmployee]);
 
   const detailWorksites = useMemo(() => {
-    const all = worksitesQuery.data ?? [];
+    const all = worksitesLookup.data?.items ?? [];
     const savedId = employeeDraft.worksiteId || selectedEmployee?.worksiteId;
     return orgOptionsWithSaved(all, savedId, all, savedOrgFromEmployee.worksite);
   }, [
-    worksitesQuery.data,
+    worksitesLookup.data?.items,
     employeeDraft.worksiteId,
     selectedEmployee?.worksiteId,
     savedOrgFromEmployee.worksite
   ]);
 
   const detailDepartments = useMemo(() => {
-    const all = departmentsQuery.data ?? [];
+    const all = departmentsLookup.data?.items ?? [];
     const filtered = detailWorksiteId
       ? all.filter((d) => !d.worksiteId || d.worksiteId === detailWorksiteId)
       : all;
     const savedId = employeeDraft.departmentId || selectedEmployee?.departmentId;
     return orgOptionsWithSaved(filtered, savedId, all, savedOrgFromEmployee.department);
   }, [
-    departmentsQuery.data,
+    departmentsLookup.data?.items,
     detailWorksiteId,
     employeeDraft.departmentId,
     selectedEmployee?.departmentId,
@@ -229,14 +243,14 @@ export function AdminPage() {
   ]);
 
   const detailPositions = useMemo(() => {
-    const all = positionsQuery.data ?? [];
+    const all = positionsLookup.data?.items ?? [];
     const filtered = detailDepartmentId
       ? all.filter((p) => !p.departmentId || p.departmentId === detailDepartmentId)
       : all;
     const savedId = employeeDraft.jobPositionId || selectedEmployee?.jobPositionId;
     return orgOptionsWithSaved(filtered, savedId, all, savedOrgFromEmployee.position);
   }, [
-    positionsQuery.data,
+    positionsLookup.data?.items,
     detailDepartmentId,
     employeeDraft.jobPositionId,
     selectedEmployee?.jobPositionId,
@@ -244,7 +258,9 @@ export function AdminPage() {
   ]);
 
   const detailFormLoading =
-    Boolean(selectedUser) && employeesQuery.isLoading && !employeesQuery.data;
+    Boolean(selectedUser) &&
+    ((employeesOptionsQuery.isLoading && !employeesOptionsQuery.data) ||
+      (Boolean(matchedEmployeeOption) && selectedEmployeeQuery.isLoading && !selectedEmployeeQuery.data));
 
   useEffect(() => {
     if (!selectedUser) {
@@ -256,7 +272,10 @@ export function AdminPage() {
     setEditRole(selectedUser.roles[0] ?? "EMPLOYEE");
     setEditFullName(selectedUser.fullName ?? "");
 
-    if (employeesQuery.isLoading && !employeesQuery.data) {
+    if (employeesOptionsQuery.isLoading && !employeesOptionsQuery.data) {
+      return;
+    }
+    if (matchedEmployeeOption && selectedEmployeeQuery.isLoading && !selectedEmployeeQuery.data) {
       return;
     }
 
@@ -274,13 +293,23 @@ export function AdminPage() {
     } else {
       setEmployeeDraft(EMPTY_EMPLOYEE_DRAFT);
     }
-  }, [selectedUser, selectedEmployee, employeesQuery.isLoading, employeesQuery.data]);
+  }, [
+    selectedUser,
+    selectedEmployee,
+    matchedEmployeeOption,
+    employeesOptionsQuery.isLoading,
+    employeesOptionsQuery.data,
+    selectedEmployeeQuery.isLoading,
+    selectedEmployeeQuery.data
+  ]);
 
   const staticQuery = useQuery({
-    queryKey: ["admin", "static-pages"],
-    queryFn: platformAdminApi.listStaticPages,
+    queryKey: ["admin", "static-pages", staticPage.page, staticPage.pageSize],
+    queryFn: () => platformAdminApi.listStaticPages(staticPage.params),
     enabled: tab === "static"
   });
+
+  const staticPaged = paginationFromResult(staticQuery.data, staticPage.page, staticPage.pageSize);
 
   const [staticForm, setStaticForm] = useState<CreateStaticPagePayload>({
     slug: "",
@@ -543,7 +572,7 @@ export function AdminPage() {
                   }
                 >
                   <option value="">— Neselectat —</option>
-                  {(worksitesQuery.data ?? []).map((w) => (
+                  {(worksitesLookup.data?.items ?? []).map((w) => (
                     <option key={w.id} value={w.id}>
                       {w.code} — {w.name}
                     </option>
@@ -641,7 +670,7 @@ export function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(usersQuery.data ?? []).map((u: TenantUserSummary) => (
+                  {usersPaged.items.map((u: TenantUserSummary) => (
                     <tr
                       key={u.id}
                       className={u.id === selectedUserId ? "selected" : undefined}
@@ -656,6 +685,15 @@ export function AdminPage() {
                 </tbody>
               </table>
             </div>
+            <PaginationBar
+              page={usersPaged.page}
+              pageSize={usersPaged.pageSize}
+              total={usersPaged.total}
+              totalPages={usersPaged.totalPages}
+              onPageChange={usersPage.setPage}
+              onPageSizeChange={usersPage.setPageSize}
+              disabled={usersQuery.isFetching}
+            />
           </section>
 
           <section className="card">
@@ -905,7 +943,7 @@ export function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(staticQuery.data ?? []).map((p) => (
+                  {staticPaged.items.map((p) => (
                     <tr key={p.id}>
                       <td>{p.slug}</td>
                       <td>{p.title}</td>
@@ -938,6 +976,15 @@ export function AdminPage() {
                 </tbody>
               </table>
             </div>
+            <PaginationBar
+              page={staticPaged.page}
+              pageSize={staticPaged.pageSize}
+              total={staticPaged.total}
+              totalPages={staticPaged.totalPages}
+              onPageChange={staticPage.setPage}
+              onPageSizeChange={staticPage.setPageSize}
+              disabled={staticQuery.isFetching}
+            />
           </section>
         </div>
       ) : null}

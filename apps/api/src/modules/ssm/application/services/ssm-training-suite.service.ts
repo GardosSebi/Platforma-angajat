@@ -440,25 +440,37 @@ export class SsmTrainingSuiteService {
     };
   }
 
-  async listPlans(tenantId: string, viewer: JwtPayload) {
+  async listPlans(
+    tenantId: string,
+    viewer: JwtPayload,
+    query?: import("../../../../common/dto/pagination-query.dto").PaginationQueryDto
+  ) {
+    const { resolvePagination } = await import("../../../../common/dto/pagination-query.dto");
+    const { paginatedResult } = await import("../../../../common/pagination");
     await this.syncOverdue(tenantId);
     const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
     if (scope.mode === "empty") {
-      return { items: [] };
+      return paginatedResult([], 0, 1, resolvePagination(query).pageSize);
     }
-    const rows = await this.prisma.ssmTrainingPlan.findMany({
-      where: {
-        tenantId,
-        ...(scope.mode === "self" ? { employeeId: scope.employeeId } : {})
-      },
-      include: {
-        employee: { select: { fullName: true } },
-        trainingType: { select: { code: true, name: true } }
-      },
-      orderBy: [{ dueAt: "asc" }]
-    });
-    return {
-      items: rows.map((row) => ({
+    const p = resolvePagination(query);
+    const where = {
+      tenantId,
+      ...(scope.mode === "self" ? { employeeId: scope.employeeId } : {})
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.ssmTrainingPlan.findMany({
+        where,
+        include: {
+          employee: { select: { fullName: true } },
+          trainingType: { select: { code: true, name: true } }
+        },
+        orderBy: [{ dueAt: "asc" }],
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.ssmTrainingPlan.count({ where })
+    ]);
+    const items = rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
         trainingTypeId: row.trainingTypeId,
@@ -472,8 +484,8 @@ export class SsmTrainingSuiteService {
         durationMinutes: row.durationMinutes,
         status: row.status,
         blockedAdmission: row.blockedAdmission
-      }))
-    };
+      }));
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   private async trainingReminders(tenantId: string, employeeId?: string) {

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, StreamableFile, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFile, UseGuards } from "@nestjs/common";
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -16,8 +17,8 @@ export class SsmAccidentsController {
 
   @Get()
   @RequirePermissions(Permission.SSM_ACCIDENT_VIEW)
-  list(@TenantId() tenantId: string) {
-    return this.accidents.listCases(tenantId);
+  list(@TenantId() tenantId: string, @Query() query: PaginationQueryDto) {
+    return this.accidents.listCases(tenantId, query);
   }
 
   @Post()

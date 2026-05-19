@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CompleteSsmTestRequest, CreateSsmTrainingPlanRequest, CreateSsmTrainingTypeRequest } from "@repo/shared-types/ssm";
+import type { PaginationParams } from "@repo/shared-types/pagination";
 import { ssmApi } from "../api/ssm.api";
 
 export function useTrainingTypes() {
@@ -9,10 +10,10 @@ export function useTrainingTypes() {
   });
 }
 
-export function useTrainingPlans() {
+export function useTrainingPlans(params?: PaginationParams) {
   return useQuery({
-    queryKey: ["ssm", "training-suite", "plans"],
-    queryFn: ssmApi.listTrainingPlans
+    queryKey: ["ssm", "training-suite", "plans", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => ssmApi.listTrainingPlans(params)
   });
 }
 

@@ -2,14 +2,19 @@ import { FormEvent, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   useDepartments,
+  useDepartmentsLookup,
   useEmployees,
   useJobPositions,
+  useJobPositionsLookup,
   useUpdateDepartment,
   useUpdateEmployee,
   useUpdateJobPosition,
   useUpdateWorksite,
-  useWorksites
+  useWorksites,
+  useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
+import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { usePagination } from "../../../shared/hooks/use-pagination";
 import type { EmployeeItem, UpdateEmployeePayload } from "../../master-data/api/master-data.api";
 
 function isoToDateInput(iso: string | null | undefined): string {
@@ -53,10 +58,24 @@ type OrgEdit =
     };
 
 export function AdminOrganizationTab() {
-  const worksitesQuery = useWorksites();
-  const departmentsQuery = useDepartments();
-  const jobPositionsQuery = useJobPositions();
-  const employeesQuery = useEmployees();
+  const worksitesPage = usePagination();
+  const departmentsPage = usePagination();
+  const jobsPage = usePagination();
+  const employeesPage = usePagination();
+
+  const worksitesQuery = useWorksites(worksitesPage.params);
+  const departmentsQuery = useDepartments(departmentsPage.params);
+  const jobPositionsQuery = useJobPositions(jobsPage.params);
+  const employeesQuery = useEmployees(employeesPage.params);
+
+  const worksitesLookup = useWorksitesLookup();
+  const departmentsLookup = useDepartmentsLookup();
+  const jobPositionsLookup = useJobPositionsLookup();
+
+  const worksitesPaged = paginationFromResult(worksitesQuery.data, worksitesPage.page, worksitesPage.pageSize);
+  const departmentsPaged = paginationFromResult(departmentsQuery.data, departmentsPage.page, departmentsPage.pageSize);
+  const jobsPaged = paginationFromResult(jobPositionsQuery.data, jobsPage.page, jobsPage.pageSize);
+  const employeesPaged = paginationFromResult(employeesQuery.data, employeesPage.page, employeesPage.pageSize);
 
   const updateWorksite = useUpdateWorksite();
   const updateDepartment = useUpdateDepartment();
@@ -67,41 +86,41 @@ export function AdminOrganizationTab() {
 
   const worksiteLabelById = useMemo(() => {
     const m = new Map<string, string>();
-    for (const w of worksitesQuery.data ?? []) {
+    for (const w of worksitesLookup.data?.items ?? []) {
       m.set(w.id, w.name);
     }
     return m;
-  }, [worksitesQuery.data]);
+  }, [worksitesLookup.data?.items]);
 
   const departmentLabelById = useMemo(() => {
     const m = new Map<string, string>();
-    for (const d of departmentsQuery.data ?? []) {
+    for (const d of departmentsLookup.data?.items ?? []) {
       m.set(d.id, d.name);
     }
     return m;
-  }, [departmentsQuery.data]);
+  }, [departmentsLookup.data?.items]);
 
   const jobPositionLabelById = useMemo(() => {
     const m = new Map<string, string>();
-    for (const j of jobPositionsQuery.data ?? []) {
+    for (const j of jobPositionsLookup.data?.items ?? []) {
       m.set(j.id, j.name);
     }
     return m;
-  }, [jobPositionsQuery.data]);
+  }, [jobPositionsLookup.data?.items]);
 
   const filteredDepartmentsForEmployee = useMemo(() => {
     if (orgEdit?.kind !== "employee") return [];
-    return (departmentsQuery.data ?? []).filter((dep) =>
+    return (departmentsLookup.data?.items ?? []).filter((dep) =>
       orgEdit.worksiteId ? dep.worksiteId === orgEdit.worksiteId : true
     );
-  }, [departmentsQuery.data, orgEdit]);
+  }, [departmentsLookup.data?.items, orgEdit]);
 
   const filteredPositionsForEmployee = useMemo(() => {
     if (orgEdit?.kind !== "employee") return [];
-    return (jobPositionsQuery.data ?? []).filter((pos) =>
+    return (jobPositionsLookup.data?.items ?? []).filter((pos) =>
       orgEdit.departmentId ? pos.departmentId === orgEdit.departmentId : true
     );
-  }, [jobPositionsQuery.data, orgEdit]);
+  }, [jobPositionsLookup.data?.items, orgEdit]);
 
   const orgLoading =
     worksitesQuery.isLoading ||
@@ -271,7 +290,7 @@ export function AdminOrganizationTab() {
                     onChange={(e) => setOrgEdit({ ...orgEdit, worksiteId: e.target.value })}
                   >
                     <option value="">— (fără punct de lucru)</option>
-                    {(worksitesQuery.data ?? []).map((w) => (
+                    {(worksitesLookup.data?.items ?? []).map((w) => (
                       <option key={w.id} value={w.id}>
                         {w.name}
                       </option>
@@ -317,7 +336,7 @@ export function AdminOrganizationTab() {
                     onChange={(e) => setOrgEdit({ ...orgEdit, departmentId: e.target.value })}
                   >
                     <option value="">— (fără departament)</option>
-                    {(departmentsQuery.data ?? []).map((d) => (
+                    {(departmentsLookup.data?.items ?? []).map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.code} — {d.name}
                       </option>
@@ -397,7 +416,7 @@ export function AdminOrganizationTab() {
                     }
                   >
                     <option value="">—</option>
-                    {(worksitesQuery.data ?? []).map((w) => (
+                    {(worksitesLookup.data?.items ?? []).map((w) => (
                       <option key={w.id} value={w.id}>
                         {w.name}
                       </option>
@@ -500,7 +519,7 @@ export function AdminOrganizationTab() {
               </tr>
             </thead>
             <tbody>
-              {(worksitesQuery.data ?? []).map((w) => (
+              {worksitesPaged.items.map((w) => (
                 <tr
                   key={w.id}
                   className={orgEdit?.kind === "worksite" && orgEdit.id === w.id ? "selected" : undefined}
@@ -525,6 +544,15 @@ export function AdminOrganizationTab() {
             </tbody>
           </table>
         </div>
+        <PaginationBar
+          page={worksitesPaged.page}
+          pageSize={worksitesPaged.pageSize}
+          total={worksitesPaged.total}
+          totalPages={worksitesPaged.totalPages}
+          onPageChange={worksitesPage.setPage}
+          onPageSizeChange={worksitesPage.setPageSize}
+          disabled={worksitesQuery.isFetching}
+        />
       </section>
 
       <section className="card">
@@ -540,7 +568,7 @@ export function AdminOrganizationTab() {
               </tr>
             </thead>
             <tbody>
-              {(departmentsQuery.data ?? []).map((d) => (
+              {departmentsPaged.items.map((d) => (
                 <tr
                   key={d.id}
                   className={orgEdit?.kind === "department" && orgEdit.id === d.id ? "selected" : undefined}
@@ -565,6 +593,15 @@ export function AdminOrganizationTab() {
             </tbody>
           </table>
         </div>
+        <PaginationBar
+          page={departmentsPaged.page}
+          pageSize={departmentsPaged.pageSize}
+          total={departmentsPaged.total}
+          totalPages={departmentsPaged.totalPages}
+          onPageChange={departmentsPage.setPage}
+          onPageSizeChange={departmentsPage.setPageSize}
+          disabled={departmentsQuery.isFetching}
+        />
       </section>
 
       <section className="card">
@@ -581,7 +618,7 @@ export function AdminOrganizationTab() {
               </tr>
             </thead>
             <tbody>
-              {(jobPositionsQuery.data ?? []).map((j) => (
+              {jobsPaged.items.map((j) => (
                 <tr
                   key={j.id}
                   className={orgEdit?.kind === "job" && orgEdit.id === j.id ? "selected" : undefined}
@@ -611,6 +648,15 @@ export function AdminOrganizationTab() {
             </tbody>
           </table>
         </div>
+        <PaginationBar
+          page={jobsPaged.page}
+          pageSize={jobsPaged.pageSize}
+          total={jobsPaged.total}
+          totalPages={jobsPaged.totalPages}
+          onPageChange={jobsPage.setPage}
+          onPageSizeChange={jobsPage.setPageSize}
+          disabled={jobPositionsQuery.isFetching}
+        />
       </section>
 
       <section className="card">
@@ -628,7 +674,7 @@ export function AdminOrganizationTab() {
               </tr>
             </thead>
             <tbody>
-              {(employeesQuery.data ?? []).map((e: EmployeeItem) => (
+              {employeesPaged.items.map((e: EmployeeItem) => (
                 <tr
                   key={e.id}
                   className={orgEdit?.kind === "employee" && orgEdit.id === e.id ? "selected" : undefined}
@@ -660,6 +706,15 @@ export function AdminOrganizationTab() {
             </tbody>
           </table>
         </div>
+        <PaginationBar
+          page={employeesPaged.page}
+          pageSize={employeesPaged.pageSize}
+          total={employeesPaged.total}
+          totalPages={employeesPaged.totalPages}
+          onPageChange={employeesPage.setPage}
+          onPageSizeChange={employeesPage.setPageSize}
+          disabled={employeesQuery.isFetching}
+        />
       </section>
     </div>
   );

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Req, StreamableFile, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, Req, StreamableFile, UseGuards } from "@nestjs/common";
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { Request } from "express";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -29,8 +30,8 @@ export class SurveysController {
 
   @Get()
   @RequirePermissions(Permission.SURVEYS_VIEW)
-  list(@TenantId() tenantId: string) {
-    return this.surveys.list(tenantId);
+  list(@TenantId() tenantId: string, @Query() query: PaginationQueryDto) {
+    return this.surveys.list(tenantId, query);
   }
 
   @Get("responded-ids")

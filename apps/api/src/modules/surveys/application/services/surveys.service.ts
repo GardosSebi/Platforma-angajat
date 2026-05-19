@@ -4,6 +4,8 @@ import { Prisma, Survey, SurveyAudienceType, SurveyStatus } from "@prisma/client
 import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { PaginationQueryDto, resolvePagination } from "../../../../common/dto/pagination-query.dto";
+import { paginatedResult } from "../../../../common/pagination";
 import {
   CreatePublicLinkDto,
   CreateSurveyDto,
@@ -100,13 +102,20 @@ export class SurveysService {
     };
   }
 
-  async list(tenantId: string) {
-    const surveys = await this.prisma.survey.findMany({
-      where: { tenantId },
-      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-      take: 200
-    });
-    return { items: await this.withStats(tenantId, surveys) };
+  async list(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [surveys, total] = await Promise.all([
+      this.prisma.survey.findMany({
+        where,
+        orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.survey.count({ where })
+    ]);
+    const items = await this.withStats(tenantId, surveys);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async create(tenantId: string, actorId: string, dto: CreateSurveyDto) {

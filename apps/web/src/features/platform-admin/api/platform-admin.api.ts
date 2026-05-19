@@ -5,6 +5,8 @@ import type {
   UsageSummaryResponse,
   UserScopedRoleRow
 } from "@repo/shared-types";
+import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
+import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
 
 export interface PatchUserPayload {
@@ -49,8 +51,8 @@ export interface CreateStaticPagePayload {
 export type UpdateStaticPagePayload = Partial<CreateStaticPagePayload>;
 
 export const platformAdminApi = {
-  listUsers() {
-    return httpClient<TenantUserSummary[]>("/admin/users");
+  listUsers(params?: PaginationParams) {
+    return httpClient<PaginatedResult<TenantUserSummary>>(`/admin/users${buildPaginationQuery(params)}`);
   },
   createUser(payload: CreateTenantUserPayload) {
     return httpClient<TenantUserSummary>("/admin/users", {
@@ -76,8 +78,10 @@ export const platformAdminApi = {
   deleteScopedRole(id: string) {
     return httpClient<{ ok: boolean }>(`/admin/scoped-roles/${id}`, { method: "DELETE" });
   },
-  listStaticPages() {
-    return httpClient<EmployeeStaticPageRow[]>("/admin/static-pages");
+  listStaticPages(params?: PaginationParams) {
+    return httpClient<PaginatedResult<EmployeeStaticPageRow>>(
+      `/admin/static-pages${buildPaginationQuery(params)}`
+    );
   },
   createStaticPage(payload: CreateStaticPagePayload) {
     return httpClient<EmployeeStaticPageRow>("/admin/static-pages", {

@@ -22,17 +22,25 @@ export class SsmAccidentsService {
     private readonly auditLog: AuditLogService
   ) {}
 
-  async listCases(tenantId: string) {
-    const rows = await this.prisma.ssmAccidentCase.findMany({
-      where: { tenantId },
-      include: {
-        employee: { select: { fullName: true } },
-        tasks: { orderBy: { dueAt: "asc" } }
-      },
-      orderBy: [{ occurredAt: "desc" }]
-    });
-    return {
-      items: rows.map((row) => ({
+  async listCases(tenantId: string, query?: import("../../../../common/dto/pagination-query.dto").PaginationQueryDto) {
+    const { resolvePagination } = await import("../../../../common/dto/pagination-query.dto");
+    const { paginatedResult } = await import("../../../../common/pagination");
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [rows, total] = await Promise.all([
+      this.prisma.ssmAccidentCase.findMany({
+        where,
+        include: {
+          employee: { select: { fullName: true } },
+          tasks: { orderBy: { dueAt: "asc" } }
+        },
+        orderBy: [{ occurredAt: "desc" }],
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.ssmAccidentCase.count({ where })
+    ]);
+    const items = rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
         employeeName: row.employee?.fullName,
@@ -53,8 +61,8 @@ export class SsmAccidentsService {
           completedAt: task.completedAt,
           notes: task.notes
         }))
-      }))
-    };
+      }));
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createCase(tenantId: string, actorId: string, dto: CreateAccidentCaseDto) {

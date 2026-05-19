@@ -3,9 +3,14 @@ import type { CreateHelpdeskTicketRequest, HelpdeskTicketStatus } from "@repo/sh
 import { ticketingApi, TicketFilters } from "../api/ticketing.api";
 
 export function useTicketingKanban(filters: TicketFilters) {
+  const queryFilters: TicketFilters = {
+    ...filters,
+    page: filters.page ?? 1,
+    pageSize: filters.pageSize ?? 100
+  };
   return useQuery({
-    queryKey: ["ticketing", "kanban", filters],
-    queryFn: () => ticketingApi.kanban(filters)
+    queryKey: ["ticketing", "kanban", queryFilters],
+    queryFn: () => ticketingApi.kanban(queryFilters)
   });
 }
 

@@ -1,4 +1,6 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   type CreateSsmDocumentRequest,
   type SsmDocumentStatus
@@ -61,6 +63,7 @@ export function SsmDocumentsManager() {
     hasPermission(session?.roles, "ssm:documents:edit") && hasPermission(session?.roles, "files:upload");
   const canApproveDocuments = hasPermission(session?.roles, "ssm:documents:approve");
 
+  const docsPage = usePagination();
   const [filters, setFilters] = useState({
     q: "",
     type: "",
@@ -68,13 +71,19 @@ export function SsmDocumentsManager() {
     targetType: "",
     controlOnly: false
   });
+
+  useEffect(() => {
+    docsPage.resetPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset page when filters change
+  }, [filters.q, filters.type, filters.status, filters.targetType, filters.controlOnly]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>();
   const [createPayload, setCreatePayload] = useState<CreateSsmDocumentRequest>(EMPTY_DOC);
   const [createFile, setCreateFile] = useState<File | null>(null);
   const [versionFile, setVersionFile] = useState<File | null>(null);
   const [versionNote, setVersionNote] = useState("");
 
-  const docsQuery = useSsmDocuments(filters);
+  const docsQuery = useSsmDocuments({ ...filters, ...docsPage.params });
+  const docsPaged = paginationFromResult(docsQuery.data, docsPage.page, docsPage.pageSize);
   const historyQuery = useSsmDocumentHistory(selectedDocumentId);
   const controlQuery = useSsmControlFolders();
 
@@ -84,8 +93,8 @@ export function SsmDocumentsManager() {
   const archiveMutation = useArchiveSsmDocument();
 
   const selectedDoc = useMemo(
-    () => docsQuery.data?.items.find((item) => item.id === selectedDocumentId),
-    [docsQuery.data?.items, selectedDocumentId]
+    () => docsPaged.items.find((item) => item.id === selectedDocumentId),
+    [docsPaged.items, selectedDocumentId]
   );
 
   const onCreate = (event: FormEvent) => {
@@ -295,7 +304,7 @@ export function SsmDocumentsManager() {
           </div>
 
           <div className="ssm-documents-table">
-            {docsQuery.data?.items.map((doc) => (
+            {docsPaged.items.map((doc) => (
               <button
                 key={doc.id}
                 type="button"
@@ -309,7 +318,16 @@ export function SsmDocumentsManager() {
                 <span>{doc.status}</span>
               </button>
             ))}
-            {!docsQuery.data?.items.length ? <p className="field-hint">Nu există documente pentru filtrele curente.</p> : null}
+            {!docsPaged.items.length ? <p className="field-hint">Nu există documente pentru filtrele curente.</p> : null}
+            <PaginationBar
+              page={docsPaged.page}
+              pageSize={docsPaged.pageSize}
+              total={docsPaged.total}
+              totalPages={docsPaged.totalPages}
+              onPageChange={docsPage.setPage}
+              onPageSizeChange={docsPage.setPageSize}
+              disabled={docsQuery.isFetching}
+            />
           </div>
         </div>
       </div>

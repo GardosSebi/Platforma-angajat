@@ -10,6 +10,8 @@ import {
   MoveTicketDto,
   UpdateTicketDto
 } from "../../api/dto/ticketing.dto";
+import { paginatedResult } from "../../../../common/pagination";
+import { resolvePagination } from "../../../../common/dto/pagination-query.dto";
 
 const KANBAN_STATUSES = [
   HelpdeskTicketStatus.OPEN,
@@ -46,7 +48,11 @@ export class TicketingService {
   ) {}
 
   async kanban(tenantId: string, query: ListTicketsDto) {
-    const tickets = await this.findTickets(tenantId, query);
+    const { items: tickets } = await this.findTicketsPaginated(tenantId, {
+      ...query,
+      page: query.page ?? 1,
+      pageSize: query.pageSize ?? 100
+    });
     return {
       columns: KANBAN_STATUSES.map((status) => ({
         status,
@@ -56,7 +62,7 @@ export class TicketingService {
   }
 
   async listTickets(tenantId: string, query: ListTicketsDto) {
-    return { items: await this.findTickets(tenantId, query) };
+    return this.findTicketsPaginated(tenantId, query);
   }
 
   async createTicket(tenantId: string, actorId: string, dto: CreateTicketDto) {
@@ -223,7 +229,7 @@ export class TicketingService {
     };
   }
 
-  private async findTickets(tenantId: string, query: ListTicketsDto) {
+  private buildTicketWhere(tenantId: string, query: ListTicketsDto): Prisma.HelpdeskTicketWhereInput {
     const subjectTrim = clean(query.subject);
     const searchTrim = query.search?.trim();
     const assignedToNameTrim = clean(query.assignedToName);
@@ -255,13 +261,24 @@ export class TicketingService {
         : undefined,
       AND: textAnd.length ? textAnd : undefined
     };
-    const rows = await this.prisma.helpdeskTicket.findMany({
-      where,
-      include: { _count: { select: { comments: true } } },
-      orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
-      take: 300
-    });
-    return rows.map((ticket) => this.serializeTicket(ticket, ticket._count.comments));
+    return where;
+  }
+
+  private async findTicketsPaginated(tenantId: string, query: ListTicketsDto) {
+    const p = resolvePagination(query);
+    const where = this.buildTicketWhere(tenantId, query);
+    const [rows, total] = await Promise.all([
+      this.prisma.helpdeskTicket.findMany({
+        where,
+        include: { _count: { select: { comments: true } } },
+        orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.helpdeskTicket.count({ where })
+    ]);
+    const items = rows.map((ticket) => this.serializeTicket(ticket, ticket._count.comments));
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   private async assertTicket(tenantId: string, id: string) {

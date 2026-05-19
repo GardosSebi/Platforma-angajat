@@ -8,7 +8,7 @@ import {
   type HelpdeskTicketSource,
   type HelpdeskTicketStatus
 } from "@repo/shared-types/ticketing";
-import { useEmployees } from "../../master-data/hooks/useMasterData";
+import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 import { TicketFilters } from "../api/ticketing.api";
 import { useAssignTicket, useCreateTicket, useMoveTicket, useTicketingKanban, useTicketingStats } from "../hooks/useTicketing";
 
@@ -63,7 +63,7 @@ function priorityChip(priority: HelpdeskTicketPriority): string {
 }
 
 export function TicketingPage() {
-  const employeesQuery = useEmployees();
+  const employeesQuery = useEmployeeOptions();
   const [filters, setFilters] = useState<TicketFilters>({});
   const [ticketForm, setTicketForm] = useState<CreateHelpdeskTicketRequest>(EMPTY_TICKET);
   const [assignByTicketId, setAssignByTicketId] = useState<Record<string, { assignedToUserId: string; assignedToName: string }>>({});
@@ -83,7 +83,7 @@ export function TicketingPage() {
   const operatorOptions = useMemo(() => stats?.operators ?? [], [stats?.operators]);
 
   const onReporterChange = (employeeId: string) => {
-    const employee = employeesQuery.data?.find((item) => item.id === employeeId);
+    const employee = employeesQuery.data?.items.find((item) => item.id === employeeId);
     setTicketForm((prev) => ({
       ...prev,
       reporterEmployeeId: employeeId,
@@ -264,7 +264,7 @@ export function TicketingPage() {
                 <label htmlFor="ticket-reporter">Solicitant angajat</label>
                 <select id="ticket-reporter" value={ticketForm.reporterEmployeeId ?? ""} onChange={(event) => onReporterChange(event.target.value)}>
                   <option value="">Fără angajat</option>
-                  {(employeesQuery.data ?? []).map((employee) => (
+                  {(employeesQuery.data?.items ?? []).map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.fullName}
                     </option>
@@ -343,7 +343,7 @@ export function TicketingPage() {
                   onChange={(event) => setFilters((prev) => ({ ...prev, reporterEmployeeId: event.target.value || undefined }))}
                 >
                   <option value="">Toți</option>
-                  {(employeesQuery.data ?? []).map((employee) => (
+                  {(employeesQuery.data?.items ?? []).map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.fullName}
                     </option>

@@ -6,7 +6,14 @@ import type {
   CreateCommunicationAnnouncementRequest,
   CreateCommunicationTemplateRequest
 } from "@repo/shared-types/communications";
-import { useDepartments, useEmployees, useJobPositions, useWorksites } from "../../master-data/hooks/useMasterData";
+import {
+  useDepartmentsLookup,
+  useEmployeeOptions,
+  useJobPositionsLookup,
+  useWorksitesLookup
+} from "../../master-data/hooks/useMasterData";
+import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   useAnnouncements,
   useChatbotDashboard,
@@ -121,14 +128,15 @@ function statusChip(status: CommunicationAnnouncementItem["status"]): string {
 }
 
 export function ChatbotPage() {
+  const announcementsPage = usePagination();
   const dashboardQuery = useChatbotDashboard();
-  const announcementsQuery = useAnnouncements();
+  const announcementsQuery = useAnnouncements(announcementsPage.params);
   const templatesQuery = useCommunicationTemplates();
   const remindersQuery = useCommunicationReminders();
-  const worksitesQuery = useWorksites();
-  const departmentsQuery = useDepartments();
-  const jobPositionsQuery = useJobPositions();
-  const employeesQuery = useEmployees();
+  const worksitesLookup = useWorksitesLookup();
+  const departmentsLookup = useDepartmentsLookup();
+  const jobPositionsLookup = useJobPositionsLookup();
+  const employeesOptions = useEmployeeOptions();
 
   const createAnnouncement = useCreateAnnouncement();
   const publishAnnouncement = usePublishAnnouncement();
@@ -146,7 +154,12 @@ export function ChatbotPage() {
   const [openedAnnouncementId, setOpenedAnnouncementId] = useState("");
 
   const latest = dashboardQuery.data?.latestAnnouncements ?? [];
-  const announcements = announcementsQuery.data?.items ?? [];
+  const announcementsPaged = paginationFromResult(
+    announcementsQuery.data,
+    announcementsPage.page,
+    announcementsPage.pageSize
+  );
+  const announcements = announcementsPaged.items;
 
   const announcementById = useMemo(() => {
     const map = new Map<string, CommunicationAnnouncementItem>();
@@ -162,19 +175,25 @@ export function ChatbotPage() {
 
   const audienceOptions = useMemo(() => {
     if (announcementForm.audienceType === "WORKSITE") {
-      return (worksitesQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+      return (worksitesLookup.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
     }
     if (announcementForm.audienceType === "DEPARTMENT") {
-      return (departmentsQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+      return (departmentsLookup.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
     }
     if (announcementForm.audienceType === "JOB_POSITION") {
-      return (jobPositionsQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
+      return (jobPositionsLookup.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
     }
     if (announcementForm.audienceType === "EMPLOYEE") {
-      return (employeesQuery.data ?? []).map((item) => ({ id: item.id, label: `${item.fullName} - ${item.email}` }));
+      return (employeesOptions.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.fullName} - ${item.email}` }));
     }
     return [];
-  }, [announcementForm.audienceType, departmentsQuery.data, employeesQuery.data, jobPositionsQuery.data, worksitesQuery.data]);
+  }, [
+    announcementForm.audienceType,
+    departmentsLookup.data?.items,
+    employeesOptions.data?.items,
+    jobPositionsLookup.data?.items,
+    worksitesLookup.data?.items
+  ]);
 
   const selectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -440,7 +459,7 @@ export function ChatbotPage() {
                     onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, targetEmployeeIdsCsv: event.target.value }))}
                     placeholder="idAngajat1, idAngajat2"
                   />
-                  <p className="field-hint">Angajați disponibili: {(employeesQuery.data ?? []).slice(0, 4).map((item) => item.fullName).join(", ")}</p>
+                  <p className="field-hint">Angajați disponibili: {(employeesOptions.data?.items ?? []).slice(0, 4).map((item) => item.fullName).join(", ")}</p>
                 </div>
               ) : null}
               <div className="field">
@@ -500,7 +519,7 @@ export function ChatbotPage() {
                 <h3 className="card-title">Anunțuri și statistici citire</h3>
                 <p className="field-hint">Retragere, duplicare și publicare etapizată.</p>
               </div>
-              <span className="ssm-chip">{announcements.length} total</span>
+              <span className="ssm-chip">{announcementsPaged.total} total</span>
             </div>
             <div className="ssm-doc-items">
               {actionFeedback ? (
@@ -533,6 +552,15 @@ export function ChatbotPage() {
               ))}
               {!announcementsQuery.isLoading && announcements.length === 0 ? <p className="field-hint">Nu există anunțuri definite.</p> : null}
             </div>
+            <PaginationBar
+              page={announcementsPaged.page}
+              pageSize={announcementsPaged.pageSize}
+              total={announcementsPaged.total}
+              totalPages={announcementsPaged.totalPages}
+              onPageChange={announcementsPage.setPage}
+              onPageSizeChange={announcementsPage.setPageSize}
+              disabled={announcementsQuery.isFetching}
+            />
           </div>
 
           <div className="card ssm-doc-card">

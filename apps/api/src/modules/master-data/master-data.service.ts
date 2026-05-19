@@ -18,6 +18,8 @@ import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 import { UpdatePlacementDto } from "./dto/update-placement.dto";
 import { CreateEmployeeGroupDto } from "./dto/create-group.dto";
 import { CreateSsmResponsibleDto } from "./dto/create-ssm-responsible.dto";
+import { paginatedResult } from "../../common/pagination";
+import { resolvePagination, PaginationQueryDto } from "../../common/dto/pagination-query.dto";
 
 type SsmTrainingCategoryCode =
   | "INTRODUCTORY_GENERAL"
@@ -196,11 +198,19 @@ export class MasterDataService {
   }
 
   // --- Puncte de lucru ---
-  listWorksites(tenantId: string) {
-    return this.prisma.worksite.findMany({
-      where: { tenantId },
-      orderBy: { code: "asc" }
-    });
+  async listWorksites(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [items, total] = await Promise.all([
+      this.prisma.worksite.findMany({
+        where,
+        orderBy: { code: "asc" },
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.worksite.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createWorksite(tenantId: string, dto: CreateWorksiteDto) {
@@ -244,11 +254,19 @@ export class MasterDataService {
   }
 
   // --- Departamente ---
-  listDepartments(tenantId: string) {
-    return this.prisma.department.findMany({
-      where: { tenantId },
-      orderBy: { code: "asc" }
-    });
+  async listDepartments(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [items, total] = await Promise.all([
+      this.prisma.department.findMany({
+        where,
+        orderBy: { code: "asc" },
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.department.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createDepartment(tenantId: string, dto: CreateDepartmentDto) {
@@ -307,11 +325,19 @@ export class MasterDataService {
   }
 
   // --- Posturi (funcții) ---
-  listJobPositions(tenantId: string) {
-    return this.prisma.jobPosition.findMany({
-      where: { tenantId },
-      orderBy: { code: "asc" }
-    });
+  async listJobPositions(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [items, total] = await Promise.all([
+      this.prisma.jobPosition.findMany({
+        where,
+        orderBy: { code: "asc" },
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.jobPosition.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createJobPosition(tenantId: string, dto: CreateJobPositionDto) {
@@ -378,20 +404,53 @@ export class MasterDataService {
   }
 
   // --- Angajați ---
-  async listEmployees(tenantId: string, revealCnp: boolean) {
-    const rows = await this.prisma.employee.findMany({
-      where: { tenantId },
-      orderBy: { fullName: "asc" },
-      include: {
-        worksite: true,
-        department: true,
-        jobPosition: true
-      }
-    });
-    return rows.map((e) => ({
+  async listEmployees(tenantId: string, revealCnp: boolean, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [rows, total] = await Promise.all([
+      this.prisma.employee.findMany({
+        where,
+        orderBy: { fullName: "asc" },
+        skip: p.skip,
+        take: p.take,
+        include: {
+          worksite: true,
+          department: true,
+          jobPosition: true
+        }
+      }),
+      this.prisma.employee.count({ where })
+    ]);
+    const items = rows.map((e) => ({
       ...e,
       cnp: this.maskCnp(e.cnp, revealCnp)
     }));
+    return paginatedResult(items, total, p.page, p.pageSize);
+  }
+
+  /** Listă ușoară pentru selectoare (max 100). */
+  async listEmployeeOptions(tenantId: string, search?: string, limit = 100) {
+    const take = Math.min(100, Math.max(1, limit));
+    const term = search?.trim();
+    const where = {
+      tenantId,
+      active: true,
+      ...(term
+        ? {
+            OR: [
+              { fullName: { contains: term, mode: "insensitive" as const } },
+              { email: { contains: term, mode: "insensitive" as const } }
+            ]
+          }
+        : {})
+    };
+    const items = await this.prisma.employee.findMany({
+      where,
+      select: { id: true, fullName: true, email: true, active: true },
+      orderBy: { fullName: "asc" },
+      take
+    });
+    return { items };
   }
 
   async getEmployee(tenantId: string, id: string, revealCnp: boolean) {
@@ -596,12 +655,20 @@ export class MasterDataService {
   }
 
   // --- Grupuri angajați ---
-  listGroups(tenantId: string) {
-    return this.prisma.employeeGroup.findMany({
-      where: { tenantId },
-      include: { _count: { select: { members: true } } },
-      orderBy: { name: "asc" }
-    });
+  async listGroups(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [items, total] = await Promise.all([
+      this.prisma.employeeGroup.findMany({
+        where,
+        include: { _count: { select: { members: true } } },
+        orderBy: { name: "asc" },
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.employeeGroup.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createGroup(tenantId: string, dto: CreateEmployeeGroupDto) {
@@ -640,11 +707,19 @@ export class MasterDataService {
   }
 
   // --- Responsabili SSM ---
-  listSsmResponsibles(tenantId: string) {
-    return this.prisma.ssmResponsible.findMany({
-      where: { tenantId },
-      orderBy: { personName: "asc" }
-    });
+  async listSsmResponsibles(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [items, total] = await Promise.all([
+      this.prisma.ssmResponsible.findMany({
+        where,
+        orderBy: { personName: "asc" },
+        skip: p.skip,
+        take: p.take
+      }),
+      this.prisma.ssmResponsible.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
   }
 
   async createSsmResponsible(tenantId: string, dto: CreateSsmResponsibleDto) {

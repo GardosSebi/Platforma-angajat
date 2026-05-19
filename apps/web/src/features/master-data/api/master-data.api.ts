@@ -1,4 +1,8 @@
+import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
 import { httpClient } from "../../../shared/api/http-client";
+import { buildPaginationQuery } from "../../../shared/api/pagination-query";
+
+export type { PaginatedResult, PaginationParams };
 
 export interface WorksiteItem {
   id: string;
@@ -37,6 +41,9 @@ export interface EmployeeItem {
   hireDate?: string | null;
   leaveDate?: string | null;
   active: boolean;
+  worksite?: { id: string; code: string; name: string } | null;
+  department?: { id: string; code: string; name: string } | null;
+  jobPosition?: { id: string; code: string; name: string } | null;
 }
 
 export interface EmployeeGroupItem {
@@ -98,9 +105,16 @@ export interface UpdateEmployeePayload {
   active?: boolean;
 }
 
+export interface EmployeeOptionItem {
+  id: string;
+  fullName: string;
+  email: string;
+  active: boolean;
+}
+
 export const masterDataApi = {
-  listWorksites() {
-    return httpClient<WorksiteItem[]>("/master-data/worksites");
+  listWorksites(params?: PaginationParams) {
+    return httpClient<PaginatedResult<WorksiteItem>>(`/master-data/worksites${buildPaginationQuery(params)}`);
   },
   createWorksite(payload: CreateWorksitePayload) {
     return httpClient<WorksiteItem>("/master-data/worksites", {
@@ -114,8 +128,8 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
-  listDepartments() {
-    return httpClient<DepartmentItem[]>("/master-data/departments");
+  listDepartments(params?: PaginationParams) {
+    return httpClient<PaginatedResult<DepartmentItem>>(`/master-data/departments${buildPaginationQuery(params)}`);
   },
   createDepartment(payload: CreateDepartmentPayload) {
     return httpClient<DepartmentItem>("/master-data/departments", {
@@ -129,8 +143,8 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
-  listJobPositions() {
-    return httpClient<JobPositionItem[]>("/master-data/job-positions");
+  listJobPositions(params?: PaginationParams) {
+    return httpClient<PaginatedResult<JobPositionItem>>(`/master-data/job-positions${buildPaginationQuery(params)}`);
   },
   createJobPosition(payload: CreateJobPositionPayload) {
     return httpClient<JobPositionItem>("/master-data/job-positions", {
@@ -144,8 +158,17 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
-  listEmployees() {
-    return httpClient<EmployeeItem[]>("/master-data/employees");
+  listEmployees(params?: PaginationParams) {
+    return httpClient<PaginatedResult<EmployeeItem>>(`/master-data/employees${buildPaginationQuery(params)}`);
+  },
+  getEmployee(id: string) {
+    return httpClient<EmployeeItem>(`/master-data/employees/${encodeURIComponent(id)}`);
+  },
+  listEmployeeOptions(search?: string, limit = 100) {
+    const qs = new URLSearchParams();
+    if (search?.trim()) qs.set("search", search.trim());
+    qs.set("limit", String(limit));
+    return httpClient<{ items: EmployeeOptionItem[] }>(`/master-data/employees/options?${qs.toString()}`);
   },
   createEmployee(payload: CreateEmployeePayload) {
     return httpClient<EmployeeItem>("/master-data/employees", {
@@ -159,7 +182,7 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
-  listGroups() {
-    return httpClient<EmployeeGroupItem[]>("/master-data/groups");
+  listGroups(params?: PaginationParams) {
+    return httpClient<PaginatedResult<EmployeeGroupItem>>(`/master-data/groups${buildPaginationQuery(params)}`);
   }
 };

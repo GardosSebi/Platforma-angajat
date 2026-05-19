@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
+import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { TenantId } from "../../../common/decorators/tenant-id.decorator";
@@ -15,8 +16,8 @@ export class SsmResponsiblesController {
 
   @Get()
   @RequirePermissions(Permission.MASTER_DATA_READ)
-  list(@TenantId() tenantId: string) {
-    return this.masterData.listSsmResponsibles(tenantId);
+  list(@TenantId() tenantId: string, @Query() query: PaginationQueryDto) {
+    return this.masterData.listSsmResponsibles(tenantId, query);
   }
 
   @Post()

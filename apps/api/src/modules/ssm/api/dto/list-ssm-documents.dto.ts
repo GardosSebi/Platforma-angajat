@@ -1,7 +1,8 @@
 import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
 import { SsmDocumentStatus, SsmDocumentTargetType, SsmDocumentType } from "@prisma/client";
+import { PaginationQueryDto } from "../../../../common/dto/pagination-query.dto";
 
-export class ListSsmDocumentsDto {
+export class ListSsmDocumentsDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
