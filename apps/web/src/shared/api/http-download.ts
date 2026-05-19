@@ -1,4 +1,5 @@
-import { authStore } from "../auth/auth-store";
+import { authStore, isAccessTokenExpired } from "../auth/auth-store";
+import { handleSessionExpired } from "../auth/session-expired";
 import { getApiBaseUrl } from "./api-base";
 
 function fileNameFromDisposition(disposition: string | null): string | undefined {
@@ -17,6 +18,10 @@ function fileNameFromDisposition(disposition: string | null): string | undefined
 
 export async function downloadWithAuth(path: string, fallbackFilename: string) {
   const session = authStore.get();
+  if (session?.accessToken && isAccessTokenExpired(session.accessToken)) {
+    handleSessionExpired();
+    throw new Error("Sesiunea a expirat. Autentificați-vă din nou.");
+  }
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     headers: {
       ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
@@ -25,6 +30,9 @@ export async function downloadWithAuth(path: string, fallbackFilename: string) {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+    }
     let details = "";
     try {
       details = await response.text();

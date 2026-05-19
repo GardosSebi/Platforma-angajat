@@ -8,6 +8,7 @@ export interface SessionData {
 }
 
 const TOKEN_KEY = "access_token";
+export const SESSION_EXPIRED_FLAG_KEY = "auth_session_expired";
 const TENANT_KEY = "tenant_id";
 const USER_ID_KEY = "auth_user_id";
 const ROLES_KEY = "auth_roles";
@@ -18,11 +19,34 @@ function notifyAuthChanged() {
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
+/** `true` dacă JWT-ul are `exp` în trecut (skew 30s pentru ceasuri decalate). */
+export function isAccessTokenExpired(accessToken: string, skewMs = 30_000): boolean {
+  const expMs = getAccessTokenExpiryMs(accessToken);
+  if (expMs === null) return false;
+  return Date.now() >= expMs - skewMs;
+}
+
+export function getAccessTokenExpiryMs(accessToken: string): number | null {
+  try {
+    const segment = accessToken.split(".")[1];
+    if (!segment) return null;
+    const payload = JSON.parse(atob(segment.replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: unknown };
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 export const authStore = {
   get(): SessionData | null {
     const accessToken = localStorage.getItem(TOKEN_KEY);
     const tenantId = localStorage.getItem(TENANT_KEY);
     if (!accessToken || !tenantId) return null;
+    if (isAccessTokenExpired(accessToken)) {
+      sessionStorage.setItem(SESSION_EXPIRED_FLAG_KEY, "1");
+      this.clear();
+      return null;
+    }
     const rolesRaw = localStorage.getItem(ROLES_KEY);
     let roles: string[] | undefined;
     if (rolesRaw) {

@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { authStore } from "../shared/auth/auth-store";
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { authStore, SESSION_EXPIRED_FLAG_KEY } from "../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../shared/auth/clear-user-query-cache";
 import { canAccessTenantAdmin } from "../shared/auth/roles";
 import { useAuthSession } from "../shared/auth/use-auth-session";
@@ -15,6 +15,21 @@ const navBase = [
 export function AppLayout() {
   const session = useAuthSession();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  if (!session) {
+    const expired = sessionStorage.getItem(SESSION_EXPIRED_FLAG_KEY) === "1";
+    if (expired) {
+      sessionStorage.removeItem(SESSION_EXPIRED_FLAG_KEY);
+    }
+    const params = new URLSearchParams({
+      returnUrl: `${location.pathname}${location.search}`
+    });
+    if (expired) {
+      params.set("expired", "1");
+    }
+    return <Navigate to={`/login?${params.toString()}`} replace />;
+  }
 
   const nav = [
     navBase[0],

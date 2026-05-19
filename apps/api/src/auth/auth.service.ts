@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
+import { JWT_EXPIRES_IN } from "./jwt.constants";
 import { JwtPayload } from "./jwt.strategy";
 
 /** Narrow shape for login; matches Prisma `User` after `prisma generate`. */
@@ -66,7 +67,7 @@ export class AuthService {
 
     return {
       accessToken,
-      expiresIn: "365d",
+      expiresIn: JWT_EXPIRES_IN,
       user: {
         id: user.id,
         email: user.email,

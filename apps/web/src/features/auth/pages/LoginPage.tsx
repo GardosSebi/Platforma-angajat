@@ -16,6 +16,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnUrl = useMemo(() => safeReturnPath(searchParams.get("returnUrl")), [searchParams]);
+  const sessionExpired = searchParams.get("expired") === "1";
   const [tenantId, setTenantId] = useState("e01");
   const [email, setEmail] = useState("admin@company.local");
   const [password, setPassword] = useState("");
@@ -103,6 +104,11 @@ export function LoginPage() {
               </button>
             </div>
           </div>
+          {sessionExpired && !error ? (
+            <p className="feedback error" role="status">
+              Sesiunea a expirat (8 ore). Autentificați-vă din nou.
+            </p>
+          ) : null}
           {error ? (
             <p className="feedback error" role="alert">
               {error}

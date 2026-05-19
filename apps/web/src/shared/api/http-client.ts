@@ -1,11 +1,17 @@
-import { authStore } from "../auth/auth-store";
+import { authStore, isAccessTokenExpired } from "../auth/auth-store";
+import { handleSessionExpired } from "../auth/session-expired";
 import { getApiBaseUrl } from "./api-base";
-import { httpErrorFromResponse } from "./http-error";
+import { HttpError, httpErrorFromResponse } from "./http-error";
 
 export async function httpClient<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = authStore.get();
   const base = getApiBaseUrl();
   const isFormData = init.body instanceof FormData;
+
+  if (session?.accessToken && isAccessTokenExpired(session.accessToken)) {
+    handleSessionExpired();
+    throw new HttpError("Sesiunea a expirat. Autentificați-vă din nou.", 401);
+  }
 
   let response: Response;
   try {
@@ -27,6 +33,9 @@ export async function httpClient<T>(path: string, init: RequestInit = {}): Promi
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+    }
     throw await httpErrorFromResponse(response);
   }
 
