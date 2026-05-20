@@ -6,7 +6,7 @@ import type {
   SsmEipMovementType
 } from "@repo/shared-types/ssm";
 import { useEipNorms, useEipNotifications, useEipRegister, useEipStockGap, useEipTypes, useCreateEipType, useRegisterEipMovement, useUpsertEipNorm } from "../hooks/useSsmEip";
-import { useJobPositions } from "../../master-data/hooks/useMasterData";
+import { useEmployeeOptions, useJobPositionsLookup } from "../../master-data/hooks/useMasterData";
 
 const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
 const DEMO_JOB_POSITION_ID = import.meta.env.VITE_DEMO_JOB_POSITION_ID ?? "";
@@ -42,7 +42,10 @@ function mutationErrorMessage(error: unknown): string {
 
 export function SsmEipManager() {
   const typesQuery = useEipTypes();
-  const jobPositionsQuery = useJobPositions();
+  const jobPositionsQuery = useJobPositionsLookup();
+  const employeeOptionsQuery = useEmployeeOptions();
+  const jobPositions = jobPositionsQuery.data?.items ?? [];
+  const employeeOptions = employeeOptionsQuery.data?.items ?? [];
   const normsQuery = useEipNorms();
   const registerQuery = useEipRegister();
   const notificationsQuery = useEipNotifications();
@@ -76,11 +79,20 @@ export function SsmEipManager() {
     registerMovement.mutate(movementForm);
   };
 
+  const loadError =
+    typesQuery.error ?? jobPositionsQuery.error ?? normsQuery.error ?? registerQuery.error;
+  const loadErrorMessage = loadError instanceof Error ? loadError.message : null;
+
   return (
     <section className="ssm-documents" aria-labelledby="eip-title">
       <h2 id="eip-title" className="card-title">
         EIP (3.5)
       </h2>
+      {loadErrorMessage ? (
+        <p className="feedback error" role="alert">
+          {loadErrorMessage}
+        </p>
+      ) : null}
 
       <div className="ssm-doc-grid">
         <form className="card form-stack ssm-doc-card" onSubmit={onTypeSubmit}>
@@ -128,7 +140,7 @@ export function SsmEipManager() {
               onChange={(e) => setNormForm((p) => ({ ...p, jobPositionId: e.target.value }))}
             >
               <option value="">Selecteaza postul</option>
-              {(jobPositionsQuery.data ?? []).map((job) => (
+              {jobPositions.map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.code} - {job.name}
                 </option>
@@ -189,12 +201,19 @@ export function SsmEipManager() {
         <form className="card form-stack ssm-doc-card" onSubmit={onMovementSubmit}>
           <h3 className="card-title">Distribuții / returnări / casări + semnătură</h3>
           <div className="field">
-            <label htmlFor="mov-emp">Employee ID</label>
-            <input
+            <label htmlFor="mov-emp">Angajat</label>
+            <select
               id="mov-emp"
               value={movementForm.employeeId}
               onChange={(e) => setMovementForm((p) => ({ ...p, employeeId: e.target.value }))}
-            />
+            >
+              <option value="">Selectează angajat</option>
+              {employeeOptions.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.fullName} ({emp.email})
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label htmlFor="mov-type">Tip EIP</label>
