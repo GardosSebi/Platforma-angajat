@@ -1,4 +1,5 @@
 import type { PaginatedResult } from "@repo/shared-types/pagination";
+import { PAGE_SIZE_OPTIONS } from "../preferences/page-size-preference";
 
 type PaginationBarProps = {
   page: number;
@@ -9,8 +10,6 @@ type PaginationBarProps = {
   onPageSizeChange?: (pageSize: number) => void;
   disabled?: boolean;
 };
-
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 export function PaginationBar({
   page,
