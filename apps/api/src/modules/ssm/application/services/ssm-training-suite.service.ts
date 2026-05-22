@@ -127,6 +127,8 @@ const LEGAL_MIN_HOURS_BY_CATEGORY: Partial<Record<SsmTrainingCategoryCode, numbe
   SUPPLEMENTARY: 8
 };
 
+const DEFAULT_REMINDER_DAYS = [30, 15, 7];
+
 @Injectable()
 export class SsmTrainingSuiteService {
   constructor(
@@ -358,7 +360,54 @@ export class SsmTrainingSuiteService {
       payload: { score: dto.score, passed: dto.passed }
     });
 
+    if (dto.passed) {
+      await this.scheduleNextRecurrenceIfNeeded(tenantId, actorId, plan.id);
+    }
+
     return { trainingPlanId: plan.id, passed: dto.passed, score: dto.score };
+  }
+
+  private async scheduleNextRecurrenceIfNeeded(tenantId: string, actorId: string, completedPlanId: string) {
+    const completed = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: completedPlanId, tenantId, status: SsmTrainingPlanStatus.COMPLETED },
+      include: { trainingType: { select: { id: true, recurrenceDays: true, name: true } } }
+    });
+    if (!completed?.completedAt || !completed.trainingType.recurrenceDays) {
+      return;
+    }
+    const existingOpen = await this.prisma.ssmTrainingPlan.findFirst({
+      where: {
+        tenantId,
+        employeeId: completed.employeeId,
+        trainingTypeId: completed.trainingTypeId,
+        status: { in: [SsmTrainingPlanStatus.PENDING, SsmTrainingPlanStatus.OVERDUE] }
+      }
+    });
+    if (existingOpen) {
+      return;
+    }
+    const scheduledAt = new Date(completed.completedAt);
+    const dueAt = new Date(scheduledAt.getTime() + completed.trainingType.recurrenceDays * 24 * 60 * 60 * 1000);
+    await this.prisma.ssmTrainingPlan.create({
+      data: {
+        tenantId,
+        employeeId: completed.employeeId,
+        trainingTypeId: completed.trainingTypeId,
+        scheduledAt,
+        dueAt,
+        materialTitle: `Recurență: ${completed.trainingType.name}`,
+        createdBy: actorId
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "TRAINING_RECURRENCE_SCHEDULED",
+      entityType: "SsmTrainingPlan",
+      entityId: completedPlanId,
+      payload: { nextDueAt: dueAt.toISOString() }
+    });
   }
 
   async signTrainingPlan(
@@ -462,7 +511,7 @@ export class SsmTrainingSuiteService {
         where,
         include: {
           employee: { select: { fullName: true } },
-          trainingType: { select: { code: true, name: true } }
+          trainingType: { select: { code: true, name: true, category: true } }
         },
         orderBy: [{ dueAt: "asc" }],
         skip: p.skip,
@@ -476,10 +525,14 @@ export class SsmTrainingSuiteService {
         trainingTypeId: row.trainingTypeId,
         trainingTypeCode: row.trainingType.code,
         trainingTypeName: row.trainingType.name,
+        trainingTypeCategory: row.trainingType.category,
         employeeName: row.employee.fullName,
         scheduledAt: row.scheduledAt,
         dueAt: row.dueAt,
         completedAt: row.completedAt,
+        materialTitle: row.materialTitle,
+        materialUrl: row.materialUrl,
+        materialCompletedAt: row.materialCompletedAt,
         score: row.score,
         durationMinutes: row.durationMinutes,
         status: row.status,
@@ -498,20 +551,27 @@ export class SsmTrainingSuiteService {
       },
       include: {
         employee: { select: { fullName: true, email: true } },
-        trainingType: { select: { name: true } }
+        trainingType: { select: { name: true, reminderDays: true } }
       }
     });
     const now = new Date();
     return rows
-      .map((row) => ({
-        trainingPlanId: row.id,
-        employeeName: row.employee.fullName,
-        employeeEmail: row.employee.email,
-        trainingTypeName: row.trainingType.name,
-        dueAt: row.dueAt,
-        daysUntilDue: daysDiff(now, row.dueAt)
-      }))
-      .filter((item) => [30, 15, 7].includes(item.daysUntilDue) || item.daysUntilDue < 0)
+      .map((row) => {
+        const daysUntilDue = daysDiff(now, row.dueAt);
+        const reminderDays = row.trainingType.reminderDays?.length
+          ? row.trainingType.reminderDays
+          : DEFAULT_REMINDER_DAYS;
+        return {
+          trainingPlanId: row.id,
+          employeeName: row.employee.fullName,
+          employeeEmail: row.employee.email,
+          trainingTypeName: row.trainingType.name,
+          dueAt: row.dueAt,
+          daysUntilDue,
+          reminderDays
+        };
+      })
+      .filter((item) => item.reminderDays.includes(item.daysUntilDue) || item.daysUntilDue < 0)
       .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
   }
 
@@ -598,7 +658,9 @@ export class SsmTrainingSuiteService {
         title: `${plan.trainingType.name} - ${plan.employee.fullName}`,
         scheduledAt: plan.scheduledAt,
         dueAt: plan.dueAt,
-        status: plan.status
+        status: plan.status,
+        employeeName: plan.employee.fullName,
+        trainingTypeName: plan.trainingType.name
       }))
     };
   }
@@ -607,7 +669,11 @@ export class SsmTrainingSuiteService {
     await this.syncOverdue(tenantId);
     const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
     if (scope.mode === "empty") {
-      return { items: [] };
+      return {
+        items: [],
+        byDepartment: [],
+        summary: { employeeCount: 0, compliantPercent: 100, blockedAdmissionCount: 0 }
+      };
     }
     const employees = await this.prisma.employee.findMany({
       where: {
@@ -618,6 +684,8 @@ export class SsmTrainingSuiteService {
       select: {
         id: true,
         fullName: true,
+        departmentId: true,
+        department: { select: { name: true } },
         ssmTrainingPlans: {
           select: {
             status: true
@@ -637,6 +705,8 @@ export class SsmTrainingSuiteService {
       return {
         employeeId: employee.id,
         employeeName: employee.fullName,
+        departmentId: employee.departmentId,
+        departmentName: employee.department?.name ?? "Fără departament",
         completed,
         pending,
         overdue,
@@ -645,7 +715,58 @@ export class SsmTrainingSuiteService {
       };
     });
 
-    return { items };
+    const departmentMap = new Map<
+      string,
+      { departmentId: string | null; departmentName: string; employees: typeof items }
+    >();
+    for (const item of items) {
+      const key = item.departmentId ?? "__none__";
+      const existing = departmentMap.get(key);
+      if (existing) {
+        existing.employees.push(item);
+      } else {
+        departmentMap.set(key, {
+          departmentId: item.departmentId,
+          departmentName: item.departmentName,
+          employees: [item]
+        });
+      }
+    }
+
+    const byDepartment = Array.from(departmentMap.values()).map((group) => {
+      const employeeCount = group.employees.length;
+      const compliantCount = group.employees.filter((e) => e.complianceScore >= 100 && !e.blockedAdmission).length;
+      const blockedCount = group.employees.filter((e) => e.blockedAdmission).length;
+      const complianceScore = employeeCount
+        ? Math.round(
+            group.employees.reduce((sum, e) => sum + e.complianceScore, 0) / employeeCount
+          )
+        : 100;
+      return {
+        departmentId: group.departmentId,
+        departmentName: group.departmentName,
+        employeeCount,
+        compliantCount,
+        complianceScore,
+        blockedCount
+      };
+    });
+
+    const employeeCount = items.length;
+    const compliantPercent = employeeCount
+      ? Math.round((items.filter((e) => !e.blockedAdmission && e.complianceScore >= 100).length / employeeCount) * 100)
+      : 100;
+    const blockedAdmissionCount = items.filter((e) => e.blockedAdmission).length;
+
+    return {
+      items: items.map(({ departmentId: _d, departmentName: _n, ...rest }) => rest),
+      byDepartment,
+      summary: {
+        employeeCount,
+        compliantPercent,
+        blockedAdmissionCount
+      }
+    };
   }
 
   async digitalFile(tenantId: string, employeeId: string, viewer: JwtPayload) {

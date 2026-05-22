@@ -108,7 +108,28 @@ export function useSignPlansBatch() {
 }
 
 export function useDispatchTrainingReminders() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => ssmApi.dispatchTrainingReminders()
+    mutationFn: () => ssmApi.dispatchTrainingReminders(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "reminders"] });
+    }
+  });
+}
+
+export function useTrainingCalendar() {
+  return useQuery({
+    queryKey: ["ssm", "training-suite", "calendar"],
+    queryFn: ssmApi.listTrainingCalendar
+  });
+}
+
+export function useStartTest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (trainingPlanId: string) => ssmApi.startTest(trainingPlanId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
+    }
   });
 }

@@ -513,6 +513,13 @@ export class MasterDataService {
         "WORKPLACE",
         "Flux automat admitere la locul de muncă"
       );
+      await this.autoAssignTrainingPlan(
+        tenantId,
+        actorUserId,
+        created.id,
+        "EMERGENCY_PSI",
+        "Flux automat instruire PSI la angajare"
+      );
       return created;
     } catch {
       throw new ConflictException("Adresa de e-mail a angajatului există deja pentru acest tenant.");

@@ -5,8 +5,14 @@ import type {
   CompleteSsmTestRequest,
   CreateSsmTrainingPlanRequest,
   CreateSsmTrainingTypeRequest,
-  SsmTrainingCategory
+  SsmTrainingCategory,
+  SsmTrainingPlanItem
 } from "@repo/shared-types/ssm";
+import {
+  SSM_TRAINING_CATEGORY_META,
+  trainingCategoryLabel,
+  trainingCategoryMeta
+} from "@repo/shared-types/ssm-training-catalog";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
@@ -18,6 +24,8 @@ import {
   useMaterialComplete,
   useSignPlan,
   useSignPlansBatch,
+  useStartTest,
+  useTrainingCalendar,
   useTrainingCompliance,
   useTrainingPlans,
   useTrainingReminders,
@@ -26,15 +34,6 @@ import {
 import { ssmApi } from "../api/ssm.api";
 
 const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
-
-const DEFAULT_TYPE: CreateSsmTrainingTypeRequest = {
-  code: "GEN-SSM",
-  name: "Instruire generala SSM",
-  category: "PERIODIC",
-  legalMinDurationHours: 8,
-  recurrenceDays: 365,
-  reminderDays: [30, 15, 7]
-};
 
 const TRAINING_CATEGORIES: SsmTrainingCategory[] = [
   "INTRODUCTORY_GENERAL",
@@ -49,12 +48,33 @@ const defaultPlan = (trainingTypeId = ""): CreateSsmTrainingPlanRequest => ({
   trainingTypeId,
   scheduledAt: new Date().toISOString(),
   dueAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-  materialTitle: "Material introductiv",
-  materialUrl: "https://intranet.local/ssm/material-intro"
+  materialTitle: "Material instruire",
+  materialUrl: ""
 });
 
 function mutationErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "A apărut o eroare neașteptată.";
+}
+
+function planStatusLabel(status: SsmTrainingPlanItem["status"]): string {
+  switch (status) {
+    case "PENDING":
+      return "În curs";
+    case "COMPLETED":
+      return "Finalizată";
+    case "OVERDUE":
+      return "Expirată";
+    case "BLOCKED":
+      return "Blocată";
+    default:
+      return status;
+  }
+}
+
+function planStatusClass(status: SsmTrainingPlanItem["status"]): string {
+  if (status === "COMPLETED") return "ssm-chip good";
+  if (status === "OVERDUE" || status === "BLOCKED") return "ssm-chip bad";
+  return "ssm-chip warn";
 }
 
 export function SsmTrainingSuiteManager() {
@@ -68,43 +88,87 @@ export function SsmTrainingSuiteManager() {
   const typesQuery = useTrainingTypes();
   const plansQuery = useTrainingPlans(plansPage.params);
   const plansPaged = paginationFromResult(plansQuery.data, plansPage.page, plansPage.pageSize);
+  const calendarQuery = useTrainingCalendar();
   const remindersQuery = useTrainingReminders();
   const complianceQuery = useTrainingCompliance();
 
   const createType = useCreateTrainingType();
   const createPlan = useCreateTrainingPlan();
   const completeMaterial = useMaterialComplete();
+  const startTest = useStartTest();
   const completeTest = useCompleteTest();
   const signPlan = useSignPlan();
   const signBatch = useSignPlansBatch();
   const dispatchReminders = useDispatchTrainingReminders();
 
-  const [typeForm, setTypeForm] = useState<CreateSsmTrainingTypeRequest>(DEFAULT_TYPE);
+  const defaultTypeMeta = trainingCategoryMeta("PERIODIC");
+  const [typeForm, setTypeForm] = useState<CreateSsmTrainingTypeRequest>({
+    code: "GEN-SSM",
+    name: "Instruire generală SSM",
+    category: "PERIODIC",
+    legalMinDurationHours: defaultTypeMeta?.defaultLegalHours,
+    recurrenceDays: defaultTypeMeta?.defaultRecurrenceDays ?? 365,
+    reminderDays: defaultTypeMeta?.defaultReminderDays ?? [30, 15, 7]
+  });
   const [planForm, setPlanForm] = useState<CreateSsmTrainingPlanRequest>(defaultPlan());
-
-  useEffect(() => {
-    setDigitalEmployeeId(resolvedEmployeeId);
-    setPlanForm((prev) => ({ ...prev, employeeId: resolvedEmployeeId }));
-  }, [resolvedEmployeeId]);
+  const [activePlanId, setActivePlanId] = useState("");
+  const [testStartedAt, setTestStartedAt] = useState<number | null>(null);
   const [testForm, setTestForm] = useState<CompleteSsmTestRequest>({
     trainingPlanId: "",
     score: 80,
     durationSeconds: 900,
     passed: true
   });
-  const [signature, setSignature] = useState("Semnatura olografa - canvas MVP");
+  const [signature, setSignature] = useState("Semnătură olografă");
   const [digitalEmployeeId, setDigitalEmployeeId] = useState(resolvedEmployeeId);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [dossierData, setDossierData] = useState<{
     trainings: Array<{ id: string; type: string; status: string; score?: number | null }>;
     documents: Array<{ id: string; title: string; type: string; fileName?: string }>;
-    riskExposureSheets?: Array<{ id: string; title: string; fileName?: string }>;
-    eipDecisionCopies?: Array<{ id: string; title: string; fileName?: string }>;
-    medicalControls?: Array<{ id: string; controlType: string; result?: string | null }>;
   } | null>(null);
 
   const planOptions = plansPaged.items;
-  const bestPlanId = useMemo(() => planOptions[0]?.id ?? "", [planOptions]);
+  const activePlan = planOptions.find((p) => p.id === activePlanId) ?? planOptions[0];
+  const compliance = complianceQuery.data;
+
+  useEffect(() => {
+    setDigitalEmployeeId(resolvedEmployeeId);
+    setPlanForm((prev) => ({ ...prev, employeeId: resolvedEmployeeId }));
+  }, [resolvedEmployeeId]);
+
+  useEffect(() => {
+    if (!activePlanId && planOptions[0]?.id) {
+      setActivePlanId(planOptions[0].id);
+    }
+  }, [activePlanId, planOptions]);
+
+  useEffect(() => {
+    if (activePlan?.id) {
+      setTestForm((prev) => ({ ...prev, trainingPlanId: activePlan.id }));
+    }
+  }, [activePlan?.id]);
+
+  const calendarBuckets = useMemo(() => {
+    const events = calendarQuery.data?.events ?? [];
+    const now = Date.now();
+    return {
+      upcoming: events.filter((e) => e.status === "PENDING" && new Date(e.dueAt).getTime() >= now),
+      overdue: events.filter((e) => e.status === "OVERDUE"),
+      inProgress: events.filter((e) => e.status === "PENDING"),
+      completed: events.filter((e) => e.status === "COMPLETED").slice(0, 8)
+    };
+  }, [calendarQuery.data?.events]);
+
+  const onCategoryChange = (category: SsmTrainingCategory) => {
+    const meta = trainingCategoryMeta(category);
+    setTypeForm((prev) => ({
+      ...prev,
+      category,
+      legalMinDurationHours: meta?.defaultLegalHours ?? prev.legalMinDurationHours,
+      recurrenceDays: meta?.defaultRecurrenceDays ?? prev.recurrenceDays,
+      reminderDays: meta?.defaultReminderDays ?? prev.reminderDays
+    }));
+  };
 
   const onCreateType = (event: FormEvent) => {
     event.preventDefault();
@@ -120,339 +184,484 @@ export function SsmTrainingSuiteManager() {
     createPlan.mutate(planForm);
   };
 
+  const onStartElearning = () => {
+    if (!activePlan?.id) return;
+    startTest.mutate(activePlan.id, {
+      onSuccess: () => setTestStartedAt(Date.now())
+    });
+  };
+
   const onCompleteTest = (event: FormEvent) => {
     event.preventDefault();
-    completeTest.mutate(testForm);
+    const durationSeconds = testStartedAt
+      ? Math.max(60, Math.round((Date.now() - testStartedAt) / 1000))
+      : testForm.durationSeconds;
+    completeTest.mutate({ ...testForm, durationSeconds });
   };
 
   return (
     <section className="ssm-documents" aria-labelledby="training-suite-title">
-      <h2 id="training-suite-title" className="card-title">
-        Instruire + teste + fișe (3.3-3.4)
-      </h2>
+      <div className="ssm-module-hero">
+        <div className="card ssm-hero-card">
+          <p className="ssm-card-eyebrow">Partea H · 3.3–3.4</p>
+          <h2 id="training-suite-title" className="card-title">
+            Modul instruire SSM / PSI
+          </h2>
+          <p className="ssm-hero-lead">
+            Planificare, e-learning, teste, semnături olografe, fișe individuale și raport conformitate — conform fluxului
+            legal de instruire.
+          </p>
+        </div>
+        <div className="ssm-summary-strip">
+          <div className="ssm-stat-card">
+            <span>Conformitate</span>
+            <strong>{compliance?.summary.compliantPercent ?? "-"}%</strong>
+          </div>
+          <div className="ssm-stat-card">
+            <span>Scadențe / remindere</span>
+            <strong>{remindersQuery.data?.reminders.length ?? "-"}</strong>
+          </div>
+          <div className="ssm-stat-card">
+            <span>Blocare admitere</span>
+            <strong>{compliance?.summary.blockedAdmissionCount ?? "-"}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="card ssm-doc-card ssm-training-legal-card">
+        <h3 className="card-title">3.3.1 Tipuri de instruire gestionate</h3>
+        <div className="ssm-training-legal-table" role="table" aria-label="Tipuri instruire SSM">
+          <div className="ssm-training-legal-row head" role="row">
+            <span role="columnheader">Tip instruire</span>
+            <span role="columnheader">Când se efectuează</span>
+            <span role="columnheader">Durată minimă legală</span>
+            <span role="columnheader">În catalog</span>
+          </div>
+          {SSM_TRAINING_CATEGORY_META.map((meta) => {
+            const catalogType = (typesQuery.data ?? []).find((t) => t.category === meta.category);
+            return (
+              <div key={meta.category} className="ssm-training-legal-row" role="row">
+                <span role="cell">
+                  <strong>{meta.labelRo}</strong>
+                </span>
+                <span role="cell">{meta.whenPerformed}</span>
+                <span role="cell">{meta.legalMinDuration}</span>
+                <span role="cell">{catalogType ? `${catalogType.code}` : "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="field-hint">
+          La angajare nouă se declanșează automat introductiv-generală, la locul de muncă și PSI. La schimbare post/loc se
+          alocă instruire suplimentară.
+        </p>
+      </div>
 
       {showCatalogForms ? (
         <div className="ssm-doc-grid">
           <form className="card form-stack ssm-doc-card" onSubmit={onCreateType}>
-          <h3 className="card-title">Catalog instruiri + recurență</h3>
-          <div className="field">
-            <label htmlFor="training-code">Cod tip instruire</label>
-            <input
-              id="training-code"
-              value={typeForm.code}
-              onChange={(event) => setTypeForm((prev) => ({ ...prev, code: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="training-name">Denumire</label>
-            <input
-              id="training-name"
-              value={typeForm.name}
-              onChange={(event) => setTypeForm((prev) => ({ ...prev, name: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="training-rec">Recurență (zile)</label>
-            <input
-              id="training-rec"
-              type="number"
-              value={typeForm.recurrenceDays ?? 365}
-              onChange={(event) =>
-                setTypeForm((prev) => ({ ...prev, recurrenceDays: Number(event.target.value || 365) }))
-              }
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="training-category">Categorie legală</label>
-            <select
-              id="training-category"
-              value={typeForm.category ?? "PERIODIC"}
-              onChange={(event) => setTypeForm((prev) => ({ ...prev, category: event.target.value as SsmTrainingCategory }))}
-            >
-              {TRAINING_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="training-legal-hours">Durată minimă legală (ore)</label>
-            <input
-              id="training-legal-hours"
-              type="number"
-              value={typeForm.legalMinDurationHours ?? 8}
-              onChange={(event) =>
-                setTypeForm((prev) => ({ ...prev, legalMinDurationHours: Number(event.target.value || 8) }))
-              }
-            />
-          </div>
-          <button className="btn-primary" type="submit" disabled={createType.isPending}>
-            {createType.isPending ? "Se creează..." : "Adaugă tip instruire"}
-          </button>
-          {createType.isSuccess ? (
-            <p className="feedback success" role="status">
-              Tipul de instruire a fost adăugat.
-            </p>
-          ) : null}
-          {createType.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(createType.error)}
-            </p>
-          ) : null}
-          <p className="field-hint">Tipuri existente: {(typesQuery.data ?? []).map((t) => t.code).join(", ") || "-"}</p>
-        </form>
+            <h3 className="card-title">Catalog tipuri instruire</h3>
+            <div className="field">
+              <label htmlFor="training-code">Cod</label>
+              <input
+                id="training-code"
+                value={typeForm.code}
+                onChange={(e) => setTypeForm((p) => ({ ...p, code: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="training-name">Denumire</label>
+              <input
+                id="training-name"
+                value={typeForm.name}
+                onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="training-category">Categorie legală</label>
+              <select
+                id="training-category"
+                value={typeForm.category ?? "PERIODIC"}
+                onChange={(e) => onCategoryChange(e.target.value as SsmTrainingCategory)}
+              >
+                {TRAINING_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {trainingCategoryLabel(category)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="training-legal-hours">Durată minimă legală (ore)</label>
+              <input
+                id="training-legal-hours"
+                type="number"
+                min={0}
+                value={typeForm.legalMinDurationHours ?? ""}
+                onChange={(e) =>
+                  setTypeForm((p) => ({
+                    ...p,
+                    legalMinDurationHours: e.target.value ? Number(e.target.value) : undefined
+                  }))
+                }
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="training-rec">Recurență (zile)</label>
+              <input
+                id="training-rec"
+                type="number"
+                value={typeForm.recurrenceDays ?? ""}
+                onChange={(e) =>
+                  setTypeForm((p) => ({ ...p, recurrenceDays: e.target.value ? Number(e.target.value) : undefined }))
+                }
+              />
+            </div>
+            <button className="btn-primary" type="submit" disabled={createType.isPending}>
+              {createType.isPending ? "Se creează..." : "Adaugă tip instruire"}
+            </button>
+          </form>
 
-        <form className="card form-stack ssm-doc-card" onSubmit={onCreatePlan}>
-          <h3 className="card-title">Planificare + calendar + reminder</h3>
-          <div className="field">
-            <label htmlFor="plan-employee">Employee ID</label>
-            <input
-              id="plan-employee"
-              value={planForm.employeeId}
-              onChange={(event) => setPlanForm((prev) => ({ ...prev, employeeId: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="plan-type">Tip instruire</label>
-            <select
-              id="plan-type"
-              value={planForm.trainingTypeId}
-              onChange={(event) => setPlanForm((prev) => ({ ...prev, trainingTypeId: event.target.value }))}
+          <form className="card form-stack ssm-doc-card" onSubmit={onCreatePlan}>
+            <h3 className="card-title">3.3.3 Planificare</h3>
+            <div className="field">
+              <label htmlFor="plan-employee">Angajat (ID)</label>
+              <input
+                id="plan-employee"
+                value={planForm.employeeId}
+                onChange={(e) => setPlanForm((p) => ({ ...p, employeeId: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="plan-type">Tip instruire</label>
+              <select
+                id="plan-type"
+                value={planForm.trainingTypeId}
+                onChange={(e) => setPlanForm((p) => ({ ...p, trainingTypeId: e.target.value }))}
+              >
+                <option value="">Selectează tip</option>
+                {(typesQuery.data ?? []).map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.code} — {type.name} ({trainingCategoryLabel(type.category)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="plan-material-title">Titlu material (PDF / video)</label>
+              <input
+                id="plan-material-title"
+                value={planForm.materialTitle ?? ""}
+                onChange={(e) => setPlanForm((p) => ({ ...p, materialTitle: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="plan-material-url">URL material</label>
+              <input
+                id="plan-material-url"
+                type="url"
+                value={planForm.materialUrl ?? ""}
+                onChange={(e) => setPlanForm((p) => ({ ...p, materialUrl: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="plan-sched">Planificat la</label>
+              <input
+                id="plan-sched"
+                type="datetime-local"
+                value={planForm.scheduledAt.slice(0, 16)}
+                onChange={(e) =>
+                  setPlanForm((p) => ({ ...p, scheduledAt: new Date(e.target.value).toISOString() }))
+                }
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="plan-due">Scadență</label>
+              <input
+                id="plan-due"
+                type="datetime-local"
+                value={planForm.dueAt.slice(0, 16)}
+                onChange={(e) => setPlanForm((p) => ({ ...p, dueAt: new Date(e.target.value).toISOString() }))}
+              />
+            </div>
+            <button className="btn-primary" type="submit" disabled={createPlan.isPending || !planForm.trainingTypeId}>
+              {createPlan.isPending ? "Se planifică..." : "Planifică instruire"}
+            </button>
+            <p className="field-hint">Notificare email la alocare; remindere 30/15/7 zile (configurabile per tip).</p>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => dispatchReminders.mutate()}
+              disabled={dispatchReminders.isPending}
             >
-              <option value="">Selectează tip</option>
-              {(typesQuery.data ?? []).map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.code} - {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="plan-sched">Data planificată (ISO)</label>
-            <input
-              id="plan-sched"
-              value={planForm.scheduledAt}
-              onChange={(event) => setPlanForm((prev) => ({ ...prev, scheduledAt: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="plan-due">Scadență (ISO)</label>
-            <input
-              id="plan-due"
-              value={planForm.dueAt}
-              onChange={(event) => setPlanForm((prev) => ({ ...prev, dueAt: event.target.value }))}
-            />
-          </div>
-          <button className="btn-primary" type="submit" disabled={createPlan.isPending || !planForm.trainingTypeId}>
-            {createPlan.isPending ? "Se planifică..." : "Adaugă eveniment instruire"}
-          </button>
-          {createPlan.isSuccess ? (
-            <p className="feedback success" role="status">
-              Planul de instruire a fost adăugat.
-            </p>
-          ) : null}
-          {createPlan.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(createPlan.error)}
-            </p>
-          ) : null}
-          <p className="field-hint">
-            Reminder 30/15/7 + restanțe: {(remindersQuery.data?.reminders.length ?? 0)} elemente.
-          </p>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => dispatchReminders.mutate()}
-            disabled={dispatchReminders.isPending}
-          >
-            {dispatchReminders.isPending ? "Se trimit..." : "Trimite remindere email"}
-          </button>
-          {dispatchReminders.isSuccess ? (
-            <p className="feedback success" role="status">
-              Remindere trimise: {dispatchReminders.data.sent}
-            </p>
-          ) : null}
-          {dispatchReminders.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(dispatchReminders.error)}
-            </p>
-          ) : null}
-        </form>
+              {dispatchReminders.isPending ? "Se trimit..." : "Trimite remindere (email)"}
+            </button>
+          </form>
         </div>
       ) : (
         <p className="field-hint" style={{ marginBottom: "1rem" }}>
-          Catalogul de tipuri de instruire și planificarea centralizată sunt disponibile pentru administrator SSM /
-          responsabil pe entitate.
+          Planificarea și catalogul sunt disponibile pentru administrator SSM / responsabil entitate.
         </p>
       )}
 
       <div className="ssm-doc-grid second">
-        <form className="card form-stack ssm-doc-card" onSubmit={onCompleteTest}>
-          <h3 className="card-title">E-learning + test final + semnare</h3>
-          <div className="field">
-            <label htmlFor="test-plan">Plan instruire</label>
-            <select
-              id="test-plan"
-              value={testForm.trainingPlanId}
-              onChange={(event) => setTestForm((prev) => ({ ...prev, trainingPlanId: event.target.value }))}
-            >
-              <option value="">Selectează plan</option>
-              {planOptions.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.employeeName} - {plan.trainingTypeName} ({plan.status})
-                </option>
-              ))}
-            </select>
+        <div className="card ssm-doc-card">
+          <h3 className="card-title">Calendar instruiri</h3>
+          <p className="field-hint">Scadențe viitoare, expirate și finalizate.</p>
+          <div className="ssm-calendar-groups">
+            <div>
+              <h4 className="ssm-subtitle">Expirate / restante ({calendarBuckets.overdue.length})</h4>
+              <ul className="ssm-calendar-list">
+                {calendarBuckets.overdue.map((e) => (
+                  <li key={e.id}>
+                    <strong>{e.title}</strong>
+                    <span className="ssm-chip bad">Scadență {new Date(e.dueAt).toLocaleDateString("ro-RO")}</span>
+                  </li>
+                ))}
+                {!calendarBuckets.overdue.length ? <li className="field-hint">Nicio instruire expirată.</li> : null}
+              </ul>
+            </div>
+            <div>
+              <h4 className="ssm-subtitle">În curs ({calendarBuckets.inProgress.length})</h4>
+              <ul className="ssm-calendar-list">
+                {calendarBuckets.inProgress.slice(0, 6).map((e) => (
+                  <li key={e.id}>
+                    <button type="button" className="ssm-link-btn" onClick={() => setActivePlanId(e.id)}>
+                      {e.trainingTypeName} — {e.employeeName}
+                    </button>
+                    <span className="field-hint">până la {new Date(e.dueAt).toLocaleDateString("ro-RO")}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor="test-score">Scor</label>
-            <input
-              id="test-score"
-              type="number"
-              value={testForm.score}
-              onChange={(event) => setTestForm((prev) => ({ ...prev, score: Number(event.target.value || 0) }))}
-            />
-          </div>
-          <div className="field inline-check">
-            <input
-              id="test-pass"
-              type="checkbox"
-              checked={testForm.passed}
-              onChange={(event) => setTestForm((prev) => ({ ...prev, passed: event.target.checked }))}
-            />
-            <label htmlFor="test-pass">Test trecut</label>
-          </div>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => testForm.trainingPlanId && completeMaterial.mutate(testForm.trainingPlanId)}
-            disabled={!testForm.trainingPlanId}
-          >
-            Marchează material parcurs
-          </button>
-          <button type="submit" className="btn-primary" disabled={!testForm.trainingPlanId || completeTest.isPending}>
-            {completeTest.isPending ? "Se salvează..." : "Salvează rezultat test"}
-          </button>
-          {completeMaterial.isSuccess ? (
-            <p className="feedback success" role="status">
-              Materialul a fost marcat ca parcurs.
-            </p>
-          ) : null}
-          {completeMaterial.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(completeMaterial.error)}
-            </p>
-          ) : null}
-          {completeTest.isSuccess ? (
-            <p className="feedback success" role="status">
-              Rezultatul testului a fost salvat.
-            </p>
-          ) : null}
-          {completeTest.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(completeTest.error)}
-            </p>
-          ) : null}
-          {signPlan.isSuccess ? (
-            <p className="feedback success" role="status">
-              Semnătura a fost salvată.
-            </p>
-          ) : null}
-          {signPlan.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(signPlan.error)}
-            </p>
-          ) : null}
-          {signBatch.isSuccess ? (
-            <p className="feedback success" role="status">
-              Semnare în pachet: {signBatch.data.signed}/{signBatch.data.requested}.
-            </p>
-          ) : null}
-          {signBatch.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(signBatch.error)}
-            </p>
-          ) : null}
-          <div className="field">
-            <label htmlFor="signature-data">Semnătură olografă (MVP text/base64)</label>
-            <input id="signature-data" value={signature} onChange={(event) => setSignature(event.target.value)} />
-          </div>
-          <div className="ssm-inline-actions">
-            {canSignAsEmployee ? (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() =>
-                  testForm.trainingPlanId &&
-                  signPlan.mutate({ planId: testForm.trainingPlanId, role: "EMPLOYEE", signatureData: signature })
-                }
-                disabled={!testForm.trainingPlanId}
-              >
-                Semnează angajat
-              </button>
-            ) : null}
-            {canApproveTraining ? (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() =>
-                  testForm.trainingPlanId &&
-                  signPlan.mutate({ planId: testForm.trainingPlanId, role: "RESPONSIBLE", signatureData: signature })
-                }
-                disabled={!testForm.trainingPlanId}
-              >
-                Semnează responsabil SSM
-              </button>
-            ) : null}
-            {canApproveTraining ? (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() =>
-                  signBatch.mutate({
-                    planIds: planOptions.map((plan) => plan.id),
-                    role: "RESPONSIBLE",
-                    signatureData: signature
-                  })
-                }
-                disabled={!planOptions.length}
-              >
-                Semnează în pachet (toate)
-              </button>
-            ) : null}
-          </div>
-          {testForm.trainingPlanId ? (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                const trainingPlanId = testForm.trainingPlanId;
-                if (!trainingPlanId) return;
-                setDownloadError(null);
-                void downloadWithAuth(ssmApi.getIndividualSheetUrl(trainingPlanId), `training-sheet-${trainingPlanId}.pdf`).catch(
-                  (error: unknown) => {
-                    setDownloadError(mutationErrorMessage(error));
-                  }
-                );
-              }}
-            >
-              Descarcă PDF fișă individuală
-            </button>
-          ) : null}
-          {downloadError ? <p className="feedback error">{downloadError}</p> : null}
-        </form>
+          <h4 className="ssm-subtitle">Remindere active</h4>
+          <ul className="ssm-calendar-list compact">
+            {(remindersQuery.data?.reminders ?? []).slice(0, 8).map((r) => (
+              <li key={r.trainingPlanId}>
+                {r.employeeName}: {r.trainingTypeName} —{" "}
+                {r.daysUntilDue < 0 ? `restantă ${Math.abs(r.daysUntilDue)} zile` : `în ${r.daysUntilDue} zile`}
+              </li>
+            ))}
+          </ul>
+        </div>
 
         <div className="card ssm-doc-card">
-          <h3 className="card-title">Dosar digital + conformitate</h3>
+          <h3 className="card-title">Evaluări planificate</h3>
+          <div className="ssm-doc-items">
+            {planOptions.map((plan) => (
+              <button
+                key={plan.id}
+                type="button"
+                className={`ssm-doc-item ${activePlanId === plan.id ? "selected" : ""}`}
+                onClick={() => setActivePlanId(plan.id)}
+              >
+                <strong>
+                  {plan.employeeName} — {plan.trainingTypeName}
+                </strong>
+                <span>
+                  {planStatusLabel(plan.status)} · scadență {new Date(plan.dueAt).toLocaleDateString("ro-RO")}
+                  {plan.blockedAdmission ? " · blocare admitere" : ""}
+                </span>
+                <span className={planStatusClass(plan.status)}>{plan.status}</span>
+              </button>
+            ))}
+          </div>
+          <PaginationBar
+            page={plansPaged.page}
+            pageSize={plansPaged.pageSize}
+            total={plansPaged.total}
+            totalPages={plansPaged.totalPages}
+            onPageChange={plansPage.setPage}
+            onPageSizeChange={plansPage.setPageSize}
+            disabled={plansQuery.isFetching}
+          />
+        </div>
+      </div>
+
+      <div className="card ssm-doc-card ssm-training-elearning-card">
+        <h3 className="card-title">3.3.2 Flux instruire online (e-learning)</h3>
+        {activePlan ? (
+          <>
+            <ol className="ssm-training-flow-steps">
+              <li className={activePlan.materialCompletedAt ? "done" : ""}>Notificare și acces material</li>
+              <li className={activePlan.materialCompletedAt ? "done" : ""}>Parcurgere material (PDF / Word / video)</li>
+              <li>Test verificare cunoștințe</li>
+              <li>Înregistrare automată dată, scor, timp</li>
+              <li>Generare fișă individuală</li>
+              <li>Semnătură angajat</li>
+              <li>Semnătură responsabil SSM (pachet)</li>
+              <li>Arhivare în dosar digital</li>
+            </ol>
+            <p className="field-hint">
+              <strong>{activePlan.trainingTypeName}</strong>
+              {activePlan.trainingTypeCategory
+                ? ` (${trainingCategoryLabel(activePlan.trainingTypeCategory)})`
+                : ""}{" "}
+              — {activePlan.employeeName}
+            </p>
+            {activePlan.materialUrl ? (
+              <p>
+                <a href={activePlan.materialUrl} target="_blank" rel="noreferrer" className="btn-text-link">
+                  Deschide material: {activePlan.materialTitle ?? "Instruire"}
+                </a>
+              </p>
+            ) : (
+              <p className="field-hint">Nu este setat URL material — adaugă la planificare.</p>
+            )}
+            <div className="ssm-inline-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!activePlan.id || completeMaterial.isPending}
+                onClick={() => activePlan.id && completeMaterial.mutate(activePlan.id)}
+              >
+                Material parcurs
+              </button>
+              <button type="button" className="btn-secondary" disabled={startTest.isPending} onClick={onStartElearning}>
+                {startTest.isPending ? "Se pornește..." : "Pornește testul"}
+              </button>
+            </div>
+            <form className="form-stack ssm-risk-version-form" onSubmit={onCompleteTest}>
+              <div className="ssm-form-grid">
+                <div className="field">
+                  <label htmlFor="test-score">Scor test (%)</label>
+                  <input
+                    id="test-score"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={testForm.score}
+                    onChange={(e) => setTestForm((p) => ({ ...p, score: Number(e.target.value || 0) }))}
+                  />
+                </div>
+                <div className="field inline-check">
+                  <input
+                    id="test-pass"
+                    type="checkbox"
+                    checked={testForm.passed}
+                    onChange={(e) => setTestForm((p) => ({ ...p, passed: e.target.checked }))}
+                  />
+                  <label htmlFor="test-pass">Test trecut</label>
+                </div>
+              </div>
+              <button type="submit" className="btn-primary" disabled={completeTest.isPending || !testForm.trainingPlanId}>
+                {completeTest.isPending ? "Se salvează..." : "Finalizează test (înregistrare automată)"}
+              </button>
+            </form>
+            <div className="field">
+              <label htmlFor="signature-data">Semnătură olografă</label>
+              <input id="signature-data" value={signature} onChange={(e) => setSignature(e.target.value)} />
+            </div>
+            <div className="ssm-inline-actions">
+              {canSignAsEmployee ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() =>
+                    activePlan.id &&
+                    signPlan.mutate({ planId: activePlan.id, role: "EMPLOYEE", signatureData: signature })
+                  }
+                >
+                  Semnează angajat
+                </button>
+              ) : null}
+              {canApproveTraining ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() =>
+                      activePlan.id &&
+                      signPlan.mutate({ planId: activePlan.id, role: "RESPONSIBLE", signatureData: signature })
+                    }
+                  >
+                    Semnează responsabil SSM
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() =>
+                      signBatch.mutate({
+                        planIds: planOptions.map((p) => p.id),
+                        role: "RESPONSIBLE",
+                        signatureData: signature
+                      })
+                    }
+                    disabled={!planOptions.length}
+                  >
+                    Semnare în pachet
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  if (!activePlan.id) return;
+                  setDownloadError(null);
+                  void downloadWithAuth(
+                    ssmApi.getIndividualSheetUrl(activePlan.id),
+                    `fisa-instruire-${activePlan.id}.pdf`
+                  ).catch((err: unknown) => setDownloadError(mutationErrorMessage(err)));
+                }}
+              >
+                Descarcă fișă individuală (PDF)
+              </button>
+            </div>
+            {downloadError ? <p className="feedback error">{downloadError}</p> : null}
+          </>
+        ) : (
+          <p className="field-hint">Selectează un plan din listă pentru a parcurge fluxul e-learning.</p>
+        )}
+      </div>
+
+      <div className="ssm-doc-grid second">
+        <div className="card ssm-doc-card">
+          <h3 className="card-title">Raport conformitate instruire</h3>
+          <p className="field-hint">
+            {compliance?.summary.employeeCount ?? 0} angajați · {compliance?.summary.compliantPercent ?? 0}% instruiți la
+            zi
+          </p>
+          <div className="ssm-history-list">
+            {(compliance?.byDepartment ?? []).map((dept) => (
+              <div key={dept.departmentId ?? "none"} className="ssm-history-item">
+                <div>
+                  <strong>{dept.departmentName}</strong>
+                  <div className="field-hint">
+                    {dept.complianceScore}% conformitate · {dept.blockedCount} blocări admitere
+                  </div>
+                </div>
+                <span className="ssm-chip">{dept.employeeCount} angajați</span>
+              </div>
+            ))}
+          </div>
+          <div className="ssm-history-list" style={{ marginTop: "1rem" }}>
+            {(compliance?.items ?? []).slice(0, 8).map((item) => (
+              <div key={item.employeeId} className="ssm-history-item">
+                <div>
+                  <strong>{item.employeeName}</strong>
+                  <div className="field-hint">
+                    {item.complianceScore}% · restanțe {item.overdue}
+                  </div>
+                </div>
+                <span className={item.blockedAdmission ? "badge-bad" : "badge-good"}>
+                  {item.blockedAdmission ? "Blocare admitere" : "Admis"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card ssm-doc-card">
+          <h3 className="card-title">Dosar digital angajat</h3>
           <div className="field">
-            <label htmlFor="digital-employee">Employee ID dosar</label>
+            <label htmlFor="digital-employee">Angajat (ID)</label>
             <input
               id="digital-employee"
               value={digitalEmployeeId}
-              onChange={(event) => setDigitalEmployeeId(event.target.value)}
+              onChange={(e) => setDigitalEmployeeId(e.target.value)}
               readOnly={Boolean(session?.linkedEmployeeId)}
-              aria-readonly={Boolean(session?.linkedEmployeeId)}
             />
           </div>
           <div className="ssm-inline-actions">
@@ -464,61 +673,23 @@ export function SsmTrainingSuiteManager() {
                 setDossierData(data);
               }}
             >
-              Încarcă dosar digital
+              Încarcă dosar (instruiri arhivate)
             </button>
             <button
               type="button"
               className="btn-secondary"
               onClick={() => {
-                const employeeId = digitalEmployeeId.trim();
-                if (!employeeId) return;
-                setDownloadError(null);
-                void downloadWithAuth(ssmApi.getDigitalFileZipUrl(employeeId), `dossier-${employeeId}.zip`).catch(
-                  (error: unknown) => {
-                    setDownloadError(mutationErrorMessage(error));
-                  }
-                );
+                const id = digitalEmployeeId.trim();
+                if (!id) return;
+                void downloadWithAuth(ssmApi.getDigitalFileZipUrl(id), `dosar-${id}.zip`);
               }}
             >
-              Export ZIP (etapizat)
+              Export ZIP dosar
             </button>
           </div>
-
-          <div className="ssm-history-list">
-            {(complianceQuery.data?.items ?? []).slice(0, 5).map((item) => (
-              <div key={item.employeeId} className="ssm-history-item">
-                <div>
-                  <strong>{item.employeeName}</strong>
-                  <div className="field-hint">
-                    conformitate {item.complianceScore}% | restanțe {item.overdue}
-                  </div>
-                </div>
-                <span className={item.blockedAdmission ? "badge-bad" : "badge-good"}>
-                  {item.blockedAdmission ? "Blocare admitere la lucru" : "Admis"}
-                </span>
-              </div>
-            ))}
-          </div>
-
           {dossierData ? (
-            <p className="field-hint">
-              Dosar: {dossierData.trainings.length} instruiri, {dossierData.documents.length} documente asociate,{" "}
-              {dossierData.medicalControls?.length ?? 0} controale medicina muncii,{" "}
-              {dossierData.riskExposureSheets?.length ?? 0} fișe expunere riscuri,{" "}
-              {dossierData.eipDecisionCopies?.length ?? 0} decizii EIP.
-            </p>
+            <p className="field-hint">{dossierData.trainings.length} instruiri în dosarul digital.</p>
           ) : null}
-          <p className="field-hint">Planuri active: {plansPaged.total}. Plan implicit recomandat: {bestPlanId || "-"}</p>
-          <PaginationBar
-            page={plansPaged.page}
-            pageSize={plansPaged.pageSize}
-            total={plansPaged.total}
-            totalPages={plansPaged.totalPages}
-            onPageChange={plansPage.setPage}
-            onPageSizeChange={plansPage.setPageSize}
-            disabled={plansQuery.isFetching}
-          />
-          {downloadError ? <p className="feedback error">{downloadError}</p> : null}
         </div>
       </div>
     </section>

@@ -37,7 +37,7 @@ const SSM_SECTIONS: Array<{
     title: "Instruire și conformitate",
     caption: "Calendar, teste, fișe",
     description:
-      "Planuri, e-learning și semnături; angajații văd doar propriile instruiri și își pot semna fișa ca angajat."
+      "Modul 3.3: tipuri legale, e-learning, teste, semnături, calendar scadențe, remindere și raport conformitate pe departament."
   },
   {
     id: "eip",

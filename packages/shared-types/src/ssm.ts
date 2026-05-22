@@ -169,14 +169,47 @@ export interface SsmTrainingPlanItem {
   trainingTypeId: string;
   trainingTypeCode: string;
   trainingTypeName: string;
+  trainingTypeCategory?: SsmTrainingCategory;
   employeeName: string;
   scheduledAt: string;
   dueAt: string;
   completedAt?: string | null;
+  materialTitle?: string | null;
+  materialUrl?: string | null;
+  materialCompletedAt?: string | null;
   score?: number | null;
   durationMinutes?: number | null;
   status: SsmTrainingPlanStatus;
   blockedAdmission: boolean;
+}
+
+export interface SsmTrainingCalendarEvent {
+  id: string;
+  title: string;
+  scheduledAt: string;
+  dueAt: string;
+  status: SsmTrainingPlanStatus;
+  employeeName?: string;
+  trainingTypeName?: string;
+}
+
+export interface SsmComplianceDepartment {
+  departmentId: string | null;
+  departmentName: string;
+  employeeCount: number;
+  compliantCount: number;
+  complianceScore: number;
+  blockedCount: number;
+}
+
+export interface SsmTrainingComplianceReport {
+  items: SsmComplianceEmployee[];
+  byDepartment: SsmComplianceDepartment[];
+  summary: {
+    employeeCount: number;
+    compliantPercent: number;
+    blockedAdmissionCount: number;
+  };
 }
 
 export interface SsmReminderItem {

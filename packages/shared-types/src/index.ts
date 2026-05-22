@@ -2,6 +2,7 @@ export * from "./pagination";
 export * from "./tenant";
 export * from "./employee";
 export * from "./ssm";
+export * from "./ssm-training-catalog";
 export * from "./communications";
 export * from "./surveys";
 export * from "./ticketing";

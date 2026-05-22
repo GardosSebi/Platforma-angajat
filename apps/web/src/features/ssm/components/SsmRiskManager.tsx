@@ -251,89 +251,100 @@ export function SsmRiskManager() {
           {createAssessment.isError ? <p className="feedback error">{mutationErrorMessage(createAssessment.error)}</p> : null}
         </form>
 
-        <div className="card ssm-doc-card ssm-doc-list">
-          <div className="ssm-card-header">
-            <div>
-              <h3 className="card-title">Evaluări existente</h3>
-              <p className="field-hint">Selectează o evaluare pentru istoric și versionare.</p>
-            </div>
-            <span className="ssm-chip">{assessmentItems.length} total</span>
-          </div>
-          <div className="ssm-filters">
-            <select value={filters.targetType} onChange={(e) => setFilters((p) => ({ ...p, targetType: e.target.value }))}>
-              <option value="">Toate țintele</option>
-              {TARGET_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <select value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
-              <option value="">Toate statusurile</option>
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="ARCHIVED">ARCHIVED</option>
-            </select>
-          </div>
-          <div className="ssm-doc-items">
-            {assessmentsQuery.isLoading ? <p className="field-hint">Se încarcă evaluările...</p> : null}
-            {assessmentItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`ssm-doc-item ${selectedAssessmentId === item.id ? "selected" : ""}`}
-                onClick={() => setSelectedAssessmentId(item.id)}
-              >
-                <strong>{item.title}</strong>
-                <span>
-                  {item.targetType} · {item.targetLabel ?? "-"} · risc {item.riskLevel ?? "-"} · v{item.activeVersionNumber ?? "-"}
-                </span>
-              </button>
-            ))}
-            {!assessmentsQuery.isLoading && (assessmentsQuery.data?.items.length ?? 0) === 0 ? (
-              <p className="field-hint">Nu există evaluări de risc. Creează una din formularul din stânga.</p>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      <div className="card ssm-doc-card">
-        <div className="ssm-card-header">
-          <div>
-            <h3 className="card-title">Versionare și istoric</h3>
-            <p className="field-hint">
-              {selectedAssessment ? `${selectedAssessment.title} · v${selectedAssessment.activeVersionNumber ?? "-"}` : "Nicio evaluare selectată"}
-            </p>
-          </div>
-          <span className="ssm-chip warn">Ultim risc: {latestVersion?.riskLevel ?? "-"}</span>
-        </div>
-        {selectedAssessmentId ? (
-          <>
-            <form className="form-stack" onSubmit={onAddVersion}>
-              <div className="field">
-                <label htmlFor="risk-version-reason">Motiv actualizare</label>
-                <input id="risk-version-reason" value={versionReason} onChange={(e) => setVersionReason(e.target.value)} />
+        <div className="ssm-doc-side-column">
+          <div className="card ssm-doc-card ssm-doc-list">
+            <div className="ssm-card-header">
+              <div>
+                <h3 className="card-title">Evaluări existente</h3>
+                <p className="field-hint">Selectează o evaluare pentru istoric și versionare.</p>
               </div>
-              <button className="btn-secondary" type="submit" disabled={addVersion.isPending}>
-                {addVersion.isPending ? "Se versionează..." : "Adaugă versiune din formular"}
-              </button>
-              <button className="btn-secondary" type="button" onClick={() => archiveAssessment.mutate(selectedAssessmentId)}>
-                Arhivează
-              </button>
-            </form>
-            <div className="ssm-doc-items">
-              {(historyQuery.data?.versions ?? []).map((version) => (
-                <article key={version.id} className="ssm-doc-item">
-                  <strong>
-                    v{version.versionNumber} · risc {version.riskLevel}
-                  </strong>
-                  <span>{version.updateReason}</span>
-                </article>
-              ))}
+              <span className="ssm-chip">{assessmentItems.length} total</span>
             </div>
-          </>
-        ) : (
-          <p className="field-hint">Selectează o evaluare pentru istoric și versionare.</p>
-        )}
+            <div className="ssm-filters">
+              <select value={filters.targetType} onChange={(e) => setFilters((p) => ({ ...p, targetType: e.target.value }))}>
+                <option value="">Toate țintele</option>
+                {TARGET_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              <select value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
+                <option value="">Toate statusurile</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="ARCHIVED">ARCHIVED</option>
+              </select>
+            </div>
+            <div className="ssm-doc-items">
+              {assessmentsQuery.isLoading ? <p className="field-hint">Se încarcă evaluările...</p> : null}
+              {assessmentItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`ssm-doc-item ${selectedAssessmentId === item.id ? "selected" : ""}`}
+                  onClick={() => setSelectedAssessmentId(item.id)}
+                >
+                  <strong>{item.title}</strong>
+                  <span>
+                    {item.targetType} · {item.targetLabel ?? "-"} · risc {item.riskLevel ?? "-"} · v
+                    {item.activeVersionNumber ?? "-"}
+                  </span>
+                </button>
+              ))}
+              {!assessmentsQuery.isLoading && assessmentItems.length === 0 ? (
+                <p className="field-hint">Nu există evaluări de risc. Creează una din formularul din stânga.</p>
+              ) : null}
+            </div>
+          </div>
+
+          {selectedAssessmentId ? (
+            <div className="card ssm-doc-card ssm-risk-version-card" aria-labelledby="risk-version-title">
+              <div className="ssm-card-header">
+                <div>
+                  <h3 id="risk-version-title" className="card-title">
+                    Versionare și istoric
+                  </h3>
+                  {selectedAssessment ? (
+                    <p className="field-hint">
+                      {selectedAssessment.title} · v{selectedAssessment.activeVersionNumber ?? "-"}
+                    </p>
+                  ) : null}
+                </div>
+                <span className="ssm-chip warn">Risc: {latestVersion?.riskLevel ?? selectedAssessment?.riskLevel ?? "-"}</span>
+              </div>
+              <form className="form-stack ssm-risk-version-form" onSubmit={onAddVersion}>
+                <div className="field">
+                  <label htmlFor="risk-version-reason">Motiv actualizare</label>
+                  <input id="risk-version-reason" value={versionReason} onChange={(e) => setVersionReason(e.target.value)} />
+                </div>
+                <div className="ssm-risk-version-actions">
+                  <button className="btn-secondary" type="submit" disabled={addVersion.isPending}>
+                    {addVersion.isPending ? "Se salvează..." : "Versiune nouă"}
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => archiveAssessment.mutate(selectedAssessmentId)}>
+                    Arhivează
+                  </button>
+                </div>
+              </form>
+              {historyQuery.isLoading ? <p className="field-hint">Se încarcă istoricul...</p> : null}
+              <div className="ssm-risk-version-history" aria-label="Istoric versiuni">
+                {(historyQuery.data?.versions ?? []).map((version) => (
+                  <article key={version.id} className="ssm-doc-item">
+                    <strong>
+                      v{version.versionNumber} · risc {version.riskLevel}
+                    </strong>
+                    <span>{version.updateReason}</span>
+                  </article>
+                ))}
+                {!historyQuery.isLoading && (historyQuery.data?.versions.length ?? 0) === 0 ? (
+                  <p className="field-hint">Nu există versiuni în istoric.</p>
+                ) : null}
+              </div>
+            </div>
+          ) : assessmentItems.length > 0 ? (
+            <p className="ssm-empty-inline">Selectează o evaluare din listă pentru versionare.</p>
+          ) : null}
+        </div>
       </div>
     </section>
   );

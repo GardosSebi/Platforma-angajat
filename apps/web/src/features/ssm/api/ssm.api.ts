@@ -163,13 +163,13 @@ export const ssmApi = {
       method: "POST"
     });
   },
-  listCalendar() {
-    return httpClient<{ events: Array<{ id: string; title: string; scheduledAt: string; dueAt: string; status: string }> }>(
+  listTrainingCalendar() {
+    return httpClient<{ events: import("@repo/shared-types/ssm").SsmTrainingCalendarEvent[] }>(
       "/ssm/training-suite/calendar"
     );
   },
   complianceReport() {
-    return httpClient<{ items: SsmComplianceEmployee[] }>("/ssm/training-suite/compliance");
+    return httpClient<import("@repo/shared-types/ssm").SsmTrainingComplianceReport>("/ssm/training-suite/compliance");
   },
   employeeDigitalFile(employeeId: string) {
     return httpClient<{

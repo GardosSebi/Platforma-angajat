@@ -541,6 +541,7 @@ button {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(300px, 1fr) minmax(360px, 1.4fr);
+  align-items: start;
 }
 
 .ssm-doc-grid.second {
@@ -548,7 +549,185 @@ button {
 }
 
 .ssm-doc-card {
-  min-height: 100%;
+  min-height: 0;
+}
+
+.ssm-doc-side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  align-self: start;
+}
+
+.ssm-risk-version-card {
+  padding: 0.95rem 1.1rem;
+}
+
+.ssm-risk-version-card .ssm-card-header {
+  margin-bottom: 0.55rem;
+}
+
+.ssm-risk-version-card .card-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.92rem;
+}
+
+.ssm-risk-version-form {
+  gap: 0.55rem;
+}
+
+.ssm-risk-version-form .field {
+  margin: 0;
+}
+
+.ssm-risk-version-form .field label {
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.ssm-risk-version-form .field input {
+  padding: 0.45rem 0.6rem;
+}
+
+.ssm-risk-version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.ssm-risk-version-actions .btn-secondary {
+  flex: 1 1 calc(50% - 0.25rem);
+  min-width: 8.5rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.ssm-risk-version-history {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.ssm-risk-version-history .ssm-doc-item {
+  padding: 0.5rem 0.65rem;
+}
+
+.ssm-risk-version-history .ssm-doc-item strong {
+  font-size: 0.82rem;
+}
+
+.ssm-risk-version-history .ssm-doc-item span {
+  font-size: 0.74rem;
+  margin-top: 0.1rem;
+}
+
+.ssm-empty-inline {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.ssm-training-legal-table {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.ssm-training-legal-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr) minmax(120px, 0.9fr) 0.7fr;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  align-items: start;
+}
+
+.ssm-training-legal-row.head {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ssm-training-legal-row:not(.head) {
+  border: 1px solid var(--color-border);
+  background: #fff;
+}
+
+.ssm-subtitle {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.ssm-calendar-groups {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ssm-calendar-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ssm-calendar-list li {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 0.84rem;
+}
+
+.ssm-calendar-list.compact li {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.ssm-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ssm-link-btn:hover {
+  text-decoration: underline;
+}
+
+.ssm-training-flow-steps {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.86rem;
+  color: var(--color-muted);
+}
+
+.ssm-training-flow-steps li.done {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.ssm-training-elearning-card {
+  margin-top: 1rem;
 }
 
 .ssm-module-hero {
