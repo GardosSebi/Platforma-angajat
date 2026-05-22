@@ -13,8 +13,22 @@ export function useAuthSession(): SessionData | null {
   }, []);
 
   useEffect(() => {
-    const id = window.setInterval(() => setSession(authStore.get()), EXPIRY_CHECK_MS);
-    return () => window.clearInterval(id);
+    const refresh = () => setSession(authStore.get());
+    const id = window.setInterval(refresh, EXPIRY_CHECK_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+      }
+    };
+    window.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+    };
   }, []);
 
   return session;

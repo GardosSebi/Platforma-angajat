@@ -1,7 +1,7 @@
 const DEFAULT_SECONDS = 8 * 60 * 60;
 
 /** Parsează JWT_EXPIRES_IN: secunde (`28800`) sau sufixe `8h`, `1d`. */
-function parseExpiresInSeconds(raw: string | undefined): number {
+export function parseExpiresInSeconds(raw: string | undefined): number {
   if (!raw?.trim()) {
     return DEFAULT_SECONDS;
   }

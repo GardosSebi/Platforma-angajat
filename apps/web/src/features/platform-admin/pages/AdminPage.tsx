@@ -151,8 +151,8 @@ export function AdminPage() {
     [session?.roles]
   );
 
-  const usersPage = usePagination();
-  const staticPage = usePagination();
+  const usersPage = usePagination({ persistKey: "admin.users" });
+  const staticPage = usePagination({ persistKey: "admin.static-pages" });
 
   const usersQuery = useQuery({
     queryKey: ["admin", "users", usersPage.page, usersPage.pageSize],

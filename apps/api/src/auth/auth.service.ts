@@ -1,8 +1,8 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
-import { JWT_EXPIRES_IN_LABEL } from "./jwt.constants";
 import { JwtPayload } from "./jwt.strategy";
 
 /** Narrow shape for login; matches Prisma `User` after `prisma generate`. */
@@ -27,8 +27,13 @@ type PrismaWithUser = {
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwt: JwtService
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService
   ) {}
+
+  private jwtExpiresInLabel(): string {
+    return this.config.get<string>("JWT_EXPIRES_IN")?.trim() || "8h";
+  }
 
   async login(tenantId: string, email: string, password: string) {
     const db = this.prisma as unknown as PrismaWithUser;
@@ -67,7 +72,7 @@ export class AuthService {
 
     return {
       accessToken,
-      expiresIn: JWT_EXPIRES_IN_LABEL,
+      expiresIn: this.jwtExpiresInLabel(),
       user: {
         id: user.id,
         email: user.email,

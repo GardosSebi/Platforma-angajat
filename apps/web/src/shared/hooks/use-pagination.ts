@@ -1,27 +1,63 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "@repo/shared-types/pagination";
 import { useAuthSession } from "../auth/use-auth-session";
+import {
+  getStoredPagination,
+  setStoredPagination
+} from "../preferences/pagination-preference";
 import { getStoredPageSize, setStoredPageSize } from "../preferences/page-size-preference";
 
-export function usePagination(initialPageSize = DEFAULT_PAGE_SIZE) {
+export type UsePaginationOptions = {
+  /** Cheie stabilă per listă (ex. `admin.users`). Restaurează pagina și pageSize după delogare. */
+  persistKey?: string;
+  initialPageSize?: number;
+};
+
+export function usePagination(options?: UsePaginationOptions) {
+  const persistKey = options?.persistKey;
+  const initialPageSize = options?.initialPageSize ?? DEFAULT_PAGE_SIZE;
   const session = useAuthSession();
   const scopeKey = session ? `${session.tenantId}:${session.userId}` : null;
+  const hydratedRef = useRef(false);
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(() => getStoredPageSize(initialPageSize));
+  const readStored = useCallback(() => {
+    if (persistKey) {
+      return getStoredPagination(persistKey, initialPageSize);
+    }
+    return { page: 1, pageSize: getStoredPageSize(initialPageSize) };
+  }, [persistKey, initialPageSize]);
+
+  const [page, setPageState] = useState(() => readStored().page);
+  const [pageSize, setPageSizeState] = useState(() => readStored().pageSize);
 
   useEffect(() => {
-    setPageSize(getStoredPageSize(initialPageSize));
-    setPage(1);
-  }, [scopeKey, initialPageSize]);
+    hydratedRef.current = false;
+    const stored = readStored();
+    setPageState(stored.page);
+    setPageSizeState(stored.pageSize);
+    hydratedRef.current = true;
+  }, [scopeKey, readStored]);
 
-  const resetPage = useCallback(() => setPage(1), []);
+  useEffect(() => {
+    if (!hydratedRef.current || !session) return;
+    if (persistKey) {
+      setStoredPagination(persistKey, page, pageSize);
+    } else {
+      setStoredPageSize(pageSize);
+    }
+  }, [page, pageSize, session, persistKey]);
+
+  const setPage = useCallback((next: number) => {
+    const safe = Number.isFinite(next) && next >= 1 ? Math.floor(next) : 1;
+    setPageState(safe);
+  }, []);
+
+  const resetPage = useCallback(() => setPage(1), [setPage]);
 
   const onPageSizeChange = useCallback((next: number) => {
-    setStoredPageSize(next);
-    setPageSize(next);
+    setPageSizeState(next);
     setPage(1);
-  }, []);
+  }, [setPage]);
 
   return {
     page,

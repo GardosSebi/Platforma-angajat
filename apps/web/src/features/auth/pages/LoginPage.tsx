@@ -2,7 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getApiBaseUrl } from "../../../shared/api/api-base";
 import { loginRequest } from "../api/auth.api";
-import { authStore } from "../../../shared/auth/auth-store";
+import { authStore, getStoredExpiresInLabel } from "../../../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../../../shared/auth/clear-user-query-cache";
 
 function safeReturnPath(raw: string | null): string | null {
@@ -36,6 +36,7 @@ export function LoginPage() {
         tenantId: data.user.tenantId,
         userId: data.user.id,
         roles: data.user.roles,
+        expiresInLabel: data.expiresIn,
         linkedEmployeeId: data.linkedEmployeeId ?? null
       });
       navigate(returnUrl ?? "/ssm", { replace: true });
@@ -106,7 +107,7 @@ export function LoginPage() {
           </div>
           {sessionExpired && !error ? (
             <p className="feedback error" role="status">
-              Sesiunea a expirat (8 ore). Autentificați-vă din nou.
+              Sesiunea a expirat ({getStoredExpiresInLabel()}). Autentificați-vă din nou.
             </p>
           ) : null}
           {error ? (

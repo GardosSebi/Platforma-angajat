@@ -3,7 +3,6 @@ import { resolve } from "path";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { config as loadEnv } from "dotenv";
-import { AppModule } from "./app.module";
 
 const envPaths = [resolve(process.cwd(), ".env"), resolve(process.cwd(), "../../.env")];
 for (const envPath of envPaths) {
@@ -13,6 +12,8 @@ for (const envPath of envPaths) {
 }
 
 async function bootstrap() {
+  const { AppModule } = await import("./app.module");
+  const { JWT_EXPIRES_IN_LABEL, JWT_EXPIRES_IN_SECONDS } = await import("./auth/jwt.constants");
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix("api/v1");
   app.enableCors({
@@ -29,6 +30,7 @@ async function bootstrap() {
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port);
   Logger.log(`API http://localhost:${port}/api/v1 (e.g. POST /api/v1/auth/login)`, "Bootstrap");
+  Logger.log(`JWT access token TTL: ${JWT_EXPIRES_IN_LABEL} (${JWT_EXPIRES_IN_SECONDS}s)`, "Bootstrap");
 }
 
 void bootstrap();

@@ -58,10 +58,10 @@ type OrgEdit =
     };
 
 export function AdminOrganizationTab() {
-  const worksitesPage = usePagination();
-  const departmentsPage = usePagination();
-  const jobsPage = usePagination();
-  const employeesPage = usePagination();
+  const worksitesPage = usePagination({ persistKey: "admin.worksites" });
+  const departmentsPage = usePagination({ persistKey: "admin.departments" });
+  const jobsPage = usePagination({ persistKey: "admin.job-positions" });
+  const employeesPage = usePagination({ persistKey: "admin.employees" });
 
   const worksitesQuery = useWorksites(worksitesPage.params);
   const departmentsQuery = useDepartments(departmentsPage.params);
