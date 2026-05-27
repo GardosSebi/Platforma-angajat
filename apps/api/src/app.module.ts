@@ -9,6 +9,8 @@ import { PrismaModule } from "./infrastructure/prisma/prisma.module";
 import { FilesModule } from "./infrastructure/files/files.module";
 import { LoggingModule } from "./infrastructure/logging/logging.module";
 import { MailModule } from "./infrastructure/mail/mail.module";
+import { NotificationsModule } from "./infrastructure/notifications/notifications.module";
+import { SchedulerModule } from "./infrastructure/scheduler/scheduler.module";
 import { SecurityModule } from "./infrastructure/security/security.module";
 import { SsmModule } from "./modules/ssm/ssm.module";
 import { ChatbotModule } from "./modules/chatbot/chatbot.module";
@@ -27,6 +29,7 @@ import { PlatformAdminModule } from "./modules/platform-admin/platform-admin.mod
     LoggingModule,
     SecurityModule,
     MailModule,
+    NotificationsModule,
     HealthModule,
     FilesModule,
     AuthModule,
@@ -35,7 +38,8 @@ import { PlatformAdminModule } from "./modules/platform-admin/platform-admin.mod
     SsmModule,
     ChatbotModule,
     SurveysModule,
-    TicketingModule
+    TicketingModule,
+    SchedulerModule
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },

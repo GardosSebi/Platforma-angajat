@@ -6,6 +6,7 @@ import type {
   SsmEipMovementType
 } from "@repo/shared-types/ssm";
 import { useEipNorms, useEipNotifications, useEipRegister, useEipStockGap, useEipTypes, useCreateEipType, useRegisterEipMovement, useUpsertEipNorm } from "../hooks/useSsmEip";
+import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { useEmployeeOptions, useJobPositionsLookup } from "../../master-data/hooks/useMasterData";
 
 const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
@@ -31,7 +32,7 @@ const EMPTY_MOVEMENT: CreateSsmEipMovementRequest = {
   movementType: "DISTRIBUTION",
   quantity: 1,
   notes: "",
-  signatureData: "Semnatura primire MVP"
+  signatureData: ""
 };
 
 const MOVEMENT_TYPES: SsmEipMovementType[] = ["DISTRIBUTION", "RETURN", "SCRAP"];
@@ -253,15 +254,12 @@ export function SsmEipManager() {
               onChange={(e) => setMovementForm((p) => ({ ...p, quantity: Number(e.target.value || 1) }))}
             />
           </div>
-          <div className="field">
-            <label htmlFor="mov-sign">Semnătură primire (text/base64)</label>
-            <input
-              id="mov-sign"
-              value={movementForm.signatureData ?? ""}
-              onChange={(e) => setMovementForm((p) => ({ ...p, signatureData: e.target.value }))}
-            />
-          </div>
-          <button className="btn-primary" type="submit" disabled={registerMovement.isPending || !movementForm.eipTypeId}>
+          <SignatureCanvas
+            label="Semnătură primire EIP"
+            value={movementForm.signatureData ?? ""}
+            onChange={(dataUrl) => setMovementForm((p) => ({ ...p, signatureData: dataUrl }))}
+          />
+          <button className="btn-primary" type="submit" disabled={registerMovement.isPending || !movementForm.eipTypeId || !movementForm.signatureData?.startsWith("data:image")}>
             {registerMovement.isPending ? "Se înregistrează..." : "Înregistrează mișcare"}
           </button>
           {registerMovement.isSuccess ? (

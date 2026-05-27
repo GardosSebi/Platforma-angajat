@@ -32,6 +32,10 @@ const EMPTY_CASE: CreateSsmAccidentCaseRequest = {
   occurredAt: new Date().toISOString(),
   location: "Punct lucru HQ",
   description: "Descriere incident și context.",
+  witnesses: [],
+  itmDaysOff: undefined,
+  hasPermanentDisability: false,
+  isFatality: false,
   legalDaysDeadline: 30
 };
 
@@ -105,7 +109,7 @@ export function SsmAccidentsManager() {
   const [taskForm, setTaskForm] = useState<CreateSsmAccidentTaskRequest>(EMPTY_TASK);
   const [closeForm, setCloseForm] = useState<CloseSsmAccidentCaseRequest>(EMPTY_CLOSE);
   const [selectedCaseId, setSelectedCaseId] = useState<string>("");
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [witnessesText, setWitnessesText] = useState("");
 
   const selectedCase = useMemo(
     () => casesPaged.items.find((item) => item.id === selectedCaseId),
@@ -114,9 +118,18 @@ export function SsmAccidentsManager() {
   const occurredLocal = useMemo(() => toDatetimeLocalValue(caseForm.occurredAt), [caseForm.occurredAt]);
   const taskDueLocal = useMemo(() => toDatetimeLocalValue(taskForm.dueAt), [taskForm.dueAt]);
 
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   const onCreateCase = (event: FormEvent) => {
     event.preventDefault();
-    createCase.mutate(caseForm, {
+    const payload: CreateSsmAccidentCaseRequest = {
+      ...caseForm,
+      witnesses: witnessesText
+        .split(/[,;\n]/)
+        .map((w) => w.trim())
+        .filter(Boolean)
+    };
+    createCase.mutate(payload, {
       onSuccess: (created) => {
         setSelectedCaseId(created.id);
         setTaskForm((prev) => ({ ...prev, accidentCaseId: created.id }));
@@ -230,6 +243,50 @@ export function SsmAccidentsManager() {
                 }))
               }
             />
+          </div>
+          <div className="field">
+            <label htmlFor="acc-witnesses">Martori (separați prin virgulă)</label>
+            <input
+              id="acc-witnesses"
+              value={witnessesText}
+              onChange={(e) => setWitnessesText(e.target.value)}
+              placeholder="Ion Popescu, Maria Ionescu"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="acc-itm-days">Zile ITM (concediu medical)</label>
+            <input
+              id="acc-itm-days"
+              type="number"
+              min={0}
+              value={caseForm.itmDaysOff ?? ""}
+              onChange={(e) =>
+                setCaseForm((p) => ({
+                  ...p,
+                  itmDaysOff: e.target.value === "" ? undefined : Number(e.target.value)
+                }))
+              }
+            />
+          </div>
+          <div className="ssm-form-grid">
+            <div className="field inline-check">
+              <input
+                id="acc-disability"
+                type="checkbox"
+                checked={caseForm.hasPermanentDisability ?? false}
+                onChange={(e) => setCaseForm((p) => ({ ...p, hasPermanentDisability: e.target.checked }))}
+              />
+              <label htmlFor="acc-disability">Invaliditate permanentă</label>
+            </div>
+            <div className="field inline-check">
+              <input
+                id="acc-fatality"
+                type="checkbox"
+                checked={caseForm.isFatality ?? false}
+                onChange={(e) => setCaseForm((p) => ({ ...p, isFatality: e.target.checked }))}
+              />
+              <label htmlFor="acc-fatality">Deces</label>
+            </div>
           </div>
           <div className="field">
             <label htmlFor="acc-desc">Descriere</label>

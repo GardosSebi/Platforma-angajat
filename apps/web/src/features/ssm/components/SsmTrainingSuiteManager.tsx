@@ -14,6 +14,7 @@ import {
   trainingCategoryMeta
 } from "@repo/shared-types/ssm-training-catalog";
 import { downloadWithAuth } from "../../../shared/api/http-download";
+import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import {
@@ -119,7 +120,7 @@ export function SsmTrainingSuiteManager() {
     durationSeconds: 900,
     passed: true
   });
-  const [signature, setSignature] = useState("Semnătură olografă");
+  const [signature, setSignature] = useState("");
   const [digitalEmployeeId, setDigitalEmployeeId] = useState(resolvedEmployeeId);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [dossierData, setDossierData] = useState<{
@@ -549,15 +550,13 @@ export function SsmTrainingSuiteManager() {
                 {completeTest.isPending ? "Se salvează..." : "Finalizează test (înregistrare automată)"}
               </button>
             </form>
-            <div className="field">
-              <label htmlFor="signature-data">Semnătură olografă</label>
-              <input id="signature-data" value={signature} onChange={(e) => setSignature(e.target.value)} />
-            </div>
+            <SignatureCanvas value={signature} onChange={setSignature} />
             <div className="ssm-inline-actions">
               {canSignAsEmployee ? (
                 <button
                   type="button"
                   className="btn-secondary"
+                  disabled={!signature.startsWith("data:image")}
                   onClick={() =>
                     activePlan.id &&
                     signPlan.mutate({ planId: activePlan.id, role: "EMPLOYEE", signatureData: signature })
@@ -571,6 +570,7 @@ export function SsmTrainingSuiteManager() {
                   <button
                     type="button"
                     className="btn-secondary"
+                    disabled={!signature.startsWith("data:image")}
                     onClick={() =>
                       activePlan.id &&
                       signPlan.mutate({ planId: activePlan.id, role: "RESPONSIBLE", signatureData: signature })
@@ -581,6 +581,11 @@ export function SsmTrainingSuiteManager() {
                   <button
                     type="button"
                     className="btn-secondary"
+                    disabled={
+                      !signature.startsWith("data:image") ||
+                      !planOptions.length ||
+                      signBatch.isPending
+                    }
                     onClick={() =>
                       signBatch.mutate({
                         planIds: planOptions.map((p) => p.id),
@@ -588,7 +593,6 @@ export function SsmTrainingSuiteManager() {
                         signatureData: signature
                       })
                     }
-                    disabled={!planOptions.length}
                   >
                     Semnare în pachet
                   </button>

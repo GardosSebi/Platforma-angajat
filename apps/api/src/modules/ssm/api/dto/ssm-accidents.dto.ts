@@ -1,4 +1,6 @@
 import {
+  IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -39,6 +41,24 @@ export class CreateAccidentCaseDto {
   @MinLength(5)
   @MaxLength(4000)
   description!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  witnesses?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  itmDaysOff?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  hasPermanentDisability?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isFatality?: boolean;
 
   @IsOptional()
   @IsInt()

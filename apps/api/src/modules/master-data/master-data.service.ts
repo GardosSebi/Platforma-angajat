@@ -7,6 +7,7 @@ import {
 import { PrismaService } from "../../infrastructure/prisma/prisma.service";
 import { DataEncryptionService } from "../../infrastructure/security/data-encryption.service";
 import { AuditLogService } from "../../infrastructure/logging/audit-log.service";
+import { NotificationsService } from "../../infrastructure/notifications/notifications.service";
 import { CreateWorksiteDto } from "./dto/create-worksite.dto";
 import { CreateDepartmentDto } from "./dto/create-department.dto";
 import { CreateJobPositionDto } from "./dto/create-job-position.dto";
@@ -76,7 +77,8 @@ export class MasterDataService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryption: DataEncryptionService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly notifications: NotificationsService
   ) {}
 
   private async ensureTrainingType(
@@ -156,7 +158,7 @@ export class MasterDataService {
     }
     const now = new Date();
     const dueAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    await this.prisma.ssmTrainingPlan.create({
+    const plan = await this.prisma.ssmTrainingPlan.create({
       data: {
         tenantId,
         employeeId,
@@ -173,8 +175,18 @@ export class MasterDataService {
       module: "SSM",
       action: "TRAINING_AUTO_ASSIGNED",
       entityType: "SsmTrainingPlan",
-      entityId: "-",
+      entityId: plan.id,
       payload: { employeeId, category, reason }
+    });
+    await this.notifications.notifyEmployee({
+      tenantId,
+      employeeId,
+      category: "TRAINING_ASSIGNED",
+      title: `Instruire alocată: ${type.name}`,
+      body: reason,
+      linkPath: "/ssm",
+      entityType: "SsmTrainingPlan",
+      entityId: plan.id
     });
   }
 

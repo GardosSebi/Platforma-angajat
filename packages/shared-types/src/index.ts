@@ -7,3 +7,4 @@ export * from "./communications";
 export * from "./surveys";
 export * from "./ticketing";
 export * from "./platform-admin";
+export * from "./notifications";

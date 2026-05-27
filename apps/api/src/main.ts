@@ -31,6 +31,7 @@ async function bootstrap() {
   await app.listen(port);
   Logger.log(`API http://localhost:${port}/api/v1 (e.g. POST /api/v1/auth/login)`, "Bootstrap");
   Logger.log(`JWT access token TTL: ${JWT_EXPIRES_IN_LABEL} (${JWT_EXPIRES_IN_SECONDS}s)`, "Bootstrap");
+  Logger.log(`Cron jobs: ${process.env.CRON_ENABLED === "true" ? "enabled" : "disabled (set CRON_ENABLED=true)"}`, "Bootstrap");
 }
 
 void bootstrap();

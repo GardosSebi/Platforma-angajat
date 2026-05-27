@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { PermissionsGuard } from "../../common/guards/permissions.guard";
+import { NotificationsModule } from "../../infrastructure/notifications/notifications.module";
 import { AssignTrainingUseCase } from "./application/use-cases/assign-training.use-case";
 import { SsmDocumentsService } from "./application/services/ssm-documents.service";
 import { SsmTrainingSuiteService } from "./application/services/ssm-training-suite.service";
@@ -23,6 +24,7 @@ import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-
 import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.client";
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [
     SsmController,
     SsmDocumentsController,
@@ -50,6 +52,7 @@ import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.cl
       provide: SSM_TRAINING_REPOSITORY,
       useClass: PrismaSsmTrainingRepository
     }
-  ]
+  ],
+  exports: [SsmTrainingSuiteService]
 })
 export class SsmModule {}

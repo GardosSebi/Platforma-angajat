@@ -1,4 +1,5 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NotificationBell } from "../shared/components/NotificationBell";
 import { authStore, SESSION_EXPIRED_FLAG_KEY } from "../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../shared/auth/clear-user-query-cache";
 import { canAccessTenantAdmin } from "../shared/auth/roles";
@@ -67,6 +68,7 @@ export function AppLayout() {
           <div className="app-auth">
             {session ? (
               <>
+                <NotificationBell />
                 <span className="app-auth-tenant" title="Active tenant">
                   {session.tenantId}
                 </span>

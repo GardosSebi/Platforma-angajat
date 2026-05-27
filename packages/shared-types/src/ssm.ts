@@ -318,6 +318,10 @@ export interface CreateSsmAccidentCaseRequest {
   occurredAt: string;
   location?: string;
   description: string;
+  witnesses?: string[];
+  itmDaysOff?: number;
+  hasPermanentDisability?: boolean;
+  isFatality?: boolean;
   legalDaysDeadline?: number;
 }
 
@@ -354,6 +358,10 @@ export interface SsmAccidentCaseItem {
   occurredAt: string;
   dueAt: string;
   location?: string | null;
+  witnesses?: string[];
+  itmDaysOff?: number | null;
+  hasPermanentDisability?: boolean;
+  isFatality?: boolean;
   conclusions?: string | null;
   correctiveMeasures?: string | null;
   tasks: SsmAccidentTaskItem[];

@@ -248,6 +248,7 @@ model Tenant {
   helpdeskTicketComments     HelpdeskTicketComment[]
   userScopedRoles            UserScopedRole[]
   employeeStaticPages        EmployeeStaticPage[]
+  inAppNotifications         InAppNotification[]
 }
 
 model User {
@@ -261,8 +262,9 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  scopedRoles UserScopedRole[]
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scopedRoles      UserScopedRole[]
+  inAppNotifications InAppNotification[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
@@ -502,9 +504,10 @@ model SsmDocumentVersion {
   mimeType      String
   fileSize      Int
   storagePath   String
-  changeNote    String?
-  createdBy     String
-  createdAt     DateTime @default(now())
+  changeNote           String?
+  retentionArchivedAt  DateTime?
+  createdBy            String
+  createdAt            DateTime @default(now())
 
   tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   document           SsmDocument   @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Cascade)
@@ -512,6 +515,7 @@ model SsmDocumentVersion {
 
   @@unique([documentId, versionNumber])
   @@index([tenantId, documentId, createdAt])
+  @@index([tenantId, retentionArchivedAt])
 }
 
 model SsmTrainingType {
@@ -704,15 +708,19 @@ model SsmAccidentCase {
   title              String
   occurredAt         DateTime
   location           String?
-  description        String
-  conclusions        String?
-  correctiveMeasures String?
-  legalDaysDeadline  Int                   @default(30)
-  dueAt              DateTime
-  closedAt           DateTime?
-  createdBy          String
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
+  description              String
+  witnesses                String[]              @default([])
+  itmDaysOff               Int?
+  hasPermanentDisability   Boolean               @default(false)
+  isFatality               Boolean               @default(false)
+  conclusions              String?
+  correctiveMeasures       String?
+  legalDaysDeadline        Int                   @default(30)
+  dueAt                    DateTime
+  closedAt                 DateTime?
+  createdBy                String
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
 
   tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   employee Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
@@ -1160,6 +1168,26 @@ model UserScopedRole {
   @@index([tenantId, userId])
   @@index([tenantId, worksiteId])
   @@index([tenantId, employeeGroupId])
+}
+
+model InAppNotification {
+  id         String    @id @default(cuid())
+  tenantId   String
+  userId     String
+  category   String
+  title      String
+  body       String
+  linkPath   String?
+  entityType String?
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, readAt, createdAt])
+  @@index([tenantId, userId, createdAt])
 }
 
 model EmployeeStaticPage {

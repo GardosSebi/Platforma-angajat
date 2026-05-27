@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import { PaginationQueryDto, resolvePagination } from "../../../../common/dto/pagination-query.dto";
 import { paginatedResult } from "../../../../common/pagination";
 import {
@@ -61,7 +62,8 @@ function statusForPublish(
 export class CommunicationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly notifications: NotificationsService
   ) {}
 
   async dashboard(tenantId: string) {
@@ -158,6 +160,10 @@ export class CommunicationsService {
       payload: { status: created.status, audienceType: created.audienceType }
     });
 
+    if (created.status === CommunicationAnnouncementStatus.PUBLISHED) {
+      await this.notifyAnnouncementAudience(tenantId, created);
+    }
+
     return this.getAnnouncement(tenantId, created.id);
   }
 
@@ -201,6 +207,9 @@ export class CommunicationsService {
     const current = await this.assertAnnouncement(tenantId, id);
     const status = statusForPublish("PUBLISHED", current.publishAt ?? undefined);
     await this.prisma.communicationAnnouncement.update({ where: { id }, data: { status, retractedAt: null } });
+    if (status === CommunicationAnnouncementStatus.PUBLISHED) {
+      await this.notifyAnnouncementAudience(tenantId, { ...current, status });
+    }
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -272,6 +281,39 @@ export class CommunicationsService {
       create: { tenantId, announcementId, employeeId: employee.id },
       update: { readAt: new Date() }
     });
+  }
+
+  async publishDueScheduled(tenantId: string, actorId: string) {
+    const now = new Date();
+    const due = await this.prisma.communicationAnnouncement.findMany({
+      where: {
+        tenantId,
+        status: CommunicationAnnouncementStatus.SCHEDULED,
+        publishAt: { lte: now }
+      }
+    });
+
+    for (const item of due) {
+      await this.prisma.communicationAnnouncement.update({
+        where: { id: item.id },
+        data: { status: CommunicationAnnouncementStatus.PUBLISHED }
+      });
+      await this.notifyAnnouncementAudience(tenantId, item);
+    }
+
+    if (due.length) {
+      await this.auditLog.write({
+        tenantId,
+        actorId,
+        module: "COMMUNICATIONS",
+        action: "SCHEDULED_ANNOUNCEMENTS_PUBLISHED",
+        entityType: "CommunicationAnnouncement",
+        entityId: "batch",
+        payload: { published: due.length }
+      });
+    }
+
+    return { published: due.length };
   }
 
   async reminders(tenantId: string) {
@@ -374,6 +416,64 @@ export class CommunicationsService {
       entityId: created.id
     });
     return created;
+  }
+
+  private async resolveAudienceEmployeeIds(tenantId: string, row: CommunicationAnnouncement): Promise<string[]> {
+    if (row.audienceType === CommunicationAudienceType.ALL) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (row.audienceType === CommunicationAudienceType.WORKSITE) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true, worksiteId: row.audienceRefId },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (row.audienceType === CommunicationAudienceType.DEPARTMENT) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true, departmentId: row.audienceRefId },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (row.audienceType === CommunicationAudienceType.JOB_POSITION) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true, jobPositionId: row.audienceRefId },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (row.audienceType === CommunicationAudienceType.EMPLOYEE_GROUP) {
+      const rows = await this.prisma.employeeGroupMember.findMany({
+        where: { group: { id: row.audienceRefId ?? undefined, tenantId, active: true } },
+        select: { employeeId: true }
+      });
+      return rows.map((item) => item.employeeId);
+    }
+    if (row.audienceType === CommunicationAudienceType.EMPLOYEE) {
+      return row.audienceRefId ? [row.audienceRefId] : [];
+    }
+    return dedupe(row.targetEmployeeIds);
+  }
+
+  private async notifyAnnouncementAudience(tenantId: string, row: CommunicationAnnouncement) {
+    const employeeIds = await this.resolveAudienceEmployeeIds(tenantId, row);
+    for (const employeeId of employeeIds) {
+      await this.notifications.notifyEmployee({
+        tenantId,
+        employeeId,
+        category: "COMMUNICATION",
+        title: `Anunț: ${row.title}`,
+        body: row.body.length > 240 ? `${row.body.slice(0, 240)}…` : row.body,
+        linkPath: "/chatbot",
+        entityType: "CommunicationAnnouncement",
+        entityId: row.id
+      });
+    }
   }
 
   private async getAnnouncement(tenantId: string, id: string) {

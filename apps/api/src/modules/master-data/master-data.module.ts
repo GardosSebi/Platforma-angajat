@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { PermissionsGuard } from "../../common/guards/permissions.guard";
+import { NotificationsModule } from "../../infrastructure/notifications/notifications.module";
 import { MasterDataService } from "./master-data.service";
 import { WorksitesController } from "./api/worksites.controller";
 import { DepartmentsController } from "./api/departments.controller";
@@ -10,6 +11,7 @@ import { SsmResponsiblesController } from "./api/ssm-responsibles.controller";
 import { MasterDataImportController } from "./api/import.controller";
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [
     WorksitesController,
     DepartmentsController,

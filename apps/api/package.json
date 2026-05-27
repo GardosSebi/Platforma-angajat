@@ -13,6 +13,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:reset": "prisma migrate reset --force",
     "prisma:seed": "prisma db seed",
     "prisma:seed:test-data": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-test-data.ts",
     "prisma:seed:test-data:extended": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-test-data-extended.ts"
@@ -27,6 +28,7 @@
     "@nestjs/jwt": "latest",
     "@nestjs/passport": "latest",
     "@nestjs/platform-express": "latest",
+    "@nestjs/schedule": "^5.0.1",
     "@prisma/client": "^6.18.0",
     "axios": "latest",
     "bcrypt": "latest",

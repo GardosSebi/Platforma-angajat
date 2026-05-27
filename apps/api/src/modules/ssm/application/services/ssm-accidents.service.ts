@@ -51,6 +51,10 @@ export class SsmAccidentsService {
         occurredAt: row.occurredAt,
         dueAt: row.dueAt,
         location: row.location,
+        witnesses: row.witnesses,
+        itmDaysOff: row.itmDaysOff,
+        hasPermanentDisability: row.hasPermanentDisability,
+        isFatality: row.isFatality,
         conclusions: row.conclusions,
         correctiveMeasures: row.correctiveMeasures,
         tasks: row.tasks.map((task) => ({
@@ -87,6 +91,10 @@ export class SsmAccidentsService {
         occurredAt,
         location: dto.location?.trim(),
         description: dto.description.trim(),
+        witnesses: (dto.witnesses ?? []).map((w) => w.trim()).filter(Boolean),
+        itmDaysOff: dto.itmDaysOff,
+        hasPermanentDisability: dto.hasPermanentDisability ?? false,
+        isFatality: dto.isFatality ?? false,
         legalDaysDeadline,
         dueAt,
         createdBy: actorId
@@ -210,6 +218,10 @@ export class SsmAccidentsService {
       doc.text(`Status: ${accidentCase.status}`);
       doc.text(`Data eveniment: ${accidentCase.occurredAt.toISOString()}`);
       doc.text(`Locatie: ${accidentCase.location ?? "-"}`);
+      doc.text(`Martori: ${accidentCase.witnesses.length ? accidentCase.witnesses.join(", ") : "-"}`);
+      doc.text(`Zile ITM: ${accidentCase.itmDaysOff ?? "-"}`);
+      doc.text(`Invaliditate permanenta: ${accidentCase.hasPermanentDisability ? "Da" : "Nu"}`);
+      doc.text(`Deces: ${accidentCase.isFatality ? "Da" : "Nu"}`);
       doc.text(`Angajat: ${accidentCase.employee?.fullName ?? "-"}`);
       doc.text(`Termen legal: ${accidentCase.dueAt.toISOString()}`);
       doc.moveDown().text("Descriere:");

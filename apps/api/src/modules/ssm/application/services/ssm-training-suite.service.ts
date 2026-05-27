@@ -9,6 +9,7 @@ import JSZip from "jszip";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
+import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import { JwtPayload } from "../../../../auth/jwt.strategy";
 import { hasAllPermissions, Permission } from "../../../../common/constants/permissions";
 import { findEmployeeIdForUserEmail, resolveSsmViewerScope } from "../../api/ssm-viewer-scope";
@@ -134,7 +135,8 @@ export class SsmTrainingSuiteService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    private readonly notifications: NotificationsService
   ) {}
 
   private async syncOverdue(tenantId: string) {
@@ -245,6 +247,17 @@ export class SsmTrainingSuiteService {
         ].join("\n")
       });
     }
+
+    await this.notifications.notifyEmployee({
+      tenantId,
+      employeeId: employee.id,
+      category: "TRAINING_ASSIGNED",
+      title: `Instruire alocată: ${type.name}`,
+      body: `Scadență: ${dueAt.toLocaleDateString("ro-RO")}. Parcurge materialul și completează testul.`,
+      linkPath: "/ssm",
+      entityType: "SsmTrainingPlan",
+      entityId: created.id
+    });
 
     return created;
   }
@@ -592,9 +605,15 @@ export class SsmTrainingSuiteService {
   async dispatchReminders(tenantId: string, actorId: string) {
     const reminders = await this.trainingReminders(tenantId);
     const dispatchRepo = (this.prisma as PrismaWithReminderDispatch).ssmTrainingReminderDispatch;
-    let sent = 0;
+    let sentEmail = 0;
+    let sentInApp = 0;
     for (const reminder of reminders) {
-      const alreadySent = await dispatchRepo.findUnique({
+      const reminderText =
+        reminder.daysUntilDue < 0
+          ? `Instruirea ${reminder.trainingTypeName} este restantă cu ${Math.abs(reminder.daysUntilDue)} zile.`
+          : `Instruirea ${reminder.trainingTypeName} expiră în ${reminder.daysUntilDue} zile.`;
+
+      const emailSent = await dispatchRepo.findUnique({
         where: {
           trainingPlanId_daysUntilDue_channel: {
             trainingPlanId: reminder.trainingPlanId,
@@ -603,25 +622,59 @@ export class SsmTrainingSuiteService {
           }
         }
       });
-      if (alreadySent || !reminder.employeeEmail) {
-        continue;
+      if (!emailSent && reminder.employeeEmail) {
+        await this.mailService.sendMail({
+          to: reminder.employeeEmail,
+          subject: `Reminder instruire SSM: ${reminder.trainingTypeName}`,
+          text: reminderText
+        });
+        await dispatchRepo.create({
+          data: {
+            tenantId,
+            trainingPlanId: reminder.trainingPlanId,
+            daysUntilDue: reminder.daysUntilDue,
+            channel: "email"
+          }
+        });
+        sentEmail += 1;
       }
-      await this.mailService.sendMail({
-        to: reminder.employeeEmail,
-        subject: `Reminder instruire SSM: ${reminder.trainingTypeName}`,
-        text: reminder.daysUntilDue < 0
-          ? `Instruirea ${reminder.trainingTypeName} este restantă cu ${Math.abs(reminder.daysUntilDue)} zile.`
-          : `Instruirea ${reminder.trainingTypeName} expiră în ${reminder.daysUntilDue} zile.`
-      });
-      await dispatchRepo.create({
-        data: {
-          tenantId,
-          trainingPlanId: reminder.trainingPlanId,
-          daysUntilDue: reminder.daysUntilDue,
-          channel: "email"
+
+      const inAppSent = await dispatchRepo.findUnique({
+        where: {
+          trainingPlanId_daysUntilDue_channel: {
+            trainingPlanId: reminder.trainingPlanId,
+            daysUntilDue: reminder.daysUntilDue,
+            channel: "in_app"
+          }
         }
       });
-      sent += 1;
+      if (!inAppSent) {
+        const plan = await this.prisma.ssmTrainingPlan.findFirst({
+          where: { id: reminder.trainingPlanId, tenantId },
+          select: { employeeId: true }
+        });
+        if (plan) {
+          await this.notifications.notifyEmployee({
+            tenantId,
+            employeeId: plan.employeeId,
+            category: "TRAINING_REMINDER",
+            title: `Reminder instruire: ${reminder.trainingTypeName}`,
+            body: reminderText,
+            linkPath: "/ssm",
+            entityType: "SsmTrainingPlan",
+            entityId: reminder.trainingPlanId
+          });
+          await dispatchRepo.create({
+            data: {
+              tenantId,
+              trainingPlanId: reminder.trainingPlanId,
+              daysUntilDue: reminder.daysUntilDue,
+              channel: "in_app"
+            }
+          });
+          sentInApp += 1;
+        }
+      }
     }
     await this.auditLog.write({
       tenantId,
@@ -630,9 +683,9 @@ export class SsmTrainingSuiteService {
       action: "TRAINING_REMINDERS_DISPATCHED",
       entityType: "SsmTrainingReminderDispatch",
       entityId: "-",
-      payload: { sent }
+      payload: { sentEmail, sentInApp }
     });
-    return { sent };
+    return { sent: sentEmail + sentInApp, sentEmail, sentInApp };
   }
 
   async calendar(tenantId: string, viewer: JwtPayload) {
