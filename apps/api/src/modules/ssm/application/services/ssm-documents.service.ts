@@ -278,7 +278,10 @@ export class SsmDocumentsService {
     tenantId: string,
     viewer: JwtPayload
   ): Promise<
-    { scope: "tenant" } | { scope: "empty" } | { scope: "self"; employee: EmployeePlacementNames }
+    | { scope: "tenant" }
+    | { scope: "empty" }
+    | { scope: "self"; employee: EmployeePlacementNames }
+    | { scope: "worksite"; worksiteName: string | null; worksiteIds: string[] }
   > {
     const resolved = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
     if (resolved.mode === "tenant") {
@@ -286,6 +289,15 @@ export class SsmDocumentsService {
     }
     if (resolved.mode === "empty") {
       return { scope: "empty" };
+    }
+    if (resolved.mode === "worksite" || resolved.mode === "worksites") {
+      const worksiteIds =
+        resolved.mode === "worksite" ? [resolved.worksiteId] : resolved.worksiteIds;
+      const ws = await this.prisma.worksite.findFirst({
+        where: { id: worksiteIds[0], tenantId },
+        select: { name: true }
+      });
+      return { scope: "worksite", worksiteName: ws?.name ?? null, worksiteIds };
     }
     const employee = await this.prisma.employee.findFirst({
       where: { id: resolved.employeeId, tenantId },
@@ -352,6 +364,53 @@ export class SsmDocumentsService {
             ctx.employee
           )
         );
+      const total = filtered.length;
+      const pageItems = filtered.slice(p.skip, p.skip + p.take);
+      return paginatedResult(
+        pageItems.map((row) => ({ ...row, activeVersion: row.activeVersion! })),
+        total,
+        p.page,
+        p.pageSize
+      );
+    }
+
+    if (ctx.scope === "worksite") {
+      const [departments, jobPositions, rows] = await Promise.all([
+        this.prisma.department.findMany({
+          where: { tenantId, worksiteId: { in: ctx.worksiteIds } },
+          select: { name: true }
+        }),
+        this.prisma.jobPosition.findMany({
+          where: {
+            tenantId,
+            department: { worksiteId: { in: ctx.worksiteIds } }
+          },
+          select: { name: true }
+        }),
+        this.prisma.ssmDocument.findMany({
+          where: dbWhere,
+          include: { activeVersion: true },
+          orderBy: [{ updatedAt: "desc" }]
+        })
+      ]);
+      const depNames = new Set(departments.map((d) => d.name));
+      const jobNames = new Set(jobPositions.map((j) => j.name));
+      const filtered = rows
+        .filter((row) => row.activeVersion)
+        .filter((row) => {
+          if (row.status !== SsmDocumentStatus.ACTIVE) return false;
+          if (row.targetType === SsmDocumentTargetType.ALL) return true;
+          if (row.targetType === SsmDocumentTargetType.WORKSITE) {
+            return row.targetLabel === ctx.worksiteName;
+          }
+          if (row.targetType === SsmDocumentTargetType.DEPARTMENT) {
+            return row.targetLabel ? depNames.has(row.targetLabel) : false;
+          }
+          if (row.targetType === SsmDocumentTargetType.JOB_POSITION) {
+            return row.targetLabel ? jobNames.has(row.targetLabel) : false;
+          }
+          return false;
+        });
       const total = filtered.length;
       const pageItems = filtered.slice(p.skip, p.skip + p.take);
       return paginatedResult(

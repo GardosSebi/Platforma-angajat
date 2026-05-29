@@ -6,6 +6,7 @@ import { RequirePermissions } from "../../../common/decorators/require-permissio
 import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { Permission } from "../../../common/constants/permissions";
 import { PermissionsGuard } from "../../../common/guards/permissions.guard";
+import { JwtPayload } from "../../../auth/jwt.strategy";
 import { TicketingService } from "../application/services/ticketing.service";
 import {
   AddTicketCommentDto,
@@ -28,26 +29,26 @@ export class TicketingController {
 
   @Get("kanban")
   @RequirePermissions(Permission.TICKETS_VIEW)
-  kanban(@TenantId() tenantId: string, @Query() query: ListTicketsDto) {
-    return this.ticketing.kanban(tenantId, query);
+  kanban(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Query() query: ListTicketsDto) {
+    return this.ticketing.kanban(tenantId, query, user);
   }
 
   @Get("tickets")
   @RequirePermissions(Permission.TICKETS_VIEW)
-  listTickets(@TenantId() tenantId: string, @Query() query: ListTicketsDto) {
-    return this.ticketing.listTickets(tenantId, query);
+  listTickets(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Query() query: ListTicketsDto) {
+    return this.ticketing.listTickets(tenantId, query, user);
   }
 
   @Post("tickets")
   @RequirePermissions(Permission.TICKETS_EDIT)
-  createTicket(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: CreateTicketDto) {
-    return this.ticketing.createTicket(tenantId, user.sub, dto);
+  createTicket(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateTicketDto) {
+    return this.ticketing.createTicket(tenantId, user.sub, dto, user);
   }
 
   @Post("tickets/from-survey-response")
   @RequirePermissions(Permission.TICKETS_EDIT)
-  createTicketFromSurvey(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: CreateTicketDto) {
-    return this.ticketing.createTicket(tenantId, user.sub, { ...dto, source: "SURVEY" });
+  createTicketFromSurvey(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateTicketDto) {
+    return this.ticketing.createTicket(tenantId, user.sub, { ...dto, source: "SURVEY" }, user);
   }
 
   @Patch("tickets/:id")

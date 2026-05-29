@@ -12,7 +12,13 @@ import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import { JwtPayload } from "../../../../auth/jwt.strategy";
 import { hasAllPermissions, Permission } from "../../../../common/constants/permissions";
-import { findEmployeeIdForUserEmail, resolveSsmViewerScope } from "../../api/ssm-viewer-scope";
+import {
+  assertSsmEmployeeAccess,
+  findEmployeeIdForUserEmail,
+  resolveSsmViewerScope,
+  ssmEmployeeWhere,
+  ssmTrainingPlanWhere
+} from "../../api/ssm-viewer-scope";
 import {
   CompleteTestDto,
   CreateTrainingPlanDto,
@@ -515,10 +521,7 @@ export class SsmTrainingSuiteService {
       return paginatedResult([], 0, 1, resolvePagination(query).pageSize);
     }
     const p = resolvePagination(query);
-    const where = {
-      tenantId,
-      ...(scope.mode === "self" ? { employeeId: scope.employeeId } : {})
-    };
+    const where = ssmTrainingPlanWhere(tenantId, scope);
     const [rows, total] = await Promise.all([
       this.prisma.ssmTrainingPlan.findMany({
         where,
@@ -554,12 +557,18 @@ export class SsmTrainingSuiteService {
     return paginatedResult(items, total, p.page, p.pageSize);
   }
 
-  private async trainingReminders(tenantId: string, employeeId?: string) {
+  private async trainingReminders(
+    tenantId: string,
+    filter?: { employeeId?: string; worksiteIds?: string[] }
+  ) {
     await this.syncOverdue(tenantId);
     const rows = await this.prisma.ssmTrainingPlan.findMany({
       where: {
         tenantId,
-        ...(employeeId ? { employeeId } : {}),
+        ...(filter?.employeeId ? { employeeId: filter.employeeId } : {}),
+        ...(filter?.worksiteIds?.length
+          ? { employee: { worksiteId: { in: filter.worksiteIds } } }
+          : {}),
         status: { in: [SsmTrainingPlanStatus.PENDING, SsmTrainingPlanStatus.OVERDUE] }
       },
       include: {
@@ -593,10 +602,15 @@ export class SsmTrainingSuiteService {
     if (scope.mode === "empty") {
       return { reminders: [] };
     }
-    const reminders = await this.trainingReminders(
-      tenantId,
-      scope.mode === "self" ? scope.employeeId : undefined
-    );
+    const filter =
+      scope.mode === "self"
+        ? { employeeId: scope.employeeId }
+        : scope.mode === "worksite"
+          ? { worksiteIds: [scope.worksiteId] }
+          : scope.mode === "worksites"
+            ? { worksiteIds: scope.worksiteIds }
+            : undefined;
+    const reminders = await this.trainingReminders(tenantId, filter);
     return {
       reminders: reminders.map(({ employeeEmail: _ignored, ...item }) => item)
     };
@@ -695,10 +709,7 @@ export class SsmTrainingSuiteService {
       return { events: [] };
     }
     const plans = await this.prisma.ssmTrainingPlan.findMany({
-      where: {
-        tenantId,
-        ...(scope.mode === "self" ? { employeeId: scope.employeeId } : {})
-      },
+      where: ssmTrainingPlanWhere(tenantId, scope),
       include: {
         employee: { select: { fullName: true } },
         trainingType: { select: { name: true } }
@@ -729,11 +740,7 @@ export class SsmTrainingSuiteService {
       };
     }
     const employees = await this.prisma.employee.findMany({
-      where: {
-        tenantId,
-        active: true,
-        ...(scope.mode === "self" ? { id: scope.employeeId } : {})
-      },
+      where: ssmEmployeeWhere(tenantId, scope),
       select: {
         id: true,
         fullName: true,
@@ -1021,9 +1028,7 @@ export class SsmTrainingSuiteService {
     if (!plan) {
       throw new NotFoundException("Training plan not found.");
     }
-    if (plan.employeeId !== scope.employeeId) {
-      throw new ForbiddenException("Nu aveți acces la acest plan de instruire.");
-    }
+    await assertSsmEmployeeAccess(this.prisma, tenantId, plan.employeeId, scope);
   }
 
   private async assertDigitalFileEmployeeAccess(
@@ -1038,9 +1043,7 @@ export class SsmTrainingSuiteService {
     if (scope.mode === "empty") {
       throw new ForbiddenException("Contul nu este asociat unui angajat pentru acces SSM individual.");
     }
-    if (employeeId !== scope.employeeId) {
-      throw new ForbiddenException("Puteți consulta doar propriul dosar personal SSM.");
-    }
+    await assertSsmEmployeeAccess(this.prisma, tenantId, employeeId, scope);
   }
 
   async generateCollectiveSheetPdf(dto: GenerateCollectiveSheetDto) {

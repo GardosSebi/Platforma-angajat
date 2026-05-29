@@ -7,6 +7,7 @@ import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
 import { Permission } from "../../../common/constants/permissions";
 import { PermissionsGuard } from "../../../common/guards/permissions.guard";
+import { JwtPayload } from "../../../auth/jwt.strategy";
 import { CommunicationsService } from "../application/services/communications.service";
 import {
   CreateAnnouncementDto,
@@ -27,61 +28,74 @@ export class CommunicationsController {
 
   @Get("overview")
   @RequirePermissions(Permission.COMMUNICATIONS_DASHBOARD_VIEW)
-  dashboard(@TenantId() tenantId: string) {
-    return this.communications.dashboard(tenantId);
+  dashboard(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.communications.dashboard(tenantId, user);
   }
 
   @Get("announcements")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
-  listAnnouncements(@TenantId() tenantId: string, @Query() query: PaginationQueryDto) {
-    return this.communications.listAnnouncements(tenantId, query);
+  listAnnouncements(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query() query: PaginationQueryDto
+  ) {
+    return this.communications.listAnnouncements(tenantId, query, user);
   }
 
   @Post("announcements")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
-  createAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: CreateAnnouncementDto) {
-    return this.communications.createAnnouncement(tenantId, user.sub, dto);
+  createAnnouncement(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateAnnouncementDto
+  ) {
+    return this.communications.createAnnouncement(tenantId, user.sub, dto, user);
   }
 
   @Patch("announcements/:id")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
   updateAnnouncement(
     @TenantId() tenantId: string,
-    @CurrentUser() user: { sub: string },
+    @CurrentUser() user: JwtPayload,
     @Param("id") id: string,
     @Body() dto: UpdateAnnouncementDto
   ) {
-    return this.communications.updateAnnouncement(tenantId, user.sub, id, dto);
+    return this.communications.updateAnnouncement(tenantId, user.sub, id, dto, user);
   }
 
   @Patch("announcements/:id/publish")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
-  publishAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string) {
-    return this.communications.publishAnnouncement(tenantId, user.sub, id);
+  publishAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.communications.publishAnnouncement(tenantId, user.sub, id, user);
   }
 
   @Patch("announcements/:id/retract")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
-  retractAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string) {
-    return this.communications.retractAnnouncement(tenantId, user.sub, id);
+  retractAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.communications.retractAnnouncement(tenantId, user.sub, id, user);
   }
 
   @Post("announcements/:id/duplicate")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
-  duplicateAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string) {
-    return this.communications.duplicateAnnouncement(tenantId, user.sub, id);
+  duplicateAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.communications.duplicateAnnouncement(tenantId, user.sub, id, user);
   }
 
   @Post("announcements/:id/read")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
-  markRead(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: MarkAnnouncementReadDto) {
-    return this.communications.markRead(tenantId, id, dto);
+  markRead(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: MarkAnnouncementReadDto
+  ) {
+    return this.communications.markRead(tenantId, id, dto, user);
   }
 
   @Get("reminders")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
-  reminders(@TenantId() tenantId: string) {
-    return this.communications.reminders(tenantId);
+  reminders(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.communications.reminders(tenantId, user);
   }
 
   @Post("reminders/dispatch")
@@ -98,7 +112,7 @@ export class CommunicationsController {
 
   @Post("templates")
   @RequirePermissions(Permission.COMMUNICATIONS_TEMPLATES_EDIT)
-  createTemplate(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: CreateTemplateDto) {
-    return this.communications.createTemplate(tenantId, user.sub, dto);
+  createTemplate(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateTemplateDto) {
+    return this.communications.createTemplate(tenantId, user.sub, dto, user);
   }
 }

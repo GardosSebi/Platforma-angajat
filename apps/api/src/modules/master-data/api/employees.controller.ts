@@ -25,8 +25,12 @@ export class EmployeesController {
 
   @Get("options")
   @RequirePermissions(Permission.MASTER_DATA_READ)
-  listOptions(@TenantId() tenantId: string, @Query() query: ListEmployeeOptionsDto) {
-    return this.masterData.listEmployeeOptions(tenantId, query.search, query.limit);
+  listOptions(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ListEmployeeOptionsDto
+  ) {
+    return this.masterData.listEmployeeOptions(tenantId, query.search, query.limit, user);
   }
 
   @Get()
@@ -36,13 +40,13 @@ export class EmployeesController {
     @CurrentUser() user: JwtPayload,
     @Query() query: PaginationQueryDto
   ) {
-    return this.masterData.listEmployees(tenantId, this.revealCnp(user), query);
+    return this.masterData.listEmployees(tenantId, this.revealCnp(user), query, user);
   }
 
   @Get(":id")
   @RequirePermissions(Permission.MASTER_DATA_READ)
   getOne(@TenantId() tenantId: string, @Param("id") id: string, @CurrentUser() user: JwtPayload) {
-    return this.masterData.getEmployee(tenantId, id, this.revealCnp(user));
+    return this.masterData.getEmployee(tenantId, id, this.revealCnp(user), user);
   }
 
   @Post()

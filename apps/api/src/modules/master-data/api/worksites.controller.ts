@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@ne
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
+import { CurrentUser } from "../../../common/decorators/current-user.decorator";
+import { JwtPayload } from "../../../auth/jwt.strategy";
 import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
 import { PermissionsGuard } from "../../../common/guards/permissions.guard";
@@ -17,8 +19,8 @@ export class WorksitesController {
 
   @Get()
   @RequirePermissions(Permission.MASTER_DATA_READ)
-  list(@TenantId() tenantId: string, @Query() query: PaginationQueryDto) {
-    return this.masterData.listWorksites(tenantId, query);
+  list(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Query() query: PaginationQueryDto) {
+    return this.masterData.listWorksites(tenantId, query, user);
   }
 
   @Post()

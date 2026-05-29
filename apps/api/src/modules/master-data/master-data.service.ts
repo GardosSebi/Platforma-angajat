@@ -21,6 +21,14 @@ import { CreateEmployeeGroupDto } from "./dto/create-group.dto";
 import { CreateSsmResponsibleDto } from "./dto/create-ssm-responsible.dto";
 import { paginatedResult } from "../../common/pagination";
 import { resolvePagination, PaginationQueryDto } from "../../common/dto/pagination-query.dto";
+import { JwtPayload } from "../../auth/jwt.strategy";
+import {
+  applyWorksiteToDepartmentWhere,
+  applyWorksiteToEmployeeWhere,
+  applyWorksiteToWorksiteWhere,
+  assertEmployeeInWorksiteScope,
+  resolveWorksiteViewerScope
+} from "../../common/worksite-viewer-scope";
 
 type SsmTrainingCategoryCode =
   | "INTRODUCTORY_GENERAL"
@@ -209,10 +217,16 @@ export class MasterDataService {
     return this.encryption.encrypt(plain.trim());
   }
 
+  private async worksiteScopeFor(viewer?: JwtPayload) {
+    if (!viewer) return { mode: "tenant" as const };
+    return resolveWorksiteViewerScope(this.prisma, viewer.tenantId, viewer);
+  }
+
   // --- Puncte de lucru ---
-  async listWorksites(tenantId: string, query?: PaginationQueryDto) {
+  async listWorksites(tenantId: string, query?: PaginationQueryDto, viewer?: JwtPayload) {
     const p = resolvePagination(query);
-    const where = { tenantId };
+    const scope = await this.worksiteScopeFor(viewer);
+    const where = applyWorksiteToWorksiteWhere({ tenantId }, scope);
     const [items, total] = await Promise.all([
       this.prisma.worksite.findMany({
         where,
@@ -266,9 +280,10 @@ export class MasterDataService {
   }
 
   // --- Departamente ---
-  async listDepartments(tenantId: string, query?: PaginationQueryDto) {
+  async listDepartments(tenantId: string, query?: PaginationQueryDto, viewer?: JwtPayload) {
     const p = resolvePagination(query);
-    const where = { tenantId };
+    const scope = await this.worksiteScopeFor(viewer);
+    const where = applyWorksiteToDepartmentWhere({ tenantId }, scope);
     const [items, total] = await Promise.all([
       this.prisma.department.findMany({
         where,
@@ -416,9 +431,15 @@ export class MasterDataService {
   }
 
   // --- Angajați ---
-  async listEmployees(tenantId: string, revealCnp: boolean, query?: PaginationQueryDto) {
+  async listEmployees(
+    tenantId: string,
+    revealCnp: boolean,
+    query?: PaginationQueryDto,
+    viewer?: JwtPayload
+  ) {
     const p = resolvePagination(query);
-    const where = { tenantId };
+    const scope = await this.worksiteScopeFor(viewer);
+    const where = applyWorksiteToEmployeeWhere({ tenantId }, scope);
     const [rows, total] = await Promise.all([
       this.prisma.employee.findMany({
         where,
@@ -441,21 +462,25 @@ export class MasterDataService {
   }
 
   /** Listă ușoară pentru selectoare (max 100). */
-  async listEmployeeOptions(tenantId: string, search?: string, limit = 100) {
+  async listEmployeeOptions(tenantId: string, search?: string, limit = 100, viewer?: JwtPayload) {
     const take = Math.min(100, Math.max(1, limit));
     const term = search?.trim();
-    const where = {
-      tenantId,
-      active: true,
-      ...(term
-        ? {
-            OR: [
-              { fullName: { contains: term, mode: "insensitive" as const } },
-              { email: { contains: term, mode: "insensitive" as const } }
-            ]
-          }
-        : {})
-    };
+    const scope = await this.worksiteScopeFor(viewer);
+    const where = applyWorksiteToEmployeeWhere(
+      {
+        tenantId,
+        active: true,
+        ...(term
+          ? {
+              OR: [
+                { fullName: { contains: term, mode: "insensitive" as const } },
+                { email: { contains: term, mode: "insensitive" as const } }
+              ]
+            }
+          : {})
+      },
+      scope
+    );
     const items = await this.prisma.employee.findMany({
       where,
       select: { id: true, fullName: true, email: true, active: true },
@@ -465,7 +490,9 @@ export class MasterDataService {
     return { items };
   }
 
-  async getEmployee(tenantId: string, id: string, revealCnp: boolean) {
+  async getEmployee(tenantId: string, id: string, revealCnp: boolean, viewer?: JwtPayload) {
+    const scope = await this.worksiteScopeFor(viewer);
+    await assertEmployeeInWorksiteScope(this.prisma, tenantId, id, scope);
     const e = await this.prisma.employee.findFirst({
       where: { id, tenantId },
       include: {

@@ -1708,6 +1708,53 @@ button.ssm-doc-item:hover {
   color: var(--color-danger);
 }
 
+.team-context-card .team-placement-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.team-context-card .team-placement-dl dt {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.team-context-card .team-placement-dl dd {
+  margin: 0;
+}
+
+.admin-directory-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-directory-stack .team-block {
+  margin-top: 0;
+}
+
+.team-block {
+  margin-top: 1.25rem;
+}
+
+.team-block-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.team-members-table .team-member-self {
+  background: var(--color-primary-muted);
+}
+
+.team-self-badge {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
 .static-page-links {
   list-style: none;
   padding: 0;

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   CommunicationAnnouncement,
   CommunicationAnnouncementStatus,
@@ -16,6 +16,15 @@ import {
   MarkAnnouncementReadDto,
   UpdateAnnouncementDto
 } from "../../api/dto/communications.dto";
+import { JwtPayload } from "../../../../auth/jwt.strategy";
+import {
+  applyWorksiteToEmployeeWhere,
+  assertEmployeeInWorksiteScope,
+  employeeIdsInWorksiteScope,
+  resolveWorksiteViewerScope,
+  worksiteIdsFromScope,
+  type WorksiteViewerScope
+} from "../../../../common/worksite-viewer-scope";
 
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
@@ -66,9 +75,16 @@ export class CommunicationsService {
     private readonly notifications: NotificationsService
   ) {}
 
-  async dashboard(tenantId: string) {
+  private async scopeFor(viewer?: JwtPayload, tenantId?: string): Promise<WorksiteViewerScope> {
+    if (!viewer || !tenantId) return { mode: "tenant" };
+    return resolveWorksiteViewerScope(this.prisma, tenantId, viewer);
+  }
+
+  async dashboard(tenantId: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const employeeWhere = applyWorksiteToEmployeeWhere({ tenantId, active: true }, scope);
     const [activeEmployees, announcements, latest] = await Promise.all([
-      this.prisma.employee.count({ where: { tenantId, active: true } }),
+      this.prisma.employee.count({ where: employeeWhere }),
       this.prisma.communicationAnnouncement.findMany({
         where: { tenantId, status: { in: [CommunicationAnnouncementStatus.PUBLISHED, CommunicationAnnouncementStatus.SCHEDULED] } },
         include: { readReceipts: { select: { employeeId: true } } }
@@ -83,7 +99,7 @@ export class CommunicationsService {
     const activeAnnouncements = announcements.filter((item) => item.status === CommunicationAnnouncementStatus.PUBLISHED).length;
     const scheduledAnnouncements = announcements.filter((item) => item.status === CommunicationAnnouncementStatus.SCHEDULED).length;
     const readEmployees = new Set(announcements.flatMap((item) => item.readReceipts.map((receipt) => receipt.employeeId))).size;
-    const latestAnnouncements = await this.withStats(tenantId, latest);
+    const latestAnnouncements = await this.withStats(tenantId, latest, scope);
     const totals = latestAnnouncements.reduce(
       (acc, item) => ({
         targetCount: acc.targetCount + item.stats.targetCount,
@@ -107,24 +123,22 @@ export class CommunicationsService {
     };
   }
 
-  async listAnnouncements(tenantId: string, query?: PaginationQueryDto) {
+  async listAnnouncements(tenantId: string, query?: PaginationQueryDto, viewer?: JwtPayload) {
     const p = resolvePagination(query);
-    const where = { tenantId };
-    const [rows, total] = await Promise.all([
-      this.prisma.communicationAnnouncement.findMany({
-        where,
-        orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }],
-        skip: p.skip,
-        take: p.take
-      }),
-      this.prisma.communicationAnnouncement.count({ where })
-    ]);
-    const items = await this.withStats(tenantId, rows);
-    return paginatedResult(items, total, p.page, p.pageSize);
+    const scope = await this.scopeFor(viewer, tenantId);
+    const allRows = await this.prisma.communicationAnnouncement.findMany({
+      where: { tenantId },
+      orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }]
+    });
+    const scopedRows = await this.filterAnnouncementsForScope(tenantId, allRows, scope);
+    const pageRows = scopedRows.slice(p.skip, p.skip + p.take);
+    const items = await this.withStats(tenantId, pageRows, scope);
+    return paginatedResult(items, scopedRows.length, p.page, p.pageSize);
   }
 
-  async createAnnouncement(tenantId: string, actorId: string, dto: CreateAnnouncementDto) {
-    await this.assertAudience(tenantId, dto.audienceType, dto.audienceRefId, dto.targetEmployeeIds);
+  async createAnnouncement(tenantId: string, actorId: string, dto: CreateAnnouncementDto, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    await this.assertAudience(tenantId, dto.audienceType, dto.audienceRefId, dto.targetEmployeeIds, scope);
     if (dto.templateId) {
       await this.assertTemplate(tenantId, dto.templateId);
     }
@@ -164,15 +178,22 @@ export class CommunicationsService {
       await this.notifyAnnouncementAudience(tenantId, created);
     }
 
-    return this.getAnnouncement(tenantId, created.id);
+    return this.getAnnouncement(tenantId, created.id, viewer);
   }
 
-  async updateAnnouncement(tenantId: string, actorId: string, id: string, dto: UpdateAnnouncementDto) {
-    const current = await this.assertAnnouncement(tenantId, id);
+  async updateAnnouncement(
+    tenantId: string,
+    actorId: string,
+    id: string,
+    dto: UpdateAnnouncementDto,
+    viewer?: JwtPayload
+  ) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const current = await this.assertAnnouncementVisible(tenantId, id, scope);
     const audienceType = dto.audienceType ?? current.audienceType;
     const audienceRefId = dto.audienceRefId ?? current.audienceRefId ?? undefined;
     const targetEmployeeIds = dto.targetEmployeeIds ?? current.targetEmployeeIds;
-    await this.assertAudience(tenantId, audienceType, audienceRefId, targetEmployeeIds);
+    await this.assertAudience(tenantId, audienceType, audienceRefId, targetEmployeeIds, scope);
 
     const publishAt = dto.publishAt === undefined ? current.publishAt : parseOptionalDate(dto.publishAt);
     const data = {
@@ -200,11 +221,12 @@ export class CommunicationsService {
       entityId: id
     });
 
-    return this.getAnnouncement(tenantId, id);
+    return this.getAnnouncement(tenantId, id, viewer);
   }
 
-  async publishAnnouncement(tenantId: string, actorId: string, id: string) {
-    const current = await this.assertAnnouncement(tenantId, id);
+  async publishAnnouncement(tenantId: string, actorId: string, id: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const current = await this.assertAnnouncementVisible(tenantId, id, scope);
     const status = statusForPublish("PUBLISHED", current.publishAt ?? undefined);
     await this.prisma.communicationAnnouncement.update({ where: { id }, data: { status, retractedAt: null } });
     if (status === CommunicationAnnouncementStatus.PUBLISHED) {
@@ -219,11 +241,12 @@ export class CommunicationsService {
       entityId: id,
       payload: { status }
     });
-    return this.getAnnouncement(tenantId, id);
+    return this.getAnnouncement(tenantId, id, viewer);
   }
 
-  async retractAnnouncement(tenantId: string, actorId: string, id: string) {
-    await this.assertAnnouncement(tenantId, id);
+  async retractAnnouncement(tenantId: string, actorId: string, id: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    await this.assertAnnouncementVisible(tenantId, id, scope);
     await this.prisma.communicationAnnouncement.update({
       where: { id },
       data: { status: CommunicationAnnouncementStatus.RETRACTED, retractedAt: new Date() }
@@ -236,11 +259,12 @@ export class CommunicationsService {
       entityType: "CommunicationAnnouncement",
       entityId: id
     });
-    return this.getAnnouncement(tenantId, id);
+    return this.getAnnouncement(tenantId, id, viewer);
   }
 
-  async duplicateAnnouncement(tenantId: string, actorId: string, id: string) {
-    const source = await this.assertAnnouncement(tenantId, id);
+  async duplicateAnnouncement(tenantId: string, actorId: string, id: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const source = await this.assertAnnouncementVisible(tenantId, id, scope);
     const duplicated = await this.prisma.communicationAnnouncement.create({
       data: {
         tenantId,
@@ -267,11 +291,13 @@ export class CommunicationsService {
       entityId: duplicated.id,
       payload: { duplicatedFromId: id }
     });
-    return this.getAnnouncement(tenantId, duplicated.id);
+    return this.getAnnouncement(tenantId, duplicated.id, viewer);
   }
 
-  async markRead(tenantId: string, announcementId: string, dto: MarkAnnouncementReadDto) {
-    await this.assertAnnouncement(tenantId, announcementId);
+  async markRead(tenantId: string, announcementId: string, dto: MarkAnnouncementReadDto, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    await this.assertAnnouncementVisible(tenantId, announcementId, scope);
+    await assertEmployeeInWorksiteScope(this.prisma, tenantId, dto.employeeId, scope);
     const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, tenantId, active: true } });
     if (!employee) {
       throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
@@ -316,7 +342,8 @@ export class CommunicationsService {
     return { published: due.length };
   }
 
-  async reminders(tenantId: string) {
+  async reminders(tenantId: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
     const rows = await this.prisma.communicationAnnouncement.findMany({
       where: {
         tenantId,
@@ -326,7 +353,8 @@ export class CommunicationsService {
       orderBy: { reminderAt: "asc" },
       take: 80
     });
-    const withStats = await this.withStats(tenantId, rows);
+    const scopedRows = await this.filterAnnouncementsForScope(tenantId, rows, scope);
+    const withStats = await this.withStats(tenantId, scopedRows, scope);
     return withStats.map((item) => ({
       announcementId: item.id,
       title: item.title,
@@ -390,8 +418,15 @@ export class CommunicationsService {
     };
   }
 
-  async createTemplate(tenantId: string, actorId: string, dto: CreateTemplateDto) {
-    await this.assertAudience(tenantId, dto.audienceType ?? CommunicationAudienceType.ALL, dto.audienceRefId);
+  async createTemplate(tenantId: string, actorId: string, dto: CreateTemplateDto, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    await this.assertAudience(
+      tenantId,
+      dto.audienceType ?? CommunicationAudienceType.ALL,
+      dto.audienceRefId,
+      undefined,
+      scope
+    );
     const created = await this.prisma.communicationTemplate.create({
       data: {
         tenantId,
@@ -476,9 +511,10 @@ export class CommunicationsService {
     }
   }
 
-  private async getAnnouncement(tenantId: string, id: string) {
-    const row = await this.assertAnnouncement(tenantId, id);
-    const [item] = await this.withStats(tenantId, [row]);
+  private async getAnnouncement(tenantId: string, id: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const row = await this.assertAnnouncementVisible(tenantId, id, scope);
+    const [item] = await this.withStats(tenantId, [row], scope);
     return item;
   }
 
@@ -488,6 +524,42 @@ export class CommunicationsService {
       throw new NotFoundException("Anunțul nu a fost găsit pentru tenantul curent.");
     }
     return announcement;
+  }
+
+  private async assertAnnouncementVisible(
+    tenantId: string,
+    id: string,
+    scope: WorksiteViewerScope
+  ) {
+    const announcement = await this.assertAnnouncement(tenantId, id);
+    if (worksiteIdsFromScope(scope) === null) {
+      return announcement;
+    }
+    const visible = await this.filterAnnouncementsForScope(tenantId, [announcement], scope);
+    if (!visible.length) {
+      throw new NotFoundException("Anunțul nu a fost găsit pentru tenantul curent.");
+    }
+    return announcement;
+  }
+
+  private async filterAnnouncementsForScope(
+    tenantId: string,
+    rows: CommunicationAnnouncement[],
+    scope: WorksiteViewerScope
+  ) {
+    const scopedIds = worksiteIdsFromScope(scope);
+    if (scopedIds === null) {
+      return rows;
+    }
+    const allowedEmployeeIds = new Set(await employeeIdsInWorksiteScope(this.prisma, tenantId, scope));
+    const filtered: CommunicationAnnouncement[] = [];
+    for (const row of rows) {
+      const targets = await this.resolveAudienceEmployeeIds(tenantId, row);
+      if (targets.some((id) => allowedEmployeeIds.has(id))) {
+        filtered.push(row);
+      }
+    }
+    return filtered;
   }
 
   private async assertTemplate(tenantId: string, id: string) {
@@ -502,52 +574,107 @@ export class CommunicationsService {
     tenantId: string,
     audienceType: CommunicationAudienceType,
     audienceRefId?: string | null,
-    targetEmployeeIds?: string[]
+    targetEmployeeIds?: string[],
+    scope: WorksiteViewerScope = { mode: "tenant" }
   ) {
+    const scopedIds = worksiteIdsFromScope(scope);
+    if (scopedIds !== null) {
+      if (audienceType === CommunicationAudienceType.ALL) {
+        throw new ForbiddenException(
+          "Nu poți trimite anunțuri către toți angajații. Audiența este limitată la punctul tău de lucru."
+        );
+      }
+    }
+
     if (audienceType === CommunicationAudienceType.ALL) return;
     if (audienceType === CommunicationAudienceType.CUSTOM) {
       const ids = dedupe(targetEmployeeIds);
       if (!ids.length) throw new BadRequestException("Lista personalizată necesită cel puțin un angajat.");
-      const count = await this.prisma.employee.count({ where: { tenantId, active: true, id: { in: ids } } });
-      if (count !== ids.length) throw new NotFoundException("Unul sau mai mulți angajați selectați nu au fost găsiți pentru tenantul curent.");
+      const count = await this.prisma.employee.count({
+        where: applyWorksiteToEmployeeWhere({ tenantId, active: true, id: { in: ids } }, scope)
+      });
+      if (count !== ids.length) {
+        throw new NotFoundException(
+          "Unul sau mai mulți angajați selectați nu aparțin punctului tău de lucru sau nu au fost găsiți."
+        );
+      }
       return;
     }
     if (!audienceRefId?.trim()) {
       throw new BadRequestException(`Audiența "${audienceLabel(audienceType)}" necesită selectarea unui segment.`);
     }
+
+    if (scopedIds !== null) {
+      if (audienceType === CommunicationAudienceType.WORKSITE) {
+        if (!scopedIds.includes(audienceRefId.trim())) {
+          throw new ForbiddenException("Poți publica anunțuri doar pentru propriul punct de lucru.");
+        }
+        return;
+      }
+      if (audienceType === CommunicationAudienceType.DEPARTMENT) {
+        const dep = await this.prisma.department.findFirst({
+          where: { id: audienceRefId.trim(), tenantId }
+        });
+        if (!dep?.worksiteId || !scopedIds.includes(dep.worksiteId)) {
+          throw new ForbiddenException("Departamentul selectat nu aparține punctului tău de lucru.");
+        }
+        return;
+      }
+      if (audienceType === CommunicationAudienceType.JOB_POSITION) {
+        const job = await this.prisma.jobPosition.findFirst({
+          where: { id: audienceRefId.trim(), tenantId },
+          include: { department: { select: { worksiteId: true } } }
+        });
+        const wsId = job?.department?.worksiteId;
+        if (!wsId || !scopedIds.includes(wsId)) {
+          throw new ForbiddenException("Postul selectat nu aparține punctului tău de lucru.");
+        }
+        return;
+      }
+      if (audienceType === CommunicationAudienceType.EMPLOYEE) {
+        await assertEmployeeInWorksiteScope(this.prisma, tenantId, audienceRefId.trim(), scope);
+        return;
+      }
+      if (audienceType === CommunicationAudienceType.EMPLOYEE_GROUP) {
+        const members = await this.prisma.employeeGroupMember.findMany({
+          where: { groupId: audienceRefId.trim() },
+          include: { employee: { select: { worksiteId: true, active: true } } }
+        });
+        const activeMembers = members.filter((m) => m.employee.active);
+        if (
+          !activeMembers.length ||
+          activeMembers.some((m) => !m.employee.worksiteId || !scopedIds.includes(m.employee.worksiteId))
+        ) {
+          throw new ForbiddenException("Grupul conține angajați din afara punctului tău de lucru.");
+        }
+        return;
+      }
+    }
   }
 
-  private async audienceCount(tenantId: string, row: CommunicationAnnouncement): Promise<number> {
-    if (row.audienceType === CommunicationAudienceType.ALL) {
-      return this.prisma.employee.count({ where: { tenantId, active: true } });
+  private async audienceCount(
+    tenantId: string,
+    row: CommunicationAnnouncement,
+    scope: WorksiteViewerScope = { mode: "tenant" }
+  ): Promise<number> {
+    const allTargets = await this.resolveAudienceEmployeeIds(tenantId, row);
+    const scopedIds = worksiteIdsFromScope(scope);
+    if (scopedIds === null) {
+      return allTargets.length;
     }
-    if (row.audienceType === CommunicationAudienceType.WORKSITE) {
-      return this.prisma.employee.count({ where: { tenantId, active: true, worksiteId: row.audienceRefId } });
-    }
-    if (row.audienceType === CommunicationAudienceType.DEPARTMENT) {
-      return this.prisma.employee.count({ where: { tenantId, active: true, departmentId: row.audienceRefId } });
-    }
-    if (row.audienceType === CommunicationAudienceType.JOB_POSITION) {
-      return this.prisma.employee.count({ where: { tenantId, active: true, jobPositionId: row.audienceRefId } });
-    }
-    if (row.audienceType === CommunicationAudienceType.EMPLOYEE_GROUP) {
-      return this.prisma.employeeGroupMember.count({
-        where: { group: { id: row.audienceRefId ?? undefined, tenantId, active: true } }
-      });
-    }
-    if (row.audienceType === CommunicationAudienceType.EMPLOYEE) {
-      if (!row.audienceRefId) return 0;
-      return this.prisma.employee.count({ where: { tenantId, active: true, id: row.audienceRefId } });
-    }
-    const ids = dedupe(row.targetEmployeeIds);
-    return this.prisma.employee.count({ where: { tenantId, active: true, id: { in: ids } } });
+    const allowed = new Set(await employeeIdsInWorksiteScope(this.prisma, tenantId, scope));
+    return allTargets.filter((id) => allowed.has(id)).length;
   }
 
-  private async withStats(tenantId: string, rows: CommunicationAnnouncement[]) {
+  private async withStats(
+    tenantId: string,
+    rows: CommunicationAnnouncement[],
+    scope: WorksiteViewerScope = { mode: "tenant" }
+  ) {
     return Promise.all(
       rows.map(async (row) => {
         const [targetCount, readCount] = await Promise.all([
-          this.audienceCount(tenantId, row),
+          this.audienceCount(tenantId, row, scope),
           this.prisma.communicationAnnouncementRead.count({ where: { tenantId, announcementId: row.id } })
         ]);
         const unreadCount = Math.max(targetCount - readCount, 0);

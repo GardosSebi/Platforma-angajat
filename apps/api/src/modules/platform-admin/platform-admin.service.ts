@@ -16,6 +16,12 @@ import { CreateTenantUserDto } from "./api/dto/create-tenant-user.dto";
 import { PatchTenantUserDto } from "./api/dto/patch-tenant-user.dto";
 import { PaginationQueryDto, resolvePagination } from "../../common/dto/pagination-query.dto";
 import { paginatedResult } from "../../common/pagination";
+import { JwtPayload } from "../../auth/jwt.strategy";
+import {
+  applyWorksiteToEmployeeWhere,
+  resolveWorksiteViewerScope,
+  worksiteIdsFromScope
+} from "../../common/worksite-viewer-scope";
 
 @Injectable()
 export class PlatformAdminService {
@@ -422,6 +428,224 @@ export class PlatformAdminService {
       throw new NotFoundException("Page not found");
     }
     return page;
+  }
+
+  async getEmployeeDirectory(tenantId: string, viewer: JwtPayload) {
+    const roles = viewer.roles ?? [];
+    if (!roles.includes(SystemRole.SSM_ADMIN)) {
+      throw new ForbiddenException("Doar administratorii SSM pot vizualiza directorul complet al organizației.");
+    }
+
+    const viewerEmail = viewer.email.trim().toLowerCase();
+
+    const [worksites, employees, users] = await Promise.all([
+      this.prisma.worksite.findMany({
+        where: { tenantId, active: true },
+        orderBy: { name: "asc" },
+        select: { id: true, code: true, name: true }
+      }),
+      this.prisma.employee.findMany({
+        where: { tenantId, active: true },
+        include: {
+          worksite: { select: { id: true, code: true, name: true } },
+          department: { select: { name: true } },
+          jobPosition: { select: { name: true } }
+        },
+        orderBy: { fullName: "asc" }
+      }),
+      this.prisma.user.findMany({
+        where: { tenantId, active: true },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          roles: true
+        },
+        orderBy: { email: "asc" }
+      })
+    ]);
+
+    const userByEmail = new Map(users.map((u) => [u.email.trim().toLowerCase(), u]));
+
+    const mapMember = (e: (typeof employees)[number]) => {
+      const linked = userByEmail.get(e.email.trim().toLowerCase());
+      return {
+        employeeId: e.id,
+        fullName: e.fullName,
+        email: e.email,
+        jobPositionName: e.jobPosition?.name ?? null,
+        departmentName: e.department?.name ?? null,
+        platformRoles: linked ? [...linked.roles] : [],
+        isSelf: e.email.trim().toLowerCase() === viewerEmail
+      };
+    };
+
+    const worksiteGroups: Array<{
+      worksite: { id: string; code: string; name: string } | null;
+      members: ReturnType<typeof mapMember>[];
+    }> = worksites.map((ws) => ({
+      worksite: ws,
+      members: employees.filter((e) => e.worksiteId === ws.id).map(mapMember)
+    }));
+
+    const withoutWorksite = employees.filter((e) => !e.worksiteId);
+    if (withoutWorksite.length > 0) {
+      worksiteGroups.push({
+        worksite: null,
+        members: withoutWorksite.map(mapMember)
+      });
+    }
+
+    const employeeByEmail = new Map(employees.map((e) => [e.email.trim().toLowerCase(), e]));
+
+    const administrators = users
+      .filter((u) => u.roles.includes(SystemRole.SSM_ADMIN))
+      .map((u) => {
+        const emp = employeeByEmail.get(u.email.trim().toLowerCase());
+        return {
+          userId: u.id,
+          email: u.email,
+          fullName: u.fullName,
+          roles: [...u.roles],
+          employeeId: emp?.id ?? null,
+          employeeFullName: emp?.fullName ?? null,
+          worksiteName: emp?.worksite?.name ?? null,
+          isSelf: u.email.trim().toLowerCase() === viewerEmail
+        };
+      });
+
+    return {
+      worksites: worksiteGroups,
+      administrators,
+      totals: {
+        employees: employees.length,
+        administrators: administrators.length,
+        worksites: worksites.length
+      }
+    };
+  }
+
+  async getEmployeeMyContext(tenantId: string, viewer: JwtPayload) {
+    const scope = await resolveWorksiteViewerScope(this.prisma, tenantId, viewer);
+    const scopedWorksiteIds = worksiteIdsFromScope(scope);
+    const employee = await this.prisma.employee.findFirst({
+      where: {
+        tenantId,
+        active: true,
+        email: { equals: viewer.email, mode: "insensitive" }
+      },
+      include: {
+        worksite: { select: { id: true, code: true, name: true } },
+        department: { select: { id: true, code: true, name: true } },
+        jobPosition: { select: { id: true, code: true, name: true } },
+        groupMembers: {
+          where: { group: { active: true } },
+          include: {
+            group: {
+              include: {
+                members: {
+                  include: {
+                    employee: {
+                      select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        active: true,
+                        worksiteId: true,
+                        jobPosition: { select: { name: true } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!employee) {
+      return {
+        worksiteRestricted: scopedWorksiteIds !== null,
+        linked: false,
+        employee: null,
+        departmentTeam: null,
+        groups: []
+      };
+    }
+
+    const memberVisible = (worksiteId: string | null) => {
+      if (scopedWorksiteIds === null) return true;
+      return Boolean(worksiteId && scopedWorksiteIds.includes(worksiteId));
+    };
+
+    const mapMember = (e: {
+      id: string;
+      fullName: string;
+      email: string;
+      active: boolean;
+      jobPosition: { name: string } | null;
+    }) => ({
+      id: e.id,
+      fullName: e.fullName,
+      email: e.email,
+      jobPositionName: e.jobPosition?.name ?? null,
+      isSelf: e.id === employee.id
+    });
+
+    const groups = employee.groupMembers.map((gm) => {
+      const members = gm.group.members
+        .map((m) => m.employee)
+        .filter((e) => e.active && memberVisible(e.worksiteId))
+        .map(mapMember)
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, "ro"));
+      return {
+        id: gm.group.id,
+        name: gm.group.name,
+        description: gm.group.description,
+        members
+      };
+    });
+
+    let departmentTeam: {
+      department: { id: string; code: string; name: string };
+      members: ReturnType<typeof mapMember>[];
+    } | null = null;
+
+    if (employee.department) {
+      const colleagues = await this.prisma.employee.findMany({
+        where: applyWorksiteToEmployeeWhere(
+          { tenantId, departmentId: employee.department.id, active: true },
+          scope
+        ),
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          jobPosition: { select: { name: true } }
+        },
+        orderBy: { fullName: "asc" }
+      });
+      departmentTeam = {
+        department: employee.department,
+        members: colleagues.map((e) => mapMember({ ...e, active: true }))
+      };
+    }
+
+    return {
+      worksiteRestricted: scopedWorksiteIds !== null,
+      linked: true,
+      employee: {
+        id: employee.id,
+        fullName: employee.fullName,
+        email: employee.email,
+        worksite: employee.worksite,
+        department: employee.department,
+        jobPosition: employee.jobPosition
+      },
+      departmentTeam,
+      groups
+    };
   }
 
   async getUsageSummary(tenantId: string, from: Date, to: Date) {

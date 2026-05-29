@@ -1,4 +1,6 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
+import { isWorksiteScopedViewer } from "../../../shared/auth/worksite-scope";
 import type {
   CommunicationAnnouncementItem,
   CommunicationAudienceType,
@@ -128,6 +130,21 @@ function statusChip(status: CommunicationAnnouncementItem["status"]): string {
 }
 
 export function ChatbotPage() {
+  const session = useAuthSession();
+  const worksiteRestricted = isWorksiteScopedViewer(session?.roles);
+  const audienceTypesForForm = useMemo(
+    () => (worksiteRestricted ? AUDIENCE_TYPES.filter((t) => t !== "ALL") : AUDIENCE_TYPES),
+    [worksiteRestricted]
+  );
+
+  useEffect(() => {
+    if (!worksiteRestricted) return;
+    setAnnouncementForm((prev) =>
+      prev.audienceType === "ALL" ? { ...prev, audienceType: "WORKSITE" } : prev
+    );
+    setTemplateForm((prev) => (prev.audienceType === "ALL" ? { ...prev, audienceType: "WORKSITE" } : prev));
+  }, [worksiteRestricted]);
+
   const announcementsPage = usePagination();
   const dashboardQuery = useChatbotDashboard();
   const announcementsQuery = useAnnouncements(announcementsPage.params);
@@ -288,6 +305,12 @@ export function ChatbotPage() {
       <p className="page-lead">
         Partea L: panou KPI, anunțuri granulare, statistici de citire, mementouri și funcții avansate etapizate.
       </p>
+      {worksiteRestricted ? (
+        <div className="callout-warn" role="status">
+          Vizibilitatea și comunicarea sunt limitate la angajații din același punct de lucru ca profilul tău (responsabil
+          SSM, manager sau angajat).
+        </div>
+      ) : null}
 
       <section className="ssm-documents" aria-labelledby="communications-title">
         <div className="ssm-module-hero">
@@ -430,7 +453,7 @@ export function ChatbotPage() {
                     }))
                   }
                 >
-                  {AUDIENCE_TYPES.map((type) => (
+                  {audienceTypesForForm.map((type) => (
                     <option key={type} value={type}>
                       {AUDIENCE_LABELS[type]}
                     </option>

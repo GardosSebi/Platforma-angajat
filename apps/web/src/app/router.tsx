@@ -12,7 +12,6 @@ import { SurveyRespondPage } from "../features/surveys/pages/SurveyRespondPage";
 import { TicketingPage } from "../features/ticketing/pages/TicketingPage";
 import { AdminPage } from "../features/platform-admin/pages/AdminPage";
 import { EmployeeStaticListPage } from "../features/employee-static/pages/EmployeeStaticListPage";
-import { EmployeeStaticDetailPage } from "../features/employee-static/pages/EmployeeStaticDetailPage";
 
 function MasterDataRoute() {
   const session = useAuthSession();
@@ -38,7 +37,6 @@ export function AppRouter() {
           <Route path="/ticketing" element={<TicketingPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/informatii" element={<EmployeeStaticListPage />} />
-          <Route path="/informatii/:slug" element={<EmployeeStaticDetailPage />} />
           <Route path="*" element={<Navigate to="/ssm" replace />} />
         </Route>
       </Routes>

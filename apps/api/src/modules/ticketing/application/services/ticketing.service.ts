@@ -12,6 +12,13 @@ import {
 } from "../../api/dto/ticketing.dto";
 import { paginatedResult } from "../../../../common/pagination";
 import { resolvePagination } from "../../../../common/dto/pagination-query.dto";
+import { JwtPayload } from "../../../../auth/jwt.strategy";
+import {
+  assertEmployeeInWorksiteScope,
+  resolveWorksiteViewerScope,
+  worksiteIdsFromScope,
+  type WorksiteViewerScope
+} from "../../../../common/worksite-viewer-scope";
 
 const KANBAN_STATUSES = [
   HelpdeskTicketStatus.OPEN,
@@ -47,12 +54,16 @@ export class TicketingService {
     private readonly auditLog: AuditLogService
   ) {}
 
-  async kanban(tenantId: string, query: ListTicketsDto) {
-    const { items: tickets } = await this.findTicketsPaginated(tenantId, {
-      ...query,
-      page: query.page ?? 1,
-      pageSize: query.pageSize ?? 100
-    });
+  async kanban(tenantId: string, query: ListTicketsDto, viewer?: JwtPayload) {
+    const { items: tickets } = await this.findTicketsPaginated(
+      tenantId,
+      {
+        ...query,
+        page: query.page ?? 1,
+        pageSize: query.pageSize ?? 100
+      },
+      viewer
+    );
     return {
       columns: KANBAN_STATUSES.map((status) => ({
         status,
@@ -61,12 +72,13 @@ export class TicketingService {
     };
   }
 
-  async listTickets(tenantId: string, query: ListTicketsDto) {
-    return this.findTicketsPaginated(tenantId, query);
+  async listTickets(tenantId: string, query: ListTicketsDto, viewer?: JwtPayload) {
+    return this.findTicketsPaginated(tenantId, query, viewer);
   }
 
-  async createTicket(tenantId: string, actorId: string, dto: CreateTicketDto) {
-    await this.assertReporter(tenantId, dto.reporterEmployeeId);
+  async createTicket(tenantId: string, actorId: string, dto: CreateTicketDto, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    await this.assertReporter(tenantId, dto.reporterEmployeeId, scope);
     await this.assertSurveyResponse(tenantId, dto.sourceSurveyResponseId);
     const ticket = await this.prisma.helpdeskTicket.create({
       data: {
@@ -229,6 +241,28 @@ export class TicketingService {
     };
   }
 
+  private async scopeFor(viewer?: JwtPayload, tenantId?: string): Promise<WorksiteViewerScope> {
+    if (!viewer || !tenantId) return { mode: "tenant" };
+    return resolveWorksiteViewerScope(this.prisma, tenantId, viewer);
+  }
+
+  private applyWorksiteToTicketWhere(
+    where: Prisma.HelpdeskTicketWhereInput,
+    scope: WorksiteViewerScope
+  ): Prisma.HelpdeskTicketWhereInput {
+    const ids = worksiteIdsFromScope(scope);
+    if (ids === null) return where;
+    if (ids.length === 0) {
+      return { ...where, id: "__worksite_scope_none__" };
+    }
+    const worksiteFilter =
+      ids.length === 1 ? { worksiteId: ids[0] } : { worksiteId: { in: ids } };
+    return {
+      ...where,
+      OR: [{ reporterEmployeeId: null }, { reporterEmployee: worksiteFilter }]
+    };
+  }
+
   private buildTicketWhere(tenantId: string, query: ListTicketsDto): Prisma.HelpdeskTicketWhereInput {
     const subjectTrim = clean(query.subject);
     const searchTrim = query.search?.trim();
@@ -264,9 +298,10 @@ export class TicketingService {
     return where;
   }
 
-  private async findTicketsPaginated(tenantId: string, query: ListTicketsDto) {
+  private async findTicketsPaginated(tenantId: string, query: ListTicketsDto, viewer?: JwtPayload) {
     const p = resolvePagination(query);
-    const where = this.buildTicketWhere(tenantId, query);
+    const scope = await this.scopeFor(viewer, tenantId);
+    const where = this.applyWorksiteToTicketWhere(this.buildTicketWhere(tenantId, query), scope);
     const [rows, total] = await Promise.all([
       this.prisma.helpdeskTicket.findMany({
         where,
@@ -287,10 +322,15 @@ export class TicketingService {
     return ticket;
   }
 
-  private async assertReporter(tenantId: string, employeeId?: string) {
+  private async assertReporter(
+    tenantId: string,
+    employeeId?: string,
+    scope: WorksiteViewerScope = { mode: "tenant" }
+  ) {
     if (!employeeId) return;
     const employee = await this.prisma.employee.findFirst({ where: { tenantId, id: employeeId, active: true } });
     if (!employee) throw new NotFoundException("Reporter employee not found for tenant.");
+    await assertEmployeeInWorksiteScope(this.prisma, tenantId, employeeId, scope);
   }
 
   private async assertSurveyResponse(tenantId: string, surveyResponseId?: string) {

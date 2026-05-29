@@ -1,0 +1,143 @@
+import type { EmployeeDirectoryResponse } from "@repo/shared-types";
+
+const ROLE_LABELS: Record<string, string> = {
+  SSM_ADMIN: "Administrator SSM",
+  SSM_ENTITY_RESPONSIBLE: "Responsabil SSM",
+  DEPARTMENT_MANAGER: "Manager departament",
+  EMPLOYEE: "Angajat"
+};
+
+function formatRoles(roles: string[]): string {
+  if (!roles.length) return "—";
+  return roles.map((r) => ROLE_LABELS[r] ?? r).join(", ");
+}
+
+function formatAngajatiCount(count: number): string {
+  if (count === 1) return "1 angajat";
+  return `${count} angajați`;
+}
+
+function formatPuncteLucruCount(count: number): string {
+  if (count === 1) return "1 punct de lucru";
+  return `${count} puncte de lucru`;
+}
+
+export function AdminDirectorySection({
+  data,
+  isLoading,
+  error
+}: {
+  data: EmployeeDirectoryResponse | undefined;
+  isLoading: boolean;
+  error: string | null;
+}) {
+  if (isLoading) {
+    return (
+      <section className="card" aria-labelledby="admin-directory-heading">
+        <h2 id="admin-directory-heading">Organizație (vizualizare administrator)</h2>
+        <p>Se încarcă…</p>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="card" aria-labelledby="admin-directory-heading">
+        <h2 id="admin-directory-heading">Organizație (vizualizare administrator)</h2>
+        <p className="feedback error" role="alert">
+          {error}
+        </p>
+      </section>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <div className="admin-directory-stack">
+      <section className="card" aria-labelledby="admin-directory-heading">
+        <h2 id="admin-directory-heading">Organizație (vizualizare administrator)</h2>
+        <p className="field-hint">
+          {formatAngajatiCount(data.totals.employees)} activi în {formatPuncteLucruCount(data.totals.worksites)}. Ca
+          administrator vezi toți utilizatorii, grupați pe locație.
+        </p>
+      </section>
+
+      <section className="card" aria-labelledby="admin-users-heading">
+        <h2 id="admin-users-heading">Administratori platformă</h2>
+        {data.administrators.length === 0 ? (
+          <p className="text-muted">Nu există conturi cu rol SSM_ADMIN.</p>
+        ) : (
+          <table className="data-table team-members-table">
+            <thead>
+              <tr>
+                <th scope="col">Nume / e-mail</th>
+                <th scope="col">Roluri</th>
+                <th scope="col">Angajat legat</th>
+                <th scope="col">Punct de lucru</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.administrators.map((admin) => (
+                <tr key={admin.userId} className={admin.isSelf ? "team-member-self" : undefined}>
+                  <td>
+                    {admin.fullName?.trim() || admin.email}
+                    {admin.isSelf ? <span className="team-self-badge">tu</span> : null}
+                    {admin.fullName?.trim() ? (
+                      <div className="text-muted small">{admin.email}</div>
+                    ) : null}
+                  </td>
+                  <td>{formatRoles(admin.roles)}</td>
+                  <td>{admin.employeeFullName ?? "—"}</td>
+                  <td>{admin.worksiteName ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {data.worksites.map((group) => (
+        <section
+          key={group.worksite?.id ?? "unassigned"}
+          className="card team-block"
+          aria-labelledby={`worksite-${group.worksite?.id ?? "unassigned"}`}
+        >
+          <h2 className="team-block-title" id={`worksite-${group.worksite?.id ?? "unassigned"}`}>
+            {group.worksite ? `${group.worksite.code} — ${group.worksite.name}` : "Fără punct de lucru"}
+            <span className="text-muted small"> ({formatAngajatiCount(group.members.length)})</span>
+          </h2>
+          {group.members.length === 0 ? (
+            <p className="text-muted">Niciun angajat activ la acest punct de lucru.</p>
+          ) : (
+            <table className="data-table team-members-table">
+              <thead>
+                <tr>
+                  <th scope="col">Nume</th>
+                  <th scope="col">E-mail</th>
+                  <th scope="col">Departament</th>
+                  <th scope="col">Post</th>
+                  <th scope="col">Rol platformă</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.members.map((m) => (
+                  <tr key={m.employeeId} className={m.isSelf ? "team-member-self" : undefined}>
+                    <td>
+                      {m.fullName}
+                      {m.isSelf ? <span className="team-self-badge">tu</span> : null}
+                    </td>
+                    <td>{m.email}</td>
+                    <td>{m.departmentName ?? "—"}</td>
+                    <td>{m.jobPositionName ?? "—"}</td>
+                    <td>{formatRoles(m.platformRoles)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
