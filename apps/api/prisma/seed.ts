@@ -101,8 +101,28 @@ async function main() {
     }
   });
 
+  await prisma.user.upsert({
+    where: { tenantId_email: { tenantId: primaryTenantId, email: demoEmail } },
+    update: {
+      fullName: "Ion Popescu (demo angajat)",
+      active: true,
+      roles: [SystemRole.EMPLOYEE],
+      passwordHash
+    },
+    create: {
+      id: "seed-demo-user-employee-e01",
+      tenantId: primaryTenantId,
+      email: demoEmail,
+      fullName: "Ion Popescu (demo angajat)",
+      active: true,
+      roles: [SystemRole.EMPLOYEE],
+      passwordHash
+    }
+  });
+
   console.log("Seed OK: 14 tenants (e01–e14), admin user on e01:", email);
   console.log("Default password (change in production):", passwordPlain);
+  console.log("Demo employee login (tenant e01):", demoEmail, "/", passwordPlain);
   console.log("Demo employee ID (tenant e01, for Assign training):", demoEmployeeId);
 }
 

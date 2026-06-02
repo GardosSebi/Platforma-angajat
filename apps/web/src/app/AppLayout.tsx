@@ -2,14 +2,19 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-route
 import { NotificationBell } from "../shared/components/NotificationBell";
 import { authStore, SESSION_EXPIRED_FLAG_KEY } from "../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../shared/auth/clear-user-query-cache";
-import { canAccessTenantAdmin } from "../shared/auth/roles";
+import { canAccessTenantAdmin, isEmployeePortalUser } from "../shared/auth/roles";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 
-const navBase = [
+const backofficeNav = [
   { to: "/ssm", label: "SSM" },
   { to: "/chatbot", label: "Chatbot" },
   { to: "/surveys", label: "Sondaje" },
   { to: "/ticketing", label: "Ticketing" },
+  { to: "/informatii", label: "Informații" }
+] as const;
+
+const employeeNav = [
+  { to: "/portal", label: "Spațiul meu" },
   { to: "/informatii", label: "Informații" }
 ] as const;
 
@@ -32,11 +37,14 @@ export function AppLayout() {
     return <Navigate to={`/login?${params.toString()}`} replace />;
   }
 
-  const nav = [
-    navBase[0],
-    ...(canAccessTenantAdmin(session) ? ([{ to: "/master-data", label: "Master Data" }] as const) : []),
-    ...navBase.slice(1)
-  ];
+  const isEmployee = isEmployeePortalUser(session);
+  const nav = isEmployee
+    ? [...employeeNav]
+    : [
+        backofficeNav[0],
+        ...(canAccessTenantAdmin(session) ? ([{ to: "/master-data", label: "Master Data" }] as const) : []),
+        ...backofficeNav.slice(1)
+      ];
 
   return (
     <div className="app-shell">
@@ -54,7 +62,7 @@ export function AppLayout() {
                 key={to}
                 to={to}
                 className={({ isActive }) => (isActive ? "active" : undefined)}
-                end={to === "/ssm" || to === "/informatii"}
+                end={to === "/ssm" || to === "/portal" || to === "/informatii"}
               >
                 {label}
               </NavLink>

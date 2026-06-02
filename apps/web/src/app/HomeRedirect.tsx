@@ -1,0 +1,11 @@
+import { Navigate } from "react-router-dom";
+import { useAuthSession } from "../shared/auth/use-auth-session";
+import { isEmployeePortalUser } from "../shared/auth/roles";
+
+export function HomeRedirect() {
+  const session = useAuthSession();
+  if (isEmployeePortalUser(session)) {
+    return <Navigate to="/portal" replace />;
+  }
+  return <Navigate to="/ssm" replace />;
+}

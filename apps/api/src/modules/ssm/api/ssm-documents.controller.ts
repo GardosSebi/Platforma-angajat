@@ -2,10 +2,12 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Query,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors
@@ -54,6 +56,21 @@ export class SsmDocumentsController {
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
   history(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
     return this.documentsService.getDocumentHistory(tenantId, id, user);
+  }
+
+  @Get(":id/file")
+  @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
+  @Header("Cache-Control", "private, max-age=300")
+  async downloadActiveFile(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string
+  ) {
+    const { stream, mimeType, fileName } = await this.documentsService.streamActiveVersion(tenantId, id, user);
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: `inline; filename="${encodeURIComponent(fileName)}"`
+    });
   }
 
   @Post()

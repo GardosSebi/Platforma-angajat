@@ -182,6 +182,7 @@ export const ssmApi = {
         controlType: string;
         scheduledAt: string;
         performedAt?: string | null;
+        nextDueAt?: string | null;
         result?: string | null;
         aptitudeSheetName?: string | null;
       }>;

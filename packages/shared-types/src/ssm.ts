@@ -181,6 +181,8 @@ export interface SsmTrainingPlanItem {
   durationMinutes?: number | null;
   status: SsmTrainingPlanStatus;
   blockedAdmission: boolean;
+  employeeSignedAt?: string | null;
+  responsibleSignedAt?: string | null;
 }
 
 export interface SsmTrainingCalendarEvent {

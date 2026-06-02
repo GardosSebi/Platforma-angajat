@@ -4,6 +4,8 @@ import { getApiBaseUrl } from "../../../shared/api/api-base";
 import { loginRequest } from "../api/auth.api";
 import { authStore, getStoredExpiresInLabel } from "../../../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../../../shared/auth/clear-user-query-cache";
+import { hasSsmBackofficeAccess, isEmployeePortalUser } from "../../../shared/auth/roles";
+import type { SessionData } from "../../../shared/auth/auth-store";
 
 function safeReturnPath(raw: string | null): string | null {
   if (!raw || !raw.startsWith("/")) return null;
@@ -31,15 +33,21 @@ export function LoginPage() {
     try {
       const data = await loginRequest(tenantId.trim(), email.trim(), password);
       clearUserScopedQueryCache();
-      authStore.set({
+      const session: SessionData = {
         accessToken: data.accessToken,
         tenantId: data.user.tenantId,
         userId: data.user.id,
         roles: data.user.roles,
         expiresInLabel: data.expiresIn,
         linkedEmployeeId: data.linkedEmployeeId ?? null
-      });
-      navigate(returnUrl ?? "/ssm", { replace: true });
+      };
+      authStore.set(session);
+      const home = isEmployeePortalUser(session)
+        ? "/portal"
+        : hasSsmBackofficeAccess(session)
+          ? "/ssm"
+          : "/portal";
+      navigate(returnUrl ?? home, { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Autentificarea a eșuat.");
     } finally {

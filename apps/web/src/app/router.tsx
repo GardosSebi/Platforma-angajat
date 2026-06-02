@@ -1,10 +1,10 @@
+import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { LoginPage } from "../features/auth/pages/LoginPage";
 import { AppLayout } from "./AppLayout";
-import { SsmDashboardPage } from "../features/ssm/pages/SsmDashboardPage";
 import { MasterDataPage } from "../features/master-data/pages/MasterDataPage";
 import { useAuthSession } from "../shared/auth/use-auth-session";
-import { canAccessTenantAdmin } from "../shared/auth/roles";
+import { canAccessTenantAdmin, isEmployeePortalUser } from "../shared/auth/roles";
 import { ChatbotPage } from "../features/chatbot/pages/ChatbotPage";
 import { SurveysPage } from "../features/surveys/pages/SurveysPage";
 import { PublicSurveyPage } from "../features/surveys/pages/PublicSurveyPage";
@@ -12,13 +12,27 @@ import { SurveyRespondPage } from "../features/surveys/pages/SurveyRespondPage";
 import { TicketingPage } from "../features/ticketing/pages/TicketingPage";
 import { AdminPage } from "../features/platform-admin/pages/AdminPage";
 import { EmployeeStaticListPage } from "../features/employee-static/pages/EmployeeStaticListPage";
+import { HomeRedirect } from "./HomeRedirect";
+import { SsmBackofficeRoute } from "./SsmBackofficeRoute";
+import { EmployeePortalRoute } from "./EmployeePortalRoute";
 
 function MasterDataRoute() {
   const session = useAuthSession();
+  if (isEmployeePortalUser(session)) {
+    return <Navigate to="/portal" replace />;
+  }
   if (!canAccessTenantAdmin(session)) {
     return <Navigate to="/ssm" replace />;
   }
   return <MasterDataPage />;
+}
+
+function BackofficeOnlyRoute({ children, employeeRedirect }: { children: ReactNode; employeeRedirect: string }) {
+  const session = useAuthSession();
+  if (isEmployeePortalUser(session)) {
+    return <Navigate to={employeeRedirect} replace />;
+  }
+  return <>{children}</>;
 }
 
 export function AppRouter() {
@@ -29,15 +43,37 @@ export function AppRouter() {
         <Route path="/surveys/public/:token" element={<PublicSurveyPage />} />
         <Route path="/surveys/respond/:surveyId" element={<SurveyRespondPage />} />
         <Route element={<AppLayout />}>
-          <Route path="/" element={<Navigate to="/ssm" replace />} />
-          <Route path="/ssm" element={<SsmDashboardPage />} />
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/portal" element={<EmployeePortalRoute />} />
+          <Route path="/ssm" element={<SsmBackofficeRoute />} />
           <Route path="/master-data" element={<MasterDataRoute />} />
-          <Route path="/chatbot" element={<ChatbotPage />} />
-          <Route path="/surveys" element={<SurveysPage />} />
-          <Route path="/ticketing" element={<TicketingPage />} />
+          <Route
+            path="/chatbot"
+            element={
+              <BackofficeOnlyRoute employeeRedirect="/portal?tab=announcements">
+                <ChatbotPage />
+              </BackofficeOnlyRoute>
+            }
+          />
+          <Route
+            path="/surveys"
+            element={
+              <BackofficeOnlyRoute employeeRedirect="/portal?tab=surveys">
+                <SurveysPage />
+              </BackofficeOnlyRoute>
+            }
+          />
+          <Route
+            path="/ticketing"
+            element={
+              <BackofficeOnlyRoute employeeRedirect="/portal?tab=tickets">
+                <TicketingPage />
+              </BackofficeOnlyRoute>
+            }
+          />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/informatii" element={<EmployeeStaticListPage />} />
-          <Route path="*" element={<Navigate to="/ssm" replace />} />
+          <Route path="*" element={<HomeRedirect />} />
         </Route>
       </Routes>
     </BrowserRouter>

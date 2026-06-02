@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "crypto";
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, Survey, SurveyAudienceType, SurveyStatus } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
@@ -13,6 +13,7 @@ import {
   SurveyQuestionDto,
   UpdateSurveyDto
 } from "../../api/dto/surveys.dto";
+import { findEmployeeIdForUserEmail } from "../../../ssm/api/ssm-viewer-scope";
 
 type AnswerValue = string | number | boolean | string[] | null;
 type Answers = Record<string, AnswerValue>;
@@ -205,14 +206,13 @@ export class SurveysService {
     return this.get(tenantId, id);
   }
 
-  async getForRespond(tenantId: string, id: string, userId: string) {
+  async getForRespond(tenantId: string, id: string, userId: string, email: string) {
     const survey = await this.assertSurvey(tenantId, id);
-    if (!survey.privateLinkEnabled) {
-      throw new BadRequestException("Private survey link is disabled for this survey.");
-    }
     if (survey.status !== SurveyStatus.ACTIVE) {
-      throw new BadRequestException("Survey is not active.");
+      throw new BadRequestException("Sondajul nu este activ.");
     }
+    const employeeId = await findEmployeeIdForUserEmail(this.prisma, tenantId, email);
+    await this.assertEmployeeMayRespondToSurvey(tenantId, survey, employeeId);
     const existing = await this.findUserSurveyResponse(tenantId, id, userId);
     return {
       ...this.serializeSurvey(survey, { responseCount: 0, privateResponses: 0, publicResponses: 0 }),
@@ -228,6 +228,100 @@ export class SurveysService {
       distinct: ["surveyId"]
     });
     return { surveyIds: rows.map((row) => row.surveyId) };
+  }
+
+  async listAvailableForUser(tenantId: string, userId: string, email: string) {
+    const employeeId = await findEmployeeIdForUserEmail(this.prisma, tenantId, email);
+    if (!employeeId) {
+      return { items: [] as Array<{ id: string; title: string; description: string | null; alreadyResponded: boolean }> };
+    }
+
+    const [surveys, respondedRows] = await Promise.all([
+      this.prisma.survey.findMany({
+        where: { tenantId, status: SurveyStatus.ACTIVE },
+        orderBy: { updatedAt: "desc" }
+      }),
+      this.prisma.surveyResponse.findMany({
+        where: { tenantId, respondentUserId: userId },
+        select: { surveyId: true },
+        distinct: ["surveyId"]
+      })
+    ]);
+    const responded = new Set(respondedRows.map((row) => row.surveyId));
+    const items: Array<{ id: string; title: string; description: string | null; alreadyResponded: boolean }> = [];
+
+    for (const survey of surveys) {
+      const audienceIds = await this.resolveSurveyAudienceEmployeeIds(tenantId, survey);
+      if (!audienceIds.includes(employeeId)) {
+        continue;
+      }
+      items.push({
+        id: survey.id,
+        title: survey.title,
+        description: survey.description,
+        alreadyResponded: responded.has(survey.id)
+      });
+    }
+
+    return { items };
+  }
+
+  private async assertEmployeeMayRespondToSurvey(
+    tenantId: string,
+    survey: Survey,
+    employeeId: string | null
+  ): Promise<void> {
+    if (!employeeId) {
+      throw new ForbiddenException(
+        "Contul nu este asociat unui angajat. Contactați HR pentru legarea e-mailului cu fișa de personal."
+      );
+    }
+    const audienceIds = await this.resolveSurveyAudienceEmployeeIds(tenantId, survey);
+    if (!audienceIds.includes(employeeId)) {
+      throw new ForbiddenException("Acest sondaj nu vă este destinat.");
+    }
+  }
+
+  private async resolveSurveyAudienceEmployeeIds(tenantId: string, survey: Survey): Promise<string[]> {
+    if (survey.audienceType === SurveyAudienceType.ALL) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (survey.audienceType === SurveyAudienceType.WORKSITE) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true, worksiteId: survey.audienceRefId },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (survey.audienceType === SurveyAudienceType.DEPARTMENT) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true, departmentId: survey.audienceRefId },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (survey.audienceType === SurveyAudienceType.JOB_POSITION) {
+      const rows = await this.prisma.employee.findMany({
+        where: { tenantId, active: true, jobPositionId: survey.audienceRefId },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
+    if (survey.audienceType === SurveyAudienceType.EMPLOYEE_GROUP) {
+      const rows = await this.prisma.employeeGroupMember.findMany({
+        where: { group: { id: survey.audienceRefId ?? undefined, tenantId, active: true } },
+        select: { employeeId: true }
+      });
+      return rows.map((item) => item.employeeId);
+    }
+    if (survey.audienceType === SurveyAudienceType.EMPLOYEE) {
+      return survey.audienceRefId ? [survey.audienceRefId] : [];
+    }
+    return dedupe(survey.targetEmployeeIds);
   }
 
   async privateLink(tenantId: string, id: string) {
@@ -276,10 +370,21 @@ export class SurveysService {
     return this.serializeSurvey(survey, { responseCount: 0, privateResponses: 0, publicResponses: 0 });
   }
 
-  async submitPrivateResponse(tenantId: string, actorId: string, surveyId: string, dto: SubmitSurveyResponseDto) {
+  async submitPrivateResponse(
+    tenantId: string,
+    actorId: string,
+    surveyId: string,
+    dto: SubmitSurveyResponseDto,
+    email: string
+  ) {
     const survey = await this.assertSurvey(tenantId, surveyId);
     this.assertCanRespond(survey);
-    await this.assertEmployee(tenantId, dto.employeeId);
+    const resolvedEmployeeId =
+      clean(dto.employeeId) ?? (await findEmployeeIdForUserEmail(this.prisma, tenantId, email)) ?? undefined;
+    await this.assertEmployeeMayRespondToSurvey(tenantId, survey, resolvedEmployeeId ?? null);
+    if (resolvedEmployeeId) {
+      await this.assertEmployee(tenantId, resolvedEmployeeId);
+    }
     const existing = await this.findUserSurveyResponse(tenantId, surveyId, actorId);
     if (existing) {
       throw new ConflictException("Ați completat deja acest sondaj.");
@@ -289,7 +394,7 @@ export class SurveysService {
         data: {
           tenantId,
           surveyId,
-          employeeId: clean(dto.employeeId),
+          employeeId: resolvedEmployeeId ?? null,
           respondentUserId: actorId,
           answersJson: jsonValue(dto.answers)
         }

@@ -45,6 +45,7 @@ type MedicalControlForDossier = {
   id: string;
   scheduledAt: Date;
   performedAt: Date | null;
+  nextDueAt: Date | null;
   result: string | null;
   aptitudeSheetName: string | null;
   controlType: {
@@ -527,7 +528,8 @@ export class SsmTrainingSuiteService {
         where,
         include: {
           employee: { select: { fullName: true } },
-          trainingType: { select: { code: true, name: true, category: true } }
+          trainingType: { select: { code: true, name: true, category: true } },
+          signature: { select: { employeeSignedAt: true, responsibleSignedAt: true } }
         },
         orderBy: [{ dueAt: "asc" }],
         skip: p.skip,
@@ -552,7 +554,9 @@ export class SsmTrainingSuiteService {
         score: row.score,
         durationMinutes: row.durationMinutes,
         status: row.status,
-        blockedAdmission: row.blockedAdmission
+        blockedAdmission: row.blockedAdmission,
+        employeeSignedAt: row.signature?.employeeSignedAt?.toISOString() ?? null,
+        responsibleSignedAt: row.signature?.responsibleSignedAt?.toISOString() ?? null
       }));
     return paginatedResult(items, total, p.page, p.pageSize);
   }
@@ -928,6 +932,7 @@ export class SsmTrainingSuiteService {
         controlType: control.controlType.name,
         scheduledAt: control.scheduledAt,
         performedAt: control.performedAt,
+        nextDueAt: control.nextDueAt,
         result: control.result,
         aptitudeSheetName: control.aptitudeSheetName
       }))

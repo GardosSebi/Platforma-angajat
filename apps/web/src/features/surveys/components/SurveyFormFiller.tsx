@@ -1,10 +1,11 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   SurveyAnswerValue,
   SurveyConditionalRule,
   SurveyQuestion,
   SurveyQuestionType
 } from "@repo/shared-types/surveys";
+import { SurveyThankYou } from "./SurveyThankYou";
 
 const TYPE_LABELS: Record<SurveyQuestionType, string> = {
   SINGLE_CHOICE: "Alegere unică",
@@ -83,6 +84,7 @@ export interface SurveyFormFillerProps {
   conditionalLogic?: SurveyConditionalRule[] | null;
   onSubmit: (answers: Record<string, SurveyAnswerValue>) => Promise<void>;
   submitLabel?: string;
+  thanksFooter?: ReactNode;
 }
 
 export function SurveyFormFiller({
@@ -91,7 +93,8 @@ export function SurveyFormFiller({
   questions,
   conditionalLogic,
   onSubmit,
-  submitLabel = "Trimite răspunsurile"
+  submitLabel = "Trimite răspunsurile",
+  thanksFooter
 }: SurveyFormFillerProps) {
   const [answers, setAnswers] = useState<Record<string, SurveyAnswerValue>>({});
   const [error, setError] = useState<string | null>(null);
@@ -161,12 +164,7 @@ export function SurveyFormFiller({
   };
 
   if (done) {
-    return (
-      <div className="survey-fill-thanks card" role="status">
-        <h2 className="card-title">Mulțumim</h2>
-        <p className="field-hint">Răspunsurile au fost înregistrate.</p>
-      </div>
-    );
+    return <SurveyThankYou footer={thanksFooter} />;
   }
 
   return (

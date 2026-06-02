@@ -9,6 +9,7 @@ import { RequirePermissions } from "../../../common/decorators/require-permissio
 import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { Permission } from "../../../common/constants/permissions";
 import { PermissionsGuard } from "../../../common/guards/permissions.guard";
+import { JwtPayload } from "../../../auth/jwt.strategy";
 import { SurveysService } from "../application/services/surveys.service";
 import { CreatePublicLinkDto, CreateSurveyDto, SubmitSurveyResponseDto, UpdateSurveyDto } from "./dto/surveys.dto";
 
@@ -40,10 +41,16 @@ export class SurveysController {
     return this.surveys.getRespondedSurveyIds(tenantId, user.sub);
   }
 
+  @Get("available")
+  @RequirePermissions(Permission.SURVEYS_RESPOND)
+  available(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.surveys.listAvailableForUser(tenantId, user.sub, user.email);
+  }
+
   @Get(":id/for-respond")
   @RequireAnyPermissions(Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
-  forRespond(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string) {
-    return this.surveys.getForRespond(tenantId, id, user.sub);
+  forRespond(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.surveys.getForRespond(tenantId, id, user.sub, user.email);
   }
 
   @Post()
@@ -84,8 +91,13 @@ export class SurveysController {
 
   @Post(":id/responses")
   @RequireAnyPermissions(Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
-  respond(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string, @Body() dto: SubmitSurveyResponseDto) {
-    return this.surveys.submitPrivateResponse(tenantId, user.sub, id, dto);
+  respond(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: SubmitSurveyResponseDto
+  ) {
+    return this.surveys.submitPrivateResponse(tenantId, user.sub, id, dto, user.email);
   }
 
   @Get(":id/stats")

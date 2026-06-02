@@ -1,4 +1,6 @@
-import { mkdir, writeFile } from "fs/promises";
+import { createReadStream } from "fs";
+import { access, mkdir, writeFile } from "fs/promises";
+import { constants } from "fs";
 import { extname, resolve } from "path";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { SsmDocumentStatus, SsmDocumentTargetType, SsmDocumentType } from "@prisma/client";
@@ -439,6 +441,52 @@ export class SsmDocumentsService {
       p.page,
       p.pageSize
     );
+  }
+
+  private async assertDocumentReadable(tenantId: string, documentId: string, viewer: JwtPayload) {
+    const document = await this.prisma.ssmDocument.findFirst({
+      where: { id: documentId, tenantId },
+      include: { activeVersion: true }
+    });
+    if (!document?.activeVersion?.storagePath) {
+      throw new NotFoundException("Document not found.");
+    }
+
+    const ctx = await this.employeeRowForViewer(tenantId, viewer);
+    if (ctx.scope === "empty") {
+      throw new ForbiddenException("Contul nu este asociat unui angajat pentru acces la documente.");
+    }
+    if (
+      ctx.scope === "self" &&
+      !ssmDocumentVisibleToEmployee(
+        {
+          targetType: document.targetType,
+          targetLabel: document.targetLabel,
+          status: document.status
+        },
+        ctx.employee
+      )
+    ) {
+      throw new ForbiddenException("Nu aveți acces la acest document.");
+    }
+
+    try {
+      await access(document.activeVersion.storagePath, constants.R_OK);
+    } catch {
+      throw new NotFoundException("Fișierul documentului nu a fost găsit pe server.");
+    }
+
+    return document;
+  }
+
+  async streamActiveVersion(tenantId: string, documentId: string, viewer: JwtPayload) {
+    const document = await this.assertDocumentReadable(tenantId, documentId, viewer);
+    const version = document.activeVersion!;
+    return {
+      stream: createReadStream(version.storagePath),
+      mimeType: version.mimeType,
+      fileName: version.fileName
+    };
   }
 
   async getDocumentHistory(tenantId: string, documentId: string, viewer: JwtPayload) {

@@ -75,6 +75,11 @@ export const surveysApi = {
       body: JSON.stringify(payload)
     });
   },
+  listAvailableSurveys() {
+    return httpClient<{ items: Array<{ id: string; title: string; description: string | null; alreadyResponded: boolean }> }>(
+      "/surveys/available"
+    );
+  },
   stats(id: string) {
     return httpClient<SurveyStatsResponse>(`/surveys/${id}/stats`);
   },
