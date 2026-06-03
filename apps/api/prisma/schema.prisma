@@ -11,6 +11,7 @@ enum SystemRole {
   SSM_ADMIN
   SSM_ENTITY_RESPONSIBLE
   DEPARTMENT_MANAGER
+  ITM_INSPECTOR
   EMPLOYEE
 }
 
@@ -122,6 +123,15 @@ enum CommunicationContentType {
   SURVEY
 }
 
+enum CommunicationCategory {
+  GENERAL
+  SAFETY_ALERT
+  POLICY
+  TRAINING_INFO
+  SSM_COMPLIANCE
+  HR_INFO
+}
+
 enum CommunicationAudienceType {
   ALL
   WORKSITE
@@ -155,6 +165,17 @@ enum SurveyQuestionType {
   LONG_TEXT
   DATE
   BOOLEAN
+  NUMBER
+  RATING_NPS
+}
+
+enum SurveyType {
+  ENGAGEMENT
+  COMPLIANCE
+  FEEDBACK
+  EXIT
+  PULSE
+  CUSTOM
 }
 
 enum SurveyAudienceType {
@@ -238,6 +259,7 @@ model Tenant {
   ssmPsiEquipmentVerifications SsmPsiEquipmentVerification[]
   ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
   ssmPsiResponsibles         SsmPsiResponsible[]
+  ssmDocumentTemplates       SsmDocumentTemplate[]
   communicationAnnouncements CommunicationAnnouncement[]
   communicationTemplates      CommunicationTemplate[]
   communicationAnnouncementReads CommunicationAnnouncementRead[]
@@ -950,6 +972,7 @@ model CommunicationAnnouncement {
   tenantId          String
   title             String
   body              String
+  category          CommunicationCategory           @default(GENERAL)
   contentType       CommunicationContentType        @default(TEXT)
   contentUrl        String?
   audienceType      CommunicationAudienceType
@@ -1000,6 +1023,7 @@ model CommunicationTemplate {
   name           String
   title          String
   body           String
+  category       CommunicationCategory     @default(GENERAL)
   contentType    CommunicationContentType  @default(TEXT)
   contentUrl     String?
   audienceType   CommunicationAudienceType @default(ALL)
@@ -1038,7 +1062,9 @@ model Survey {
   tenantId            String
   title               String
   description         String?
+  surveyType          SurveyType           @default(ENGAGEMENT)
   status              SurveyStatus       @default(DRAFT)
+  closesAt            DateTime?
   audienceType        SurveyAudienceType @default(ALL)
   audienceRefId       String?
   audienceLabel       String?
@@ -1059,7 +1085,29 @@ model Survey {
   responses SurveyResponse[]
 
   @@index([tenantId, status, createdAt])
+  @@index([tenantId, status, closesAt])
   @@index([tenantId, audienceType, audienceRefId])
+}
+
+model SsmDocumentTemplate {
+  id              String                @id @default(cuid())
+  tenantId        String
+  name            String
+  title           String
+  type            SsmDocumentType
+  targetType      SsmDocumentTargetType @default(ENTITY)
+  targetLabel     String?
+  isControlFolder Boolean               @default(false)
+  checklistItems  String[]              @default([])
+  active          Boolean               @default(true)
+  createdBy       String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId, type, active])
 }
 
 model SurveyResponse {

@@ -147,7 +147,7 @@ export class SsmTrainingSuiteService {
   ) {}
 
   private async syncOverdue(tenantId: string) {
-    await this.prisma.ssmTrainingPlan.updateMany({
+    const result = await this.prisma.ssmTrainingPlan.updateMany({
       where: {
         tenantId,
         status: SsmTrainingPlanStatus.PENDING,
@@ -158,6 +158,13 @@ export class SsmTrainingSuiteService {
         blockedAdmission: true
       }
     });
+    return result.count;
+  }
+
+  /** Marchează planurile restante — apelat din cron zilnic înainte de remindere. */
+  async markOverduePlans(tenantId: string) {
+    const marked = await this.syncOverdue(tenantId);
+    return { marked };
   }
 
   async listTrainingTypes(tenantId: string) {

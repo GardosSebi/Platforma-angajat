@@ -3,7 +3,9 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { PrismaService } from "../prisma/prisma.service";
 import { RetentionService } from "../retention/retention.service";
 import { SsmTrainingSuiteService } from "../../modules/ssm/application/services/ssm-training-suite.service";
+import { SsmMedicalService } from "../../modules/ssm/application/services/ssm-medical.service";
 import { CommunicationsService } from "../../modules/chatbot/application/services/communications.service";
+import { SurveysService } from "../../modules/surveys/application/services/surveys.service";
 import { isCronEnabled, SYSTEM_CRON_ACTOR } from "./scheduler.constants";
 
 @Injectable()
@@ -14,7 +16,9 @@ export class PlatformCronService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly trainingSuite: SsmTrainingSuiteService,
+    private readonly medicalService: SsmMedicalService,
     private readonly communications: CommunicationsService,
+    private readonly surveys: SurveysService,
     private readonly retention: RetentionService
   ) {}
 
@@ -41,13 +45,20 @@ export class PlatformCronService {
   }
 
   async runForTenant(tenantId: string) {
+    const overdue = await this.trainingSuite.markOverduePlans(tenantId);
     const training = await this.trainingSuite.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
+    const medical = await this.medicalService.dispatchMedicalReminders(tenantId, SYSTEM_CRON_ACTOR);
     const published = await this.communications.publishDueScheduled(tenantId, SYSTEM_CRON_ACTOR);
+    const archivedAnnouncements = await this.communications.archiveExpiredAnnouncements(
+      tenantId,
+      SYSTEM_CRON_ACTOR
+    );
     const commReminders = await this.communications.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
+    const closedSurveys = await this.surveys.closeExpiredSurveys(tenantId, SYSTEM_CRON_ACTOR);
     const retention = await this.retention.archiveExpiredDocumentVersions(tenantId);
     this.logger.log(
-      `Tenant ${tenantId}: trainingReminders=${training.sent}, announcementsPublished=${published.published}, commReminders=${commReminders.sent}, retentionArchived=${retention.archived}`
+      `Tenant ${tenantId}: trainingOverdue=${overdue.marked}, trainingReminders=${training.sent}, medicalReminders=${medical.sent}, announcementsPublished=${published.published}, announcementsArchived=${archivedAnnouncements.archived}, commReminders=${commReminders.sent}, surveysClosed=${closedSurveys.closed}, retentionArchived=${retention.archived}`
     );
-    return { training, published, commReminders, retention };
+    return { overdue, training, medical, published, archivedAnnouncements, commReminders, closedSurveys, retention };
   }
 }

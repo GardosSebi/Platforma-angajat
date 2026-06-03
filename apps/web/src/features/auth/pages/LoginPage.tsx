@@ -4,7 +4,7 @@ import { getApiBaseUrl } from "../../../shared/api/api-base";
 import { loginRequest } from "../api/auth.api";
 import { authStore, getStoredExpiresInLabel } from "../../../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../../../shared/auth/clear-user-query-cache";
-import { hasSsmBackofficeAccess, isEmployeePortalUser } from "../../../shared/auth/roles";
+import { hasSsmBackofficeAccess, isEmployeePortalUser, isItmInspectorUser } from "../../../shared/auth/roles";
 import type { SessionData } from "../../../shared/auth/auth-store";
 
 function safeReturnPath(raw: string | null): string | null {
@@ -44,9 +44,11 @@ export function LoginPage() {
       authStore.set(session);
       const home = isEmployeePortalUser(session)
         ? "/portal"
-        : hasSsmBackofficeAccess(session)
-          ? "/ssm"
-          : "/portal";
+        : isItmInspectorUser(session)
+          ? "/itm"
+          : hasSsmBackofficeAccess(session)
+            ? "/ssm"
+            : "/portal";
       navigate(returnUrl ?? home, { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Autentificarea a eșuat.");

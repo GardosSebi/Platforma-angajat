@@ -166,6 +166,20 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly string[]> = {
     Permission.TICKETS_VIEW,
     Permission.TICKETS_EDIT
   ],
+  /** Inspector ITM/ISU: vizualizare și export dosar control, fără editare master data sau configurare. */
+  [SystemRole.ITM_INSPECTOR]: [
+    Permission.SSM_DOCUMENT_VIEW,
+    Permission.SSM_TRAINING_VIEW,
+    Permission.SSM_EIP_VIEW,
+    Permission.SSM_ACCIDENT_VIEW,
+    Permission.SSM_MEDICAL_VIEW,
+    Permission.SSM_RISK_VIEW,
+    Permission.SSM_PSI_VIEW,
+    Permission.SSM_DASHBOARD_VIEW,
+    Permission.SSM_REPORT_VIEW,
+    Permission.SSM_REPORT_EXPORT,
+    Permission.AUDIT_READ
+  ],
   /** 3.12 — Angajat: documente și instruiri proprii, e-learning, chestionare (API filtrează la datele proprii după e-mail ↔ angajat). */
   [SystemRole.EMPLOYEE]: [
     Permission.SURVEYS_RESPOND,

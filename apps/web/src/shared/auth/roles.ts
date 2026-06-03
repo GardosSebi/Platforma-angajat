@@ -1,6 +1,7 @@
 import type { SessionData } from "./auth-store";
 
 const SSM_BACKOFFICE_ROLES = ["SSM_ADMIN", "SSM_ENTITY_RESPONSIBLE", "DEPARTMENT_MANAGER"] as const;
+const ITM_INSPECTOR_ROLES = ["ITM_INSPECTOR"] as const;
 
 /** Administrator SSM — administrare utilizatori, master data, configurare modul. */
 export function canAccessTenantAdmin(session: SessionData | null): boolean {
@@ -16,12 +17,20 @@ export function hasSsmBackofficeAccess(session: SessionData | null): boolean {
   return roles.some((role) => (SSM_BACKOFFICE_ROLES as readonly string[]).includes(role));
 }
 
+/** Inspector ITM/ISU — vizualizare dosar control, fără editare SSM. */
+export function isItmInspectorUser(session: SessionData | null): boolean {
+  const roles = session?.roles;
+  if (!roles?.length) return false;
+  if (hasSsmBackofficeAccess(session)) return false;
+  return roles.some((role) => (ITM_INSPECTOR_ROLES as readonly string[]).includes(role));
+}
+
 /** Utilizator cu rol EMPLOYEE și fără roluri SSM de administrare — vede portalul angajat. */
 export function isEmployeePortalUser(session: SessionData | null): boolean {
   const roles = session?.roles;
   if (!roles?.length) return false;
   if (!roles.includes("EMPLOYEE")) return false;
-  return !hasSsmBackofficeAccess(session);
+  return !hasSsmBackofficeAccess(session) && !isItmInspectorUser(session);
 }
 
 export function requireLinkedEmployeeId(session: SessionData | null): string | null {

@@ -79,7 +79,7 @@ export async function resolveSsmViewerScope(
   viewer: JwtPayload
 ): Promise<SsmViewerScope> {
   const roles = viewer.roles ?? [];
-  if (roles.includes(SystemRole.SSM_ADMIN)) {
+  if (roles.includes(SystemRole.SSM_ADMIN) || roles.includes(SystemRole.ITM_INSPECTOR)) {
     return { mode: "tenant" };
   }
 

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
@@ -16,6 +17,7 @@ import {
   useSsmDocumentHistory,
   useSsmDocuments
 } from "../hooks/useSsmDocuments";
+import { ssmApi } from "../api/ssm.api";
 
 const SSM_DOCUMENT_TYPES: ReadonlyArray<CreateSsmDocumentRequest["type"]> = [
   "IPSSM",
@@ -37,6 +39,42 @@ const SSM_DOCUMENT_TARGET_TYPES: ReadonlyArray<CreateSsmDocumentRequest["targetT
 ];
 
 const STATUS_OPTIONS: Array<SsmDocumentStatus | ""> = ["", "ACTIVE", "ARCHIVED"];
+
+function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
+  const queryClient = useQueryClient();
+  const templatesQuery = useQuery({
+    queryKey: ["ssm", "document-templates"],
+    queryFn: () => ssmApi.listDocumentTemplates()
+  });
+  const seedMutation = useMutation({
+    mutationFn: () => ssmApi.seedDocumentTemplates(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ssm", "document-templates"] })
+  });
+
+  return (
+    <div className="card ssm-doc-card">
+      <div className="ssm-card-header">
+        <h3 className="card-title">Șabloane documente SSM</h3>
+        {canEdit ? (
+          <button type="button" className="btn-secondary" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
+            {seedMutation.isPending ? "Se încarcă…" : "Încarcă șabloane implicite"}
+          </button>
+        ) : null}
+      </div>
+      <ul className="data-list">
+        {(templatesQuery.data?.items ?? []).map((t) => (
+          <li key={t.id}>
+            <strong>{t.name}</strong> — {t.title} ({t.type})
+            {t.isControlFolder ? " · control ITM/ISU" : ""}
+          </li>
+        ))}
+      </ul>
+      {!templatesQuery.isLoading && !(templatesQuery.data?.items ?? []).length ? (
+        <p className="field-hint">Niciun șablon. Administratorii pot încărca setul implicit (IPSSM, PPP, registru, PSI).</p>
+      ) : null}
+    </div>
+  );
+}
 
 const EMPTY_DOC: CreateSsmDocumentRequest = {
   title: "",
@@ -432,6 +470,8 @@ export function SsmDocumentsManager() {
             <p className="field-hint">Selectează un document din listă pentru istoric și acțiuni de versionare.</p>
           )}
         </div>
+
+        <DocumentTemplatesPanel canEdit={hasPermission(session?.roles, "ssm:documents:edit")} />
 
         <div className="card ssm-doc-card">
           <h3 className="card-title">Acces rapid control ITM/ISU</h3>

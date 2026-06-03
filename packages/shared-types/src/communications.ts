@@ -1,6 +1,25 @@
 export const COMMUNICATION_CONTENT_TYPES = ["TEXT", "RICH_TEXT", "LINK", "DOCUMENT", "SURVEY"] as const;
 export type CommunicationContentType = (typeof COMMUNICATION_CONTENT_TYPES)[number];
 
+export const COMMUNICATION_CATEGORIES = [
+  "GENERAL",
+  "SAFETY_ALERT",
+  "POLICY",
+  "TRAINING_INFO",
+  "SSM_COMPLIANCE",
+  "HR_INFO"
+] as const;
+export type CommunicationCategory = (typeof COMMUNICATION_CATEGORIES)[number];
+
+export const COMMUNICATION_CATEGORY_LABELS: Record<CommunicationCategory, string> = {
+  GENERAL: "General",
+  SAFETY_ALERT: "Alertă SSM / siguranță",
+  POLICY: "Politică / procedură",
+  TRAINING_INFO: "Instruire / informare",
+  SSM_COMPLIANCE: "Conformitate SSM",
+  HR_INFO: "Informare HR"
+};
+
 export const COMMUNICATION_AUDIENCE_TYPES = [
   "ALL",
   "WORKSITE",
@@ -17,6 +36,7 @@ export type CommunicationAnnouncementStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED
 export interface CreateCommunicationAnnouncementRequest {
   title: string;
   body: string;
+  category?: CommunicationCategory;
   contentType?: CommunicationContentType;
   contentUrl?: string;
   audienceType: CommunicationAudienceType;
@@ -33,6 +53,7 @@ export interface CreateCommunicationAnnouncementRequest {
 export interface UpdateCommunicationAnnouncementRequest {
   title?: string;
   body?: string;
+  category?: CommunicationCategory;
   contentType?: CommunicationContentType;
   contentUrl?: string;
   audienceType?: CommunicationAudienceType;
@@ -49,6 +70,7 @@ export interface CommunicationAnnouncementItem {
   id: string;
   title: string;
   body: string;
+  category: CommunicationCategory;
   contentType: CommunicationContentType;
   contentUrl?: string | null;
   audienceType: CommunicationAudienceType;
@@ -101,6 +123,7 @@ export interface CommunicationTemplateItem {
   name: string;
   title: string;
   body: string;
+  category: CommunicationCategory;
   contentType: CommunicationContentType;
   contentUrl?: string | null;
   audienceType: CommunicationAudienceType;
@@ -115,6 +138,7 @@ export interface CreateCommunicationTemplateRequest {
   name: string;
   title: string;
   body: string;
+  category?: CommunicationCategory;
   contentType?: CommunicationContentType;
   contentUrl?: string;
   audienceType?: CommunicationAudienceType;

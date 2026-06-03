@@ -15,6 +15,7 @@ import { EmployeeStaticListPage } from "../features/employee-static/pages/Employ
 import { HomeRedirect } from "./HomeRedirect";
 import { SsmBackofficeRoute } from "./SsmBackofficeRoute";
 import { EmployeePortalRoute } from "./EmployeePortalRoute";
+import { ItmInspectorRoute } from "./ItmInspectorRoute";
 
 function MasterDataRoute() {
   const session = useAuthSession();
@@ -45,6 +46,7 @@ export function AppRouter() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomeRedirect />} />
           <Route path="/portal" element={<EmployeePortalRoute />} />
+          <Route path="/itm" element={<ItmInspectorRoute />} />
           <Route path="/ssm" element={<SsmBackofficeRoute />} />
           <Route path="/master-data" element={<MasterDataRoute />} />
           <Route

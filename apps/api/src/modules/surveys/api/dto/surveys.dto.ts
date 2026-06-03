@@ -16,12 +16,24 @@ import {
   ValidateNested
 } from "class-validator";
 
-const QUESTION_TYPES = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "SCALE", "TEXT", "LONG_TEXT", "DATE", "BOOLEAN"] as const;
+const QUESTION_TYPES = [
+  "SINGLE_CHOICE",
+  "MULTIPLE_CHOICE",
+  "SCALE",
+  "TEXT",
+  "LONG_TEXT",
+  "DATE",
+  "BOOLEAN",
+  "NUMBER",
+  "RATING_NPS"
+] as const;
+const SURVEY_TYPES = ["ENGAGEMENT", "COMPLIANCE", "FEEDBACK", "EXIT", "PULSE", "CUSTOM"] as const;
 const AUDIENCE_TYPES = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE_GROUP", "EMPLOYEE", "CUSTOM"] as const;
 const SURVEY_STATUSES = ["DRAFT", "ACTIVE", "CLOSED", "ARCHIVED"] as const;
 const RULE_OPERATORS = ["EQUALS", "NOT_EQUALS", "INCLUDES", "GREATER_THAN", "LESS_THAN"] as const;
 
 type SurveyQuestionTypeCode = (typeof QUESTION_TYPES)[number];
+type SurveyTypeCode = (typeof SURVEY_TYPES)[number];
 type SurveyAudienceTypeCode = (typeof AUDIENCE_TYPES)[number];
 type SurveyStatusCode = (typeof SURVEY_STATUSES)[number];
 type SurveyRuleOperatorCode = (typeof RULE_OPERATORS)[number];
@@ -99,6 +111,10 @@ export class CreateSurveyDto {
   description?: string;
 
   @IsOptional()
+  @IsIn(SURVEY_TYPES)
+  surveyType?: SurveyTypeCode;
+
+  @IsOptional()
   @IsIn(AUDIENCE_TYPES)
   audienceType?: SurveyAudienceTypeCode;
 
@@ -116,6 +132,10 @@ export class CreateSurveyDto {
   @IsArray()
   @IsString({ each: true })
   targetEmployeeIds?: string[];
+
+  @IsOptional()
+  @IsDateString()
+  closesAt?: string;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -148,6 +168,14 @@ export class UpdateSurveyDto {
   @IsOptional()
   @IsIn(SURVEY_STATUSES)
   status?: SurveyStatusCode;
+
+  @IsOptional()
+  @IsIn(SURVEY_TYPES)
+  surveyType?: SurveyTypeCode;
+
+  @IsOptional()
+  @IsDateString()
+  closesAt?: string;
 
   @IsOptional()
   @IsIn(AUDIENCE_TYPES)

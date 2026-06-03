@@ -4,6 +4,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { SsmMedicalControlResult } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import { CreateMedicalControlDto, CreateMedicalControlTypeDto } from "../../api/dto/ssm-medical.dto";
 
 const MEDICAL_ALLOWED_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg"]);
@@ -31,7 +32,8 @@ function sanitizeFilename(name: string): string {
 export class SsmMedicalService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly notifications: NotificationsService
   ) {}
 
   private assertAptitudeSheet(file?: Express.Multer.File) {
@@ -268,5 +270,52 @@ export class SsmMedicalService {
       .map(({ reminderDays: _ignored, ...row }) => row);
 
     return { reminders };
+  }
+
+  /** Remindere controale medicale scadente — cron zilnic. */
+  async dispatchMedicalReminders(tenantId: string, actorId: string) {
+    const controls = await this.prisma.ssmMedicalControl.findMany({
+      where: { tenantId, nextDueAt: { not: null } },
+      include: {
+        employee: { select: { id: true, email: true, fullName: true } },
+        controlType: { select: { name: true, reminderDays: true } }
+      }
+    });
+    const now = new Date();
+    let sent = 0;
+    for (const row of controls) {
+      if (!row.nextDueAt) continue;
+      const daysUntilDue = daysDiff(now, row.nextDueAt);
+      const reminderDays = row.controlType.reminderDays ?? [30, 15, 7];
+      if (daysUntilDue > 0 && !reminderDays.includes(daysUntilDue)) continue;
+      if (daysUntilDue > 30) continue;
+      const text =
+        daysUntilDue < 0
+          ? `Control medical (${row.controlType.name}) restant cu ${Math.abs(daysUntilDue)} zile.`
+          : `Control medical (${row.controlType.name}) în ${daysUntilDue} zile.`;
+      const notified = await this.notifications.notifyEmployee({
+        tenantId,
+        employeeId: row.employeeId,
+        category: "SSM_MEDICAL",
+        title: "Reminder medicina muncii",
+        body: text,
+        linkPath: "/portal?tab=medical",
+        entityType: "SsmMedicalControl",
+        entityId: row.id
+      });
+      if (notified) sent += 1;
+    }
+    if (sent) {
+      await this.auditLog.write({
+        tenantId,
+        actorId,
+        module: "SSM",
+        action: "MEDICAL_REMINDERS_DISPATCHED",
+        entityType: "SsmMedicalControl",
+        entityId: "batch",
+        payload: { sent }
+      });
+    }
+    return { sent };
   }
 }

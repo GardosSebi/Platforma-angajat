@@ -2,20 +2,10 @@ import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   SurveyAnswerValue,
   SurveyConditionalRule,
-  SurveyQuestion,
-  SurveyQuestionType
+  SurveyQuestion
 } from "@repo/shared-types/surveys";
+import { SURVEY_QUESTION_TYPE_LABELS } from "@repo/shared-types/surveys";
 import { SurveyThankYou } from "./SurveyThankYou";
-
-const TYPE_LABELS: Record<SurveyQuestionType, string> = {
-  SINGLE_CHOICE: "Alegere unică",
-  MULTIPLE_CHOICE: "Alegere multiplă",
-  SCALE: "Scală",
-  TEXT: "Text scurt",
-  LONG_TEXT: "Text lung",
-  DATE: "Dată",
-  BOOLEAN: "Da / Nu"
-};
 
 function equalsAnswer(answer: SurveyAnswerValue, value: SurveyAnswerValue): boolean {
   if (Array.isArray(answer) && !Array.isArray(value)) {
@@ -188,7 +178,7 @@ export function SurveyFormFiller({
             <legend className="survey-question-legend">
               {q.title}
               {q.required ? <span className="survey-required"> *</span> : null}
-              <span className="survey-type-hint">{TYPE_LABELS[q.type]}</span>
+              <span className="survey-type-hint">{SURVEY_QUESTION_TYPE_LABELS[q.type]}</span>
             </legend>
 
             {q.type === "SINGLE_CHOICE" && q.options ? (
@@ -261,6 +251,32 @@ export function SurveyFormFiller({
 
             {q.type === "DATE" ? (
               <input type="date" value={typeof answers[q.id] === "string" ? (answers[q.id] as string) : ""} onChange={(ev) => setAnswer(q.id, ev.target.value)} />
+            ) : null}
+
+            {q.type === "NUMBER" ? (
+              <input
+                type="number"
+                min={q.min}
+                max={q.max}
+                value={typeof answers[q.id] === "number" ? (answers[q.id] as number) : ""}
+                onChange={(ev) => setAnswer(q.id, ev.target.value === "" ? null : Number(ev.target.value))}
+              />
+            ) : null}
+
+            {q.type === "RATING_NPS" ? (
+              <div className="field">
+                <input
+                  type="range"
+                  min={q.min ?? 0}
+                  max={q.max ?? 10}
+                  step={1}
+                  value={typeof answers[q.id] === "number" ? (answers[q.id] as number) : 0}
+                  onChange={(ev) => setAnswer(q.id, Number(ev.target.value))}
+                />
+                <div className="field-hint">
+                  Scor NPS: {typeof answers[q.id] === "number" ? answers[q.id] : 0} (0–10)
+                </div>
+              </div>
             ) : null}
           </fieldset>
         );

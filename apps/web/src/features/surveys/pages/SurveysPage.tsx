@@ -7,7 +7,14 @@ import type {
   SurveyAudienceType,
   SurveyQuestion,
   SurveyQuestionOption,
-  SurveyQuestionType
+  SurveyQuestionType,
+  SurveyType
+} from "@repo/shared-types/surveys";
+import {
+  SURVEY_QUESTION_TYPE_LABELS,
+  SURVEY_QUESTION_TYPES,
+  SURVEY_TYPE_LABELS,
+  SURVEY_TYPES
 } from "@repo/shared-types/surveys";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import {
@@ -30,18 +37,9 @@ import {
   useSurveysOverview
 } from "../hooks/useSurveys";
 
-const QUESTION_TYPES: SurveyQuestionType[] = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "SCALE", "TEXT", "LONG_TEXT", "DATE", "BOOLEAN"];
+const QUESTION_TYPES = [...SURVEY_QUESTION_TYPES];
+const SURVEY_TYPE_OPTIONS = [...SURVEY_TYPES];
 const AUDIENCE_TYPES: SurveyAudienceType[] = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE", "CUSTOM"];
-
-const QUESTION_TYPE_LABELS: Record<SurveyQuestionType, string> = {
-  SINGLE_CHOICE: "Alegere unică",
-  MULTIPLE_CHOICE: "Alegere multiplă",
-  SCALE: "Scală",
-  TEXT: "Text scurt",
-  LONG_TEXT: "Text lung",
-  DATE: "Dată",
-  BOOLEAN: "Da / Nu"
-};
 
 const SURVEY_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Ciornă",
@@ -62,6 +60,7 @@ const AUDIENCE_LABELS: Record<SurveyAudienceType, string> = {
 
 type SurveyForm = Omit<CreateSurveyRequest, "questionSchema" | "conditionalLogic" | "targetEmployeeIds"> & {
   targetEmployeeIdsCsv: string;
+  closesAtInput: string;
 };
 
 type QuestionForm = Omit<SurveyQuestion, "options"> & {
@@ -71,11 +70,13 @@ type QuestionForm = Omit<SurveyQuestion, "options"> & {
 const EMPTY_SURVEY: SurveyForm = {
   title: "Sondaj satisfacție angajați",
   description: "Chestionar scurt pentru feedback intern.",
+  surveyType: "ENGAGEMENT",
   audienceType: "ALL",
   audienceRefId: "",
   audienceLabel: "",
   targetEmployeeIdsCsv: "",
-  privateLinkEnabled: true
+  privateLinkEnabled: true,
+  closesAtInput: ""
 };
 
 const EMPTY_QUESTION: QuestionForm = {
@@ -233,6 +234,8 @@ export function SurveysPage() {
     const payload: CreateSurveyRequest = {
       title: surveyForm.title,
       description: surveyForm.description || undefined,
+      surveyType: surveyForm.surveyType,
+      closesAt: surveyForm.closesAtInput ? new Date(`${surveyForm.closesAtInput}T23:59:59`).toISOString() : undefined,
       audienceType: surveyForm.audienceType,
       audienceRefId: surveyForm.audienceRefId || undefined,
       audienceLabel: surveyForm.audienceLabel || undefined,
@@ -379,6 +382,31 @@ export function SurveysPage() {
                   />
                 </div>
                 <div className="field">
+                  <label htmlFor="survey-type">Tip sondaj</label>
+                  <select
+                    id="survey-type"
+                    value={surveyForm.surveyType ?? "ENGAGEMENT"}
+                    onChange={(event) =>
+                      setSurveyForm((prev) => ({ ...prev, surveyType: event.target.value as SurveyType }))
+                    }
+                  >
+                    {SURVEY_TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>
+                        {SURVEY_TYPE_LABELS[type]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="survey-closes">Închidere automată</label>
+                  <input
+                    id="survey-closes"
+                    type="date"
+                    value={surveyForm.closesAtInput}
+                    onChange={(event) => setSurveyForm((prev) => ({ ...prev, closesAtInput: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
                   <label htmlFor="survey-audience">Destinatari</label>
                   <select
                     id="survey-audience"
@@ -439,7 +467,7 @@ export function SurveysPage() {
                   >
                     {QUESTION_TYPES.map((type) => (
                       <option key={type} value={type}>
-                        {QUESTION_TYPE_LABELS[type]}
+                        {SURVEY_QUESTION_TYPE_LABELS[type]}
                       </option>
                     ))}
                   </select>
@@ -482,7 +510,7 @@ export function SurveysPage() {
                     <strong>
                       {question.id} · {question.title}
                     </strong>
-                    <span>{QUESTION_TYPE_LABELS[question.type]}</span>
+                    <span>{SURVEY_QUESTION_TYPE_LABELS[question.type]}</span>
                   </article>
                 ))}
                 {questions.length === 0 ? (

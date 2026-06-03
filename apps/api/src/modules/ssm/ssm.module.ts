@@ -53,6 +53,6 @@ import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.cl
       useClass: PrismaSsmTrainingRepository
     }
   ],
-  exports: [SsmTrainingSuiteService]
+  exports: [SsmTrainingSuiteService, SsmMedicalService]
 })
 export class SsmModule {}

@@ -25,6 +25,10 @@ import { SsmDocumentsService } from "../application/services/ssm-documents.servi
 import { CreateSsmDocumentDto } from "./dto/create-ssm-document.dto";
 import { ListSsmDocumentsDto } from "./dto/list-ssm-documents.dto";
 import { RevertSsmDocumentDto } from "./dto/revert-ssm-document.dto";
+import {
+  CreateSsmDocumentTemplateDto,
+  UpdateSsmDocumentTemplateDto
+} from "./dto/ssm-document-template.dto";
 
 @Controller("ssm/documents")
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
@@ -50,6 +54,39 @@ export class SsmDocumentsController {
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
   quickControlAccess(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
     return this.documentsService.quickControlAccess(tenantId, user);
+  }
+
+  @Get("templates")
+  @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
+  listTemplates(@TenantId() tenantId: string) {
+    return this.documentsService.listTemplates(tenantId);
+  }
+
+  @Post("templates/seed-defaults")
+  @RequirePermissions(Permission.SSM_DOCUMENT_EDIT)
+  seedTemplates(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
+    return this.documentsService.seedDefaultTemplates(tenantId, user.sub);
+  }
+
+  @Post("templates")
+  @RequirePermissions(Permission.SSM_DOCUMENT_EDIT)
+  createTemplate(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() dto: CreateSsmDocumentTemplateDto
+  ) {
+    return this.documentsService.createTemplate(tenantId, user.sub, dto);
+  }
+
+  @Patch("templates/:templateId")
+  @RequirePermissions(Permission.SSM_DOCUMENT_EDIT)
+  updateTemplate(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("templateId") templateId: string,
+    @Body() dto: UpdateSsmDocumentTemplateDto
+  ) {
+    return this.documentsService.updateTemplate(tenantId, user.sub, templateId, dto);
   }
 
   @Get(":id/history")

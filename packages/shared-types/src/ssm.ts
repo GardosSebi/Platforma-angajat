@@ -98,6 +98,35 @@ export interface SsmDocumentControlFoldersResponse {
   }>;
 }
 
+export interface SsmDocumentTemplateItem {
+  id: string;
+  name: string;
+  title: string;
+  type: SsmDocumentType;
+  targetType: SsmDocumentTargetType;
+  targetLabel?: string | null;
+  isControlFolder: boolean;
+  checklistItems: string[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSsmDocumentTemplateRequest {
+  name: string;
+  title: string;
+  type: SsmDocumentType;
+  targetType?: SsmDocumentTargetType;
+  targetLabel?: string;
+  isControlFolder?: boolean;
+  checklistItems?: string[];
+  active?: boolean;
+}
+
+export interface ListSsmDocumentTemplatesResponse {
+  items: SsmDocumentTemplateItem[];
+}
+
 export interface UploadSsmDocumentResponse {
   documentId: string;
   versionId: string;

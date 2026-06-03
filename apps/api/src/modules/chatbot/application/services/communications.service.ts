@@ -3,6 +3,7 @@ import {
   CommunicationAnnouncement,
   CommunicationAnnouncementStatus,
   CommunicationAudienceType,
+  CommunicationCategory,
   CommunicationContentType
 } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
@@ -149,6 +150,7 @@ export class CommunicationsService {
         tenantId,
         title: dto.title.trim(),
         body: dto.body.trim(),
+        category: dto.category ?? CommunicationCategory.GENERAL,
         contentType: dto.contentType ?? CommunicationContentType.TEXT,
         contentUrl: clean(dto.contentUrl),
         audienceType: dto.audienceType,
@@ -199,6 +201,7 @@ export class CommunicationsService {
     const data = {
       title: dto.title?.trim(),
       body: dto.body?.trim(),
+      category: dto.category,
       contentType: dto.contentType,
       contentUrl: dto.contentUrl === undefined ? undefined : clean(dto.contentUrl) ?? null,
       audienceType: dto.audienceType,
@@ -342,6 +345,36 @@ export class CommunicationsService {
     return { published: due.length };
   }
 
+  /** Arhivează anunțurile publicate după data de expirare. */
+  async archiveExpiredAnnouncements(tenantId: string, actorId: string) {
+    const now = new Date();
+    const due = await this.prisma.communicationAnnouncement.findMany({
+      where: {
+        tenantId,
+        status: CommunicationAnnouncementStatus.PUBLISHED,
+        expiresAt: { lte: now }
+      }
+    });
+    for (const item of due) {
+      await this.prisma.communicationAnnouncement.update({
+        where: { id: item.id },
+        data: { status: CommunicationAnnouncementStatus.ARCHIVED }
+      });
+    }
+    if (due.length) {
+      await this.auditLog.write({
+        tenantId,
+        actorId,
+        module: "COMMUNICATIONS",
+        action: "ANNOUNCEMENTS_EXPIRED_ARCHIVED",
+        entityType: "CommunicationAnnouncement",
+        entityId: "batch",
+        payload: { archived: due.length }
+      });
+    }
+    return { archived: due.length };
+  }
+
   async reminders(tenantId: string, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
     const rows = await this.prisma.communicationAnnouncement.findMany({
@@ -433,6 +466,7 @@ export class CommunicationsService {
         name: dto.name.trim(),
         title: dto.title.trim(),
         body: dto.body.trim(),
+        category: dto.category ?? CommunicationCategory.GENERAL,
         contentType: dto.contentType ?? CommunicationContentType.TEXT,
         contentUrl: clean(dto.contentUrl),
         audienceType: dto.audienceType ?? CommunicationAudienceType.ALL,
@@ -682,6 +716,7 @@ export class CommunicationsService {
           id: row.id,
           title: row.title,
           body: row.body,
+          category: row.category,
           contentType: row.contentType,
           contentUrl: row.contentUrl,
           audienceType: row.audienceType,

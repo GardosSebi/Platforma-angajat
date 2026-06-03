@@ -26,6 +26,7 @@ const ALL_SYSTEM_ROLES = [
   "SSM_ADMIN",
   "SSM_ENTITY_RESPONSIBLE",
   "DEPARTMENT_MANAGER",
+  "ITM_INSPECTOR",
   "EMPLOYEE"
 ] as const;
 
@@ -35,6 +36,8 @@ const ROLE_LABELS_RO: Record<string, string> = {
     "Responsabil SSM (per entitate) — administrare completă pentru entitatea sa: documente, instruiri, EIP, accidente, calendar",
   DEPARTMENT_MANAGER:
     "Manager / șef de departament — vizualizare situație echipă proprie; aprobare instruiri la locul de muncă; alertă la neconformități",
+  ITM_INSPECTOR:
+    "Inspector ITM/ISU — vizualizare dosar control (documente marcate), accidente, rapoarte; fără editare",
   EMPLOYEE:
     "Angajat — acces la propriile documente și fișe de instruire; parcurgere instruiri online; vizualizare dosar personal"
 };

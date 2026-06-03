@@ -1,5 +1,43 @@
-export const SURVEY_QUESTION_TYPES = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "SCALE", "TEXT", "LONG_TEXT", "DATE", "BOOLEAN"] as const;
+export const SURVEY_QUESTION_TYPES = [
+  "SINGLE_CHOICE",
+  "MULTIPLE_CHOICE",
+  "SCALE",
+  "TEXT",
+  "LONG_TEXT",
+  "DATE",
+  "BOOLEAN",
+  "NUMBER",
+  "RATING_NPS"
+] as const;
 export type SurveyQuestionType = (typeof SURVEY_QUESTION_TYPES)[number];
+
+export const SURVEY_QUESTION_TYPE_LABELS: Record<SurveyQuestionType, string> = {
+  SINGLE_CHOICE: "Alegere unică",
+  MULTIPLE_CHOICE: "Alegere multiplă",
+  SCALE: "Scală",
+  TEXT: "Text scurt",
+  LONG_TEXT: "Text lung",
+  DATE: "Dată",
+  BOOLEAN: "Da / Nu",
+  NUMBER: "Număr",
+  RATING_NPS: "Scor NPS (0–10)"
+};
+
+export function surveyQuestionNeedsOptions(type: SurveyQuestionType): boolean {
+  return type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE";
+}
+
+export const SURVEY_TYPES = ["ENGAGEMENT", "COMPLIANCE", "FEEDBACK", "EXIT", "PULSE", "CUSTOM"] as const;
+export type SurveyType = (typeof SURVEY_TYPES)[number];
+
+export const SURVEY_TYPE_LABELS: Record<SurveyType, string> = {
+  ENGAGEMENT: "Angajare / satisfacție",
+  COMPLIANCE: "Conformitate SSM",
+  FEEDBACK: "Feedback",
+  EXIT: "Părăsire companie",
+  PULSE: "Pulse check",
+  CUSTOM: "Personalizat"
+};
 
 export const SURVEY_AUDIENCE_TYPES = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE_GROUP", "EMPLOYEE", "CUSTOM"] as const;
 export type SurveyAudienceType = (typeof SURVEY_AUDIENCE_TYPES)[number];
@@ -32,6 +70,7 @@ export interface SurveyConditionalRule {
 export interface CreateSurveyRequest {
   title: string;
   description?: string;
+  surveyType?: SurveyType;
   audienceType?: SurveyAudienceType;
   audienceRefId?: string;
   audienceLabel?: string;
@@ -39,11 +78,13 @@ export interface CreateSurveyRequest {
   questionSchema: SurveyQuestion[];
   conditionalLogic?: SurveyConditionalRule[];
   privateLinkEnabled?: boolean;
+  closesAt?: string;
 }
 
 export interface UpdateSurveyRequest {
   title?: string;
   description?: string;
+  surveyType?: SurveyType;
   status?: SurveyStatus;
   audienceType?: SurveyAudienceType;
   audienceRefId?: string;
@@ -52,13 +93,16 @@ export interface UpdateSurveyRequest {
   questionSchema?: SurveyQuestion[];
   conditionalLogic?: SurveyConditionalRule[];
   privateLinkEnabled?: boolean;
+  closesAt?: string;
 }
 
 export interface SurveyItem {
   id: string;
   title: string;
   description?: string | null;
+  surveyType: SurveyType;
   status: SurveyStatus;
+  closesAt?: string | null;
   audienceType: SurveyAudienceType;
   audienceRefId?: string | null;
   audienceLabel?: string | null;

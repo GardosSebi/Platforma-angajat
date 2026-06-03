@@ -2,7 +2,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-route
 import { NotificationBell } from "../shared/components/NotificationBell";
 import { authStore, SESSION_EXPIRED_FLAG_KEY } from "../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../shared/auth/clear-user-query-cache";
-import { canAccessTenantAdmin, isEmployeePortalUser } from "../shared/auth/roles";
+import { canAccessTenantAdmin, isEmployeePortalUser, isItmInspectorUser } from "../shared/auth/roles";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 
 const backofficeNav = [
@@ -17,6 +17,8 @@ const employeeNav = [
   { to: "/portal", label: "Spațiul meu" },
   { to: "/informatii", label: "Informații" }
 ] as const;
+
+const itmNav = [{ to: "/itm", label: "Control ITM/ISU" }, { to: "/informatii", label: "Informații" }] as const;
 
 export function AppLayout() {
   const session = useAuthSession();
@@ -38,9 +40,12 @@ export function AppLayout() {
   }
 
   const isEmployee = isEmployeePortalUser(session);
+  const isItm = isItmInspectorUser(session);
   const nav = isEmployee
     ? [...employeeNav]
-    : [
+    : isItm
+      ? [...itmNav]
+      : [
         backofficeNav[0],
         ...(canAccessTenantAdmin(session) ? ([{ to: "/master-data", label: "Master Data" }] as const) : []),
         ...backofficeNav.slice(1)

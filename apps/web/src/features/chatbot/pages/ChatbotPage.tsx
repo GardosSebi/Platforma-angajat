@@ -4,10 +4,12 @@ import { isWorksiteScopedViewer } from "../../../shared/auth/worksite-scope";
 import type {
   CommunicationAnnouncementItem,
   CommunicationAudienceType,
+  CommunicationCategory,
   CommunicationContentType,
   CreateCommunicationAnnouncementRequest,
   CreateCommunicationTemplateRequest
 } from "@repo/shared-types/communications";
+import { COMMUNICATION_CATEGORIES, COMMUNICATION_CATEGORY_LABELS } from "@repo/shared-types/communications";
 import {
   useDepartmentsLookup,
   useEmployeeOptions,
@@ -77,6 +79,7 @@ type FeedbackState = {
 const EMPTY_ANNOUNCEMENT: AnnouncementForm = {
   title: "Anunț intern",
   body: "Mesaj pentru angajați...",
+  category: "GENERAL",
   contentType: "TEXT",
   audienceType: "ALL",
   status: "DRAFT",
@@ -392,6 +395,25 @@ export function ChatbotPage() {
                   {(templatesQuery.data?.items ?? []).map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="announcement-category">Categorie mesaj</label>
+                <select
+                  id="announcement-category"
+                  value={announcementForm.category ?? "GENERAL"}
+                  onChange={(event) =>
+                    setAnnouncementForm((prev) => ({
+                      ...prev,
+                      category: event.target.value as CommunicationCategory
+                    }))
+                  }
+                >
+                  {COMMUNICATION_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {COMMUNICATION_CATEGORY_LABELS[cat]}
                     </option>
                   ))}
                 </select>

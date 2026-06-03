@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from "crypto";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, Survey, SurveyAudienceType, SurveyStatus } from "@prisma/client";
+import { Prisma, Survey, SurveyAudienceType, SurveyStatus, SurveyType } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
@@ -128,7 +128,9 @@ export class SurveysService {
         tenantId,
         title: dto.title.trim(),
         description: clean(dto.description),
+        surveyType: dto.surveyType ?? SurveyType.ENGAGEMENT,
         audienceType: dto.audienceType ?? SurveyAudienceType.ALL,
+        closesAt: dto.closesAt ? parseDate(dto.closesAt) : undefined,
         audienceRefId: clean(dto.audienceRefId),
         audienceLabel: clean(dto.audienceLabel),
         targetEmployeeIds: dedupe(dto.targetEmployeeIds),
@@ -169,7 +171,9 @@ export class SurveysService {
       data: {
         title: dto.title?.trim(),
         description: cleanNullable(dto.description),
+        surveyType: dto.surveyType,
         status: dto.status,
+        closesAt: dto.closesAt === undefined ? undefined : dto.closesAt ? parseDate(dto.closesAt) : null,
         audienceType: dto.audienceType,
         audienceRefId: dto.audienceRefId === undefined ? undefined : clean(dto.audienceRefId) ?? null,
         audienceLabel: dto.audienceLabel === undefined ? undefined : clean(dto.audienceLabel) ?? null,
@@ -517,6 +521,36 @@ export class SurveysService {
     }
   }
 
+  /** Închide sondajele active după data closesAt — cron zilnic. */
+  async closeExpiredSurveys(tenantId: string, actorId: string) {
+    const now = new Date();
+    const due = await this.prisma.survey.findMany({
+      where: {
+        tenantId,
+        status: SurveyStatus.ACTIVE,
+        closesAt: { lte: now }
+      }
+    });
+    for (const survey of due) {
+      await this.prisma.survey.update({
+        where: { id: survey.id },
+        data: { status: SurveyStatus.CLOSED }
+      });
+    }
+    if (due.length) {
+      await this.auditLog.write({
+        tenantId,
+        actorId,
+        module: "SURVEYS",
+        action: "SURVEYS_AUTO_CLOSED",
+        entityType: "Survey",
+        entityId: "batch",
+        payload: { closed: due.length }
+      });
+    }
+    return { closed: due.length };
+  }
+
   private async withStats(tenantId: string, surveys: Survey[]) {
     return Promise.all(
       surveys.map(async (survey) => {
@@ -539,7 +573,9 @@ export class SurveysService {
       id: survey.id,
       title: survey.title,
       description: survey.description,
+      surveyType: survey.surveyType,
       status: survey.status,
+      closesAt: survey.closesAt,
       audienceType: survey.audienceType,
       audienceRefId: survey.audienceRefId,
       audienceLabel: survey.audienceLabel,

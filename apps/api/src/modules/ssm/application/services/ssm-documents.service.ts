@@ -9,6 +9,10 @@ import { PrismaService } from "../../../../infrastructure/prisma/prisma.service"
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { resolveSsmViewerScope } from "../../api/ssm-viewer-scope";
 import { CreateSsmDocumentDto } from "../../api/dto/create-ssm-document.dto";
+import {
+  CreateSsmDocumentTemplateDto,
+  UpdateSsmDocumentTemplateDto
+} from "../../api/dto/ssm-document-template.dto";
 import { resolvePagination } from "../../../../common/dto/pagination-query.dto";
 import { paginatedResult } from "../../../../common/pagination";
 import { ListSsmDocumentsDto } from "../../api/dto/list-ssm-documents.dto";
@@ -572,5 +576,131 @@ export class SsmDocumentsService {
 
   static documentTargets(): SsmDocumentTargetType[] {
     return Object.values(SsmDocumentTargetType);
+  }
+
+  async listTemplates(tenantId: string, activeOnly = true) {
+    const rows = await this.prisma.ssmDocumentTemplate.findMany({
+      where: { tenantId, ...(activeOnly ? { active: true } : {}) },
+      orderBy: [{ type: "asc" }, { name: "asc" }]
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        title: row.title,
+        type: row.type,
+        targetType: row.targetType,
+        targetLabel: row.targetLabel,
+        isControlFolder: row.isControlFolder,
+        checklistItems: row.checklistItems,
+        active: row.active,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt
+      }))
+    };
+  }
+
+  async createTemplate(tenantId: string, actorId: string, dto: CreateSsmDocumentTemplateDto) {
+    const row = await this.prisma.ssmDocumentTemplate.create({
+      data: {
+        tenantId,
+        name: dto.name.trim(),
+        title: dto.title.trim(),
+        type: dto.type,
+        targetType: dto.targetType ?? SsmDocumentTargetType.ENTITY,
+        targetLabel: dto.targetLabel?.trim(),
+        isControlFolder: dto.isControlFolder ?? false,
+        checklistItems: dto.checklistItems ?? [],
+        active: dto.active ?? true,
+        createdBy: actorId
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "DOCUMENT_TEMPLATE_CREATED",
+      entityType: "SsmDocumentTemplate",
+      entityId: row.id,
+      payload: { type: row.type, name: row.name }
+    });
+    return { id: row.id };
+  }
+
+  async updateTemplate(tenantId: string, actorId: string, id: string, dto: UpdateSsmDocumentTemplateDto) {
+    const existing = await this.prisma.ssmDocumentTemplate.findFirst({ where: { id, tenantId } });
+    if (!existing) {
+      throw new NotFoundException("Șablonul de document nu a fost găsit.");
+    }
+    await this.prisma.ssmDocumentTemplate.update({
+      where: { id },
+      data: {
+        name: dto.name?.trim(),
+        title: dto.title?.trim(),
+        type: dto.type,
+        targetType: dto.targetType,
+        targetLabel: dto.targetLabel === undefined ? undefined : dto.targetLabel?.trim() ?? null,
+        isControlFolder: dto.isControlFolder,
+        checklistItems: dto.checklistItems,
+        active: dto.active
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "DOCUMENT_TEMPLATE_UPDATED",
+      entityType: "SsmDocumentTemplate",
+      entityId: id,
+      payload: {}
+    });
+    return { id };
+  }
+
+  async seedDefaultTemplates(tenantId: string, actorId: string) {
+    const defaults: CreateSsmDocumentTemplateDto[] = [
+      {
+        name: "ipssm-entitate",
+        title: "Instrucțiuni proprii SSM — {entitate}",
+        type: SsmDocumentType.IPSSM,
+        targetType: SsmDocumentTargetType.ENTITY,
+        isControlFolder: true,
+        checklistItems: ["Semnat de conducere", "Comunicat angajaților", "Revizie la 12 luni"]
+      },
+      {
+        name: "ppp-post",
+        title: "Program prevenire și protecție — {post}",
+        type: SsmDocumentType.PPP,
+        targetType: SsmDocumentTargetType.JOB_POSITION,
+        isControlFolder: true,
+        checklistItems: ["Măsuri tehnice", "Măsuri organizatorice", "EIP aferent"]
+      },
+      {
+        name: "registru-accidente",
+        title: "Registru accidente de muncă",
+        type: SsmDocumentType.REGISTER,
+        targetType: SsmDocumentTargetType.ENTITY,
+        isControlFolder: true,
+        checklistItems: ["Numerotare continuă", "Păstrare 45 zile la punct de lucru"]
+      },
+      {
+        name: "psi-evacuare",
+        title: "Documentație PSI / plan evacuare",
+        type: SsmDocumentType.PSI,
+        targetType: SsmDocumentTargetType.WORKSITE,
+        isControlFolder: true,
+        checklistItems: ["Plan evacuare", "Verificare stingătoare", "Instruire SU"]
+      }
+    ];
+    let created = 0;
+    for (const item of defaults) {
+      const exists = await this.prisma.ssmDocumentTemplate.findFirst({
+        where: { tenantId, name: item.name }
+      });
+      if (exists) continue;
+      await this.createTemplate(tenantId, actorId, item);
+      created += 1;
+    }
+    return { created };
   }
 }

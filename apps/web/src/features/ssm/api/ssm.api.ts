@@ -45,6 +45,7 @@ import type {
   SsmDocumentControlFoldersResponse,
   SsmDocumentHistoryResponse,
   SsmDocumentListItem,
+  ListSsmDocumentTemplatesResponse,
   SsmTrainingPlanItem,
   SignSsmTrainingBatchRequest,
   SsmTrainingTypeItem,
@@ -70,6 +71,12 @@ export const ssmApi = {
   },
   getControlFolders() {
     return httpClient<SsmDocumentControlFoldersResponse>("/ssm/documents/control/quick-access");
+  },
+  listDocumentTemplates() {
+    return httpClient<ListSsmDocumentTemplatesResponse>("/ssm/documents/templates");
+  },
+  seedDocumentTemplates() {
+    return httpClient<{ created: number }>("/ssm/documents/templates/seed-defaults", { method: "POST" });
   },
   createDocument(payload: CreateSsmDocumentRequest, file: File) {
     const body = new FormData();
