@@ -2,7 +2,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-route
 import { NotificationBell } from "../shared/components/NotificationBell";
 import { authStore, SESSION_EXPIRED_FLAG_KEY } from "../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../shared/auth/clear-user-query-cache";
-import { canAccessTenantAdmin, isEmployeePortalUser, isItmInspectorUser } from "../shared/auth/roles";
+import { canAccessTenantAdmin, canAccessEmployeePortal, hasSsmBackofficeAccess, isEmployeePortalUser, isItmInspectorUser } from "../shared/auth/roles";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 
 const backofficeNav = [
@@ -41,14 +41,19 @@ export function AppLayout() {
 
   const isEmployee = isEmployeePortalUser(session);
   const isItm = isItmInspectorUser(session);
+  const hasBackoffice = hasSsmBackofficeAccess(session);
+  const showPortalNav = canAccessEmployeePortal(session);
+
   const nav = isEmployee
     ? [...employeeNav]
     : isItm
       ? [...itmNav]
       : [
-        backofficeNav[0],
+        ...(showPortalNav ? ([{ to: "/portal", label: "Spațiul meu" }] as const) : []),
+        ...(hasBackoffice ? ([backofficeNav[0]] as const) : []),
         ...(canAccessTenantAdmin(session) ? ([{ to: "/master-data", label: "Master Data" }] as const) : []),
-        ...backofficeNav.slice(1)
+        ...(hasBackoffice ? backofficeNav.slice(1) : []),
+        ...(!hasBackoffice && !showPortalNav ? ([{ to: "/informatii", label: "Informații" }] as const) : [])
       ];
 
   return (

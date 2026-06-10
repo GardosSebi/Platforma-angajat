@@ -27,6 +27,14 @@ import {
   SignPlanDto,
   SignPlansBatchDto
 } from "../../api/dto/training-suite.dto";
+import {
+  buildTrainingTestPresentation,
+  gradeTrainingTestAnswers,
+  rebuildPublicQuestions,
+  resolveTrainingTestQuestions,
+  SSM_TRAINING_PASS_THRESHOLD_PERCENT,
+  type SsmTrainingTestAttemptMeta
+} from "../training-test-bank";
 
 function parseDate(value: string): Date {
   const d = new Date(value);
@@ -89,10 +97,16 @@ type PrismaWithTrainingTypeExtended = PrismaService & {
 
 type TrainingPlanForTest = {
   id: string;
-  attempts: Array<{ id: string }>;
+  materialTitle?: string | null;
+  materialUrl?: string | null;
+  materialCompletedAt?: Date | null;
+  score?: number | null;
+  status: SsmTrainingPlanStatus;
+  attempts: Array<{ id: string; finishedAt: Date | null; passed: boolean | null; answersJson: unknown }>;
   trainingType: {
     legalMinDurationHours?: number | null;
     name: string;
+    category: SsmTrainingCategoryCode;
   };
 };
 
@@ -101,7 +115,7 @@ type PrismaWithTrainingPlanLegal = PrismaService & {
     findFirst(args: {
       where: { id: string; tenantId: string };
       include: {
-        trainingType: { select: { legalMinDurationHours: true; name: true } };
+        trainingType: { select: { legalMinDurationHours: true; name: true; category: true } };
         attempts: { orderBy: { startedAt: "asc" | "desc" }; take: number };
       };
     }): Promise<TrainingPlanForTest | null>;
@@ -268,7 +282,7 @@ export class SsmTrainingSuiteService {
       category: "TRAINING_ASSIGNED",
       title: `Instruire alocată: ${type.name}`,
       body: `Scadență: ${dueAt.toLocaleDateString("ro-RO")}. Parcurge materialul și completează testul.`,
-      linkPath: "/ssm",
+      linkPath: "/portal?tab=trainings",
       entityType: "SsmTrainingPlan",
       entityId: created.id
     });
@@ -276,15 +290,63 @@ export class SsmTrainingSuiteService {
     return created;
   }
 
+  private planHasMaterial(plan: { materialUrl?: string | null; materialTitle?: string | null }): boolean {
+    return Boolean(plan.materialUrl?.trim() || plan.materialTitle?.trim());
+  }
+
+  private assertTrainingPlanActiveForWorkflow(plan: { status: SsmTrainingPlanStatus; score?: number | null }) {
+    if (plan.status === SsmTrainingPlanStatus.COMPLETED) {
+      throw new BadRequestException("Instruirea este deja validată de responsabilul SSM.");
+    }
+    if (plan.status === SsmTrainingPlanStatus.BLOCKED) {
+      throw new BadRequestException("Instruirea este blocată după testul eșuat. Contactați responsabilul SSM.");
+    }
+    if (plan.score != null) {
+      throw new BadRequestException("Testul a fost deja finalizat. Continuați cu semnătura.");
+    }
+  }
+
+  private assertMaterialReady(plan: {
+    materialUrl?: string | null;
+    materialTitle?: string | null;
+    materialCompletedAt?: Date | null;
+  }) {
+    if (this.planHasMaterial(plan) && !plan.materialCompletedAt) {
+      throw new BadRequestException("Confirmați parcurgerea materialului înainte de a porni testul.");
+    }
+  }
+
+  private parseAttemptMeta(raw: unknown): SsmTrainingTestAttemptMeta | null {
+    if (!raw || typeof raw !== "object") return null;
+    const record = raw as Record<string, unknown>;
+    const meta = record.__meta__;
+    if (!meta || typeof meta !== "object") return null;
+    const metaRecord = meta as SsmTrainingTestAttemptMeta;
+    if (!Array.isArray(metaRecord.questionIds) || typeof metaRecord.permutations !== "object") {
+      return null;
+    }
+    return metaRecord;
+  }
+
   async markMaterialCompleted(tenantId: string, actorId: string, trainingPlanId: string, viewer: JwtPayload) {
     await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
-    const updated = await this.prisma.ssmTrainingPlan.updateMany({
-      where: { id: trainingPlanId, tenantId },
-      data: { materialCompletedAt: new Date() }
+    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId }
     });
-    if (!updated.count) {
+    if (!plan) {
       throw new NotFoundException("Training plan not found.");
     }
+    this.assertTrainingPlanActiveForWorkflow(plan);
+    if (!this.planHasMaterial(plan)) {
+      throw new BadRequestException("Nu există material de parcurs pentru această instruire.");
+    }
+    if (plan.materialCompletedAt) {
+      return { trainingPlanId, materialCompleted: true };
+    }
+    await this.prisma.ssmTrainingPlan.update({
+      where: { id: trainingPlanId },
+      data: { materialCompletedAt: new Date() }
+    });
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -298,38 +360,14 @@ export class SsmTrainingSuiteService {
 
   async startTestAttempt(tenantId: string, actorId: string, trainingPlanId: string, viewer: JwtPayload) {
     await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
-    const plan = await this.prisma.ssmTrainingPlan.findFirst({
-      where: { id: trainingPlanId, tenantId }
-    });
-    if (!plan) {
-      throw new NotFoundException("Training plan not found.");
-    }
-    const attempt = await this.prisma.ssmTrainingTestAttempt.create({
-      data: {
-        tenantId,
-        trainingPlanId
-      }
-    });
-    await this.auditLog.write({
-      tenantId,
-      actorId,
-      module: "SSM",
-      action: "ELEARNING_TEST_STARTED",
-      entityType: "SsmTrainingTestAttempt",
-      entityId: attempt.id
-    });
-    return attempt;
-  }
-
-  async completeTest(tenantId: string, actorId: string, dto: CompleteTestDto, viewer: JwtPayload) {
-    await this.assertTrainingPlanVisibleToViewer(tenantId, dto.trainingPlanId, viewer);
     const plan = await (this.prisma as PrismaWithTrainingPlanLegal).ssmTrainingPlan.findFirst({
-      where: { id: dto.trainingPlanId, tenantId },
+      where: { id: trainingPlanId, tenantId },
       include: {
         trainingType: {
           select: {
             legalMinDurationHours: true,
-            name: true
+            name: true,
+            category: true
           }
         },
         attempts: {
@@ -341,12 +379,87 @@ export class SsmTrainingSuiteService {
     if (!plan) {
       throw new NotFoundException("Training plan not found.");
     }
+    this.assertTrainingPlanActiveForWorkflow(plan);
+    this.assertMaterialReady(plan);
+
+    const bank = resolveTrainingTestQuestions(plan.trainingType.category as SsmTrainingCategoryCode);
+    const latestAttempt = plan.attempts[0];
+    if (latestAttempt && !latestAttempt.finishedAt) {
+      const existingMeta = this.parseAttemptMeta(latestAttempt.answersJson);
+      if (existingMeta) {
+        const bank = resolveTrainingTestQuestions(plan.trainingType.category as SsmTrainingCategoryCode);
+        const questions = rebuildPublicQuestions(existingMeta, bank);
+        return {
+          attemptId: latestAttempt.id,
+          questions,
+          passThresholdPercent: SSM_TRAINING_PASS_THRESHOLD_PERCENT
+        };
+      }
+    }
+
+    const { meta, questions } = buildTrainingTestPresentation(bank);
+    const attempt = await this.prisma.ssmTrainingTestAttempt.create({
+      data: {
+        tenantId,
+        trainingPlanId,
+        answersJson: { __meta__: meta } as unknown as Prisma.InputJsonValue
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "ELEARNING_TEST_STARTED",
+      entityType: "SsmTrainingTestAttempt",
+      entityId: attempt.id
+    });
+    return {
+      attemptId: attempt.id,
+      questions,
+      passThresholdPercent: SSM_TRAINING_PASS_THRESHOLD_PERCENT
+    };
+  }
+
+  async completeTest(tenantId: string, actorId: string, dto: CompleteTestDto, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, dto.trainingPlanId, viewer);
+    const plan = await (this.prisma as PrismaWithTrainingPlanLegal).ssmTrainingPlan.findFirst({
+      where: { id: dto.trainingPlanId, tenantId },
+      include: {
+        trainingType: {
+          select: {
+            legalMinDurationHours: true,
+            name: true,
+            category: true
+          }
+        },
+        attempts: {
+          orderBy: { startedAt: "desc" },
+          take: 1
+        }
+      }
+    });
+    if (!plan) {
+      throw new NotFoundException("Training plan not found.");
+    }
+    this.assertTrainingPlanActiveForWorkflow(plan);
+    this.assertMaterialReady(plan);
     if (!plan.attempts.length) {
-      throw new BadRequestException("No started test attempt found.");
+      throw new BadRequestException("Nu există o tentativă de test pornită.");
     }
     const latestAttempt = plan.attempts[0];
+    if (latestAttempt.finishedAt) {
+      throw new BadRequestException("Testul a fost deja trimis.");
+    }
+    const meta = this.parseAttemptMeta(latestAttempt.answersJson);
+    if (!meta) {
+      throw new BadRequestException("Datele testului nu sunt valide. Reporniți testul.");
+    }
+
+    const bank = resolveTrainingTestQuestions(plan.trainingType.category as SsmTrainingCategoryCode);
+    const grade = gradeTrainingTestAnswers(meta, dto.answers, bank);
     const now = new Date();
-    if (dto.passed && plan.trainingType.legalMinDurationHours) {
+
+    if (grade.passed && plan.trainingType.legalMinDurationHours) {
       const minimumSeconds = plan.trainingType.legalMinDurationHours * 60 * 60;
       if (dto.durationSeconds < minimumSeconds) {
         throw new BadRequestException(
@@ -360,19 +473,24 @@ export class SsmTrainingSuiteService {
         where: { id: latestAttempt.id },
         data: {
           finishedAt: now,
-          score: dto.score,
+          score: grade.score,
           durationSeconds: dto.durationSeconds,
-          passed: dto.passed
+          passed: grade.passed,
+          answersJson: {
+            __meta__: meta,
+            answers: dto.answers,
+            grade
+          } as unknown as Prisma.InputJsonValue
         }
       });
       await tx.ssmTrainingPlan.update({
         where: { id: plan.id },
         data: {
-          completedAt: dto.passed ? now : null,
-          score: dto.score,
+          completedAt: null,
+          score: grade.score,
           durationMinutes: Math.ceil(dto.durationSeconds / 60),
-          status: dto.passed ? SsmTrainingPlanStatus.COMPLETED : SsmTrainingPlanStatus.BLOCKED,
-          blockedAdmission: !dto.passed
+          status: grade.passed ? SsmTrainingPlanStatus.PENDING : SsmTrainingPlanStatus.BLOCKED,
+          blockedAdmission: !grade.passed
         }
       });
     });
@@ -384,14 +502,17 @@ export class SsmTrainingSuiteService {
       action: "ELEARNING_TEST_COMPLETED",
       entityType: "SsmTrainingPlan",
       entityId: plan.id,
-      payload: { score: dto.score, passed: dto.passed }
+      payload: { score: grade.score, passed: grade.passed, correctCount: grade.correctCount, totalCount: grade.totalCount }
     });
 
-    if (dto.passed) {
-      await this.scheduleNextRecurrenceIfNeeded(tenantId, actorId, plan.id);
-    }
-
-    return { trainingPlanId: plan.id, passed: dto.passed, score: dto.score };
+    return {
+      trainingPlanId: plan.id,
+      passed: grade.passed,
+      score: grade.score,
+      correctCount: grade.correctCount,
+      totalCount: grade.totalCount,
+      passThresholdPercent: SSM_TRAINING_PASS_THRESHOLD_PERCENT
+    };
   }
 
   private async scheduleNextRecurrenceIfNeeded(tenantId: string, actorId: string, completedPlanId: string) {
@@ -445,10 +566,22 @@ export class SsmTrainingSuiteService {
     viewer: JwtPayload
   ) {
     const plan = await this.prisma.ssmTrainingPlan.findFirst({
-      where: { id: trainingPlanId, tenantId }
+      where: { id: trainingPlanId, tenantId },
+      include: {
+        signature: true,
+        attempts: {
+          where: { finishedAt: { not: null } },
+          orderBy: { finishedAt: "desc" },
+          take: 1
+        }
+      }
     });
     if (!plan) {
       throw new NotFoundException("Training plan not found.");
+    }
+    const passedAttempt = plan.attempts.find((attempt) => attempt.passed === true);
+    if (!passedAttempt) {
+      throw new BadRequestException("Semnarea necesită un test trecut cu succes.");
     }
     if (dto.role === "EMPLOYEE") {
       if (!hasAllPermissions(viewer.roles, [Permission.SSM_TRAINING_EDIT])) {
@@ -458,9 +591,18 @@ export class SsmTrainingSuiteService {
       if (!selfId || selfId !== plan.employeeId) {
         throw new ForbiddenException("Semnătura angajatului este permisă doar pentru propriul plan de instruire.");
       }
+      if (plan.signature?.employeeSignedAt) {
+        throw new BadRequestException("Angajatul a semnat deja această instruire.");
+      }
     } else {
       if (!hasAllPermissions(viewer.roles, [Permission.SSM_TRAINING_APPROVE])) {
         throw new ForbiddenException("Semnătura responsabilului necesită dreptul de aprobare instruire.");
+      }
+      if (!plan.signature?.employeeSignedAt) {
+        throw new BadRequestException("Instruirea trebuie semnată mai întâi de angajat.");
+      }
+      if (plan.signature?.responsibleSignedAt) {
+        throw new BadRequestException("Responsabilul SSM a validat deja această instruire.");
       }
     }
     const now = new Date();
@@ -478,6 +620,18 @@ export class SsmTrainingSuiteService {
           ? { employeeSignature: dto.signatureData, employeeSignedAt: now }
           : { responsibleSignature: dto.signatureData, responsibleSignedAt: now }
     });
+
+    if (dto.role === "RESPONSIBLE") {
+      await this.prisma.ssmTrainingPlan.update({
+        where: { id: trainingPlanId },
+        data: {
+          status: SsmTrainingPlanStatus.COMPLETED,
+          completedAt: now,
+          blockedAdmission: false
+        }
+      });
+      await this.scheduleNextRecurrenceIfNeeded(tenantId, actorId, trainingPlanId);
+    }
 
     await this.auditLog.write({
       tenantId,
@@ -685,7 +839,7 @@ export class SsmTrainingSuiteService {
             category: "TRAINING_REMINDER",
             title: `Reminder instruire: ${reminder.trainingTypeName}`,
             body: reminderText,
-            linkPath: "/ssm",
+            linkPath: "/portal?tab=trainings",
             entityType: "SsmTrainingPlan",
             entityId: reminder.trainingPlanId
           });
@@ -806,7 +960,7 @@ export class SsmTrainingSuiteService {
 
     const byDepartment = Array.from(departmentMap.values()).map((group) => {
       const employeeCount = group.employees.length;
-      const compliantCount = group.employees.filter((e) => e.complianceScore >= 100 && !e.blockedAdmission).length;
+    const compliantCount = group.employees.filter((e) => e.complianceScore >= 100 && !e.blockedAdmission).length;
       const blockedCount = group.employees.filter((e) => e.blockedAdmission).length;
       const complianceScore = employeeCount
         ? Math.round(

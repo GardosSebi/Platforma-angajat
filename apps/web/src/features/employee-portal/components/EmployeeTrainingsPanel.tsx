@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { CompleteSsmTestRequest, SsmTrainingPlanItem } from "@repo/shared-types/ssm";
+import { useEffect, useMemo, useState } from "react";
+import type { SsmTrainingPlanItem } from "@repo/shared-types/ssm";
+import type { SsmTrainingTestQuestionPublic } from "@repo/shared-types/ssm-training-test";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import {
@@ -10,21 +11,17 @@ import {
   useTrainingPlans
 } from "../../ssm/hooks/useSsmTrainingSuite";
 import { ssmApi } from "../../ssm/api/ssm.api";
+import { SsmTrainingTestPanel } from "../../ssm/components/SsmTrainingTestPanel";
 import {
   formatRoDate,
   formatRoDateTime,
   mutationErrorMessage,
   planCategoryLabel,
-  planStatusClass,
-  planStatusLabel
+  planHasMaterial,
+  planWorkflowClass,
+  planWorkflowLabel,
+  trainingStep
 } from "../utils";
-
-function trainingStep(plan: SsmTrainingPlanItem): number {
-  if (plan.employeeSignedAt) return 5;
-  if (plan.score != null) return 4;
-  if (plan.materialCompletedAt) return 3;
-  return plan.materialUrl ? 2 : 1;
-}
 
 export function EmployeeTrainingsPanel() {
   const plansQuery = useTrainingPlans({ page: 1, pageSize: 50 });
@@ -32,14 +29,15 @@ export function EmployeeTrainingsPanel() {
 
   const [activePlanId, setActivePlanId] = useState("");
   const [testStartedAt, setTestStartedAt] = useState<number | null>(null);
+  const [testQuestions, setTestQuestions] = useState<SsmTrainingTestQuestionPublic[]>([]);
+  const [testResult, setTestResult] = useState<{
+    score: number;
+    passed: boolean;
+    correctCount: number;
+    totalCount: number;
+  } | null>(null);
   const [signature, setSignature] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [testForm, setTestForm] = useState<CompleteSsmTestRequest>({
-    trainingPlanId: "",
-    score: 80,
-    durationSeconds: 900,
-    passed: true
-  });
 
   const completeMaterial = useMaterialComplete();
   const startTest = useStartTest();
@@ -52,7 +50,14 @@ export function EmployeeTrainingsPanel() {
   );
 
   const pendingPlans = useMemo(
-    () => plans.filter((p) => p.status === "PENDING" || p.status === "OVERDUE" || p.status === "BLOCKED"),
+    () =>
+      plans.filter(
+        (p) =>
+          p.status === "PENDING" ||
+          p.status === "OVERDUE" ||
+          p.status === "BLOCKED" ||
+          (p.score != null && !p.responsibleSignedAt)
+      ),
     [plans]
   );
 
@@ -67,25 +72,53 @@ export function EmployeeTrainingsPanel() {
   }, [plans, activePlanId, pendingPlans]);
 
   useEffect(() => {
-    if (!activePlan?.id) return;
-    setTestForm((prev) => ({ ...prev, trainingPlanId: activePlan.id }));
+    setTestQuestions([]);
+    setTestResult(null);
+    setTestStartedAt(null);
+    setSignature("");
   }, [activePlan?.id]);
+
+  useEffect(() => {
+    if (activePlan?.score != null && activePlan.status !== "BLOCKED") {
+      setTestResult({
+        score: activePlan.score,
+        passed: true,
+        correctCount: 0,
+        totalCount: 0
+      });
+    }
+  }, [activePlan?.id, activePlan?.score, activePlan?.status]);
 
   const onStartTest = () => {
     if (!activePlan?.id) return;
-    setTestStartedAt(Date.now());
     startTest.mutate(activePlan.id, {
-      onSuccess: () => setTestForm((prev) => ({ ...prev, trainingPlanId: activePlan.id }))
+      onSuccess: (data) => {
+        setTestStartedAt(Date.now());
+        setTestQuestions(data.questions);
+        setTestResult(null);
+      }
     });
   };
 
-  const onCompleteTest = (event: FormEvent) => {
-    event.preventDefault();
+  const onCompleteTest = (answers: Record<string, number>) => {
+    if (!activePlan?.id) return;
     const durationSeconds = testStartedAt
       ? Math.max(60, Math.round((Date.now() - testStartedAt) / 1000))
-      : testForm.durationSeconds;
-    completeTest.mutate({ ...testForm, durationSeconds });
+      : 900;
+    completeTest.mutate(
+      { trainingPlanId: activePlan.id, answers, durationSeconds },
+      {
+        onSuccess: (data) => {
+          setTestResult(data);
+          setTestQuestions([]);
+        }
+      }
+    );
   };
+
+  const materialReady = activePlan
+    ? !planHasMaterial(activePlan) || Boolean(activePlan.materialCompletedAt)
+    : false;
 
   if (plansQuery.isLoading) {
     return <p className="field-hint">Se încarcă instruirile tale…</p>;
@@ -123,7 +156,7 @@ export function EmployeeTrainingsPanel() {
                   <strong>{plan.trainingTypeName}</strong>
                   <span>{planCategoryLabel(plan)}</span>
                   <span className="employee-training-list-meta">
-                    <span className={planStatusClass(plan.status)}>{planStatusLabel(plan.status)}</span>
+                    <span className={planWorkflowClass(plan)}>{planWorkflowLabel(plan)}</span>
                     <span>până la {formatRoDate(plan.dueAt)}</span>
                   </span>
                   {plan.blockedAdmission ? <span className="employee-badge-warn">Blocare admitere</span> : null}
@@ -143,7 +176,7 @@ export function EmployeeTrainingsPanel() {
                     {planCategoryLabel(activePlan)} · scadență {formatRoDate(activePlan.dueAt)}
                   </p>
                 </div>
-                <span className={planStatusClass(activePlan.status)}>{planStatusLabel(activePlan.status)}</span>
+                <span className={planWorkflowClass(activePlan)}>{planWorkflowLabel(activePlan)}</span>
               </header>
 
               {activePlan.blockedAdmission ? (
@@ -161,79 +194,75 @@ export function EmployeeTrainingsPanel() {
                 <li className={step >= 5 ? "done" : ""}>Așteaptă validarea responsabilului SSM</li>
               </ol>
 
-              {activePlan.materialUrl ? (
-                <p>
-                  <a
-                    href={activePlan.materialUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-secondary employee-portal-material-link"
-                  >
-                    Deschide: {activePlan.materialTitle ?? "Material instruire"}
-                  </a>
-                </p>
+              {planHasMaterial(activePlan) ? (
+                <>
+                  {activePlan.materialUrl ? (
+                    <p>
+                      <a
+                        href={activePlan.materialUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-secondary employee-portal-material-link"
+                      >
+                        Deschide: {activePlan.materialTitle ?? "Material instruire"}
+                      </a>
+                    </p>
+                  ) : (
+                    <p className="field-hint">{activePlan.materialTitle ?? "Material instruire"} — fără link extern.</p>
+                  )}
+                  <div className="ssm-inline-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={Boolean(activePlan.materialCompletedAt) || completeMaterial.isPending}
+                      onClick={() => completeMaterial.mutate(activePlan.id)}
+                    >
+                      {activePlan.materialCompletedAt ? "Material parcurs" : "Confirm parcurgerea materialului"}
+                    </button>
+                  </div>
+                </>
               ) : (
-                <p className="field-hint">Materialul va fi disponibil de la responsabilul SSM.</p>
+                <p className="field-hint">Nu există material de parcurs — poți trece direct la test.</p>
               )}
 
-              <div className="ssm-inline-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={Boolean(activePlan.materialCompletedAt) || completeMaterial.isPending}
-                  onClick={() => completeMaterial.mutate(activePlan.id)}
-                >
-                  {activePlan.materialCompletedAt ? "Material parcurs" : "Confirm parcurgerea materialului"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={!activePlan.materialCompletedAt || startTest.isPending}
-                  onClick={onStartTest}
-                >
-                  {startTest.isPending ? "Se pornește testul…" : "Pornește testul"}
-                </button>
-              </div>
-
-              {activePlan.materialCompletedAt ? (
-                <form className="form-stack employee-test-form" onSubmit={onCompleteTest}>
-                  <div className="ssm-form-grid">
-                    <div className="field">
-                      <label htmlFor="emp-test-score">Scor test (%)</label>
-                      <input
-                        id="emp-test-score"
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={testForm.score}
-                        onChange={(e) => setTestForm((p) => ({ ...p, score: Number(e.target.value || 0) }))}
-                      />
-                    </div>
-                    <div className="field inline-check">
-                      <input
-                        id="emp-test-pass"
-                        type="checkbox"
-                        checked={testForm.passed}
-                        onChange={(e) => setTestForm((p) => ({ ...p, passed: e.target.checked }))}
-                      />
-                      <label htmlFor="emp-test-pass">Am trecut testul</label>
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={completeTest.isPending || activePlan.score != null}
-                  >
-                    {activePlan.score != null
-                      ? `Test înregistrat — scor ${activePlan.score}%`
-                      : completeTest.isPending
-                        ? "Se salvează…"
-                        : "Finalizează testul"}
-                  </button>
-                </form>
+              {materialReady && activePlan.score == null && activePlan.status !== "BLOCKED" ? (
+                <div className="employee-test-section">
+                  {testQuestions.length === 0 ? (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={startTest.isPending}
+                      onClick={onStartTest}
+                    >
+                      {startTest.isPending ? "Se pornește testul…" : "Pornește testul"}
+                    </button>
+                  ) : (
+                    <SsmTrainingTestPanel
+                      questions={testQuestions}
+                      disabled={completeTest.isPending}
+                      isSubmitting={completeTest.isPending}
+                      onSubmit={onCompleteTest}
+                    />
+                  )}
+                </div>
               ) : null}
 
-              {activePlan.score != null && !activePlan.employeeSignedAt ? (
+              {activePlan.score != null && activePlan.status !== "BLOCKED" ? (
+                <SsmTrainingTestPanel
+                  questions={[]}
+                  result={
+                    testResult ?? {
+                      score: activePlan.score,
+                      passed: true,
+                      correctCount: 0,
+                      totalCount: 0
+                    }
+                  }
+                  onSubmit={() => undefined}
+                />
+              ) : null}
+
+              {activePlan.score != null && activePlan.status !== "BLOCKED" && !activePlan.employeeSignedAt ? (
                 <div className="employee-signature-block">
                   <p className="field-hint">Semnează olograf în chenarul de mai jos pentru a confirma instruirea.</p>
                   <SignatureCanvas value={signature} onChange={setSignature} />
@@ -275,10 +304,10 @@ export function EmployeeTrainingsPanel() {
                 </button>
               </div>
               {downloadError ? <p className="feedback error">{downloadError}</p> : null}
-              {(completeMaterial.isError || completeTest.isError || signPlan.isError) && (
+              {(completeMaterial.isError || completeTest.isError || signPlan.isError || startTest.isError) && (
                 <p className="feedback error">
                   {mutationErrorMessage(
-                    completeMaterial.error ?? completeTest.error ?? signPlan.error
+                    completeMaterial.error ?? startTest.error ?? completeTest.error ?? signPlan.error
                   )}
                 </p>
               )}

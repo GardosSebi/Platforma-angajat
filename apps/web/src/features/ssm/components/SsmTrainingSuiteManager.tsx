@@ -2,12 +2,12 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import type {
-  CompleteSsmTestRequest,
   CreateSsmTrainingPlanRequest,
   CreateSsmTrainingTypeRequest,
   SsmTrainingCategory,
   SsmTrainingPlanItem
 } from "@repo/shared-types/ssm";
+import type { SsmTrainingTestQuestionPublic } from "@repo/shared-types/ssm-training-test";
 import {
   SSM_TRAINING_CATEGORY_META,
   trainingCategoryLabel,
@@ -17,6 +17,8 @@ import { downloadWithAuth } from "../../../shared/api/http-download";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
+import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 import {
   useCompleteTest,
   useCreateTrainingPlan,
@@ -33,6 +35,8 @@ import {
   useTrainingTypes
 } from "../hooks/useSsmTrainingSuite";
 import { ssmApi } from "../api/ssm.api";
+import { SsmTrainingTestPanel } from "./SsmTrainingTestPanel";
+import { planHasMaterial, planWorkflowLabel } from "../../employee-portal/utils";
 
 const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
 
@@ -44,8 +48,8 @@ const TRAINING_CATEGORIES: SsmTrainingCategory[] = [
   "EMERGENCY_PSI"
 ];
 
-const defaultPlan = (trainingTypeId = ""): CreateSsmTrainingPlanRequest => ({
-  employeeId: DEMO_EMPLOYEE_ID,
+const defaultPlan = (trainingTypeId = "", employeeId = ""): CreateSsmTrainingPlanRequest => ({
+  employeeId,
   trainingTypeId,
   scheduledAt: new Date().toISOString(),
   dueAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
@@ -114,12 +118,13 @@ export function SsmTrainingSuiteManager() {
   const [planForm, setPlanForm] = useState<CreateSsmTrainingPlanRequest>(defaultPlan());
   const [activePlanId, setActivePlanId] = useState("");
   const [testStartedAt, setTestStartedAt] = useState<number | null>(null);
-  const [testForm, setTestForm] = useState<CompleteSsmTestRequest>({
-    trainingPlanId: "",
-    score: 80,
-    durationSeconds: 900,
-    passed: true
-  });
+  const [testQuestions, setTestQuestions] = useState<SsmTrainingTestQuestionPublic[]>([]);
+  const [testResult, setTestResult] = useState<{
+    score: number;
+    passed: boolean;
+    correctCount: number;
+    totalCount: number;
+  } | null>(null);
   const [signature, setSignature] = useState("");
   const [digitalEmployeeId, setDigitalEmployeeId] = useState(resolvedEmployeeId);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -132,10 +137,21 @@ export function SsmTrainingSuiteManager() {
   const activePlan = planOptions.find((p) => p.id === activePlanId) ?? planOptions[0];
   const compliance = complianceQuery.data;
 
+  const employeesQuery = useEmployeeOptions();
+  const employeeOptions = employeesQuery.data?.items ?? [];
+
   useEffect(() => {
     setDigitalEmployeeId(resolvedEmployeeId);
-    setPlanForm((prev) => ({ ...prev, employeeId: resolvedEmployeeId }));
+    if (resolvedEmployeeId) {
+      setPlanForm((prev) => ({ ...prev, employeeId: resolvedEmployeeId }));
+    }
   }, [resolvedEmployeeId]);
+
+  useEffect(() => {
+    if (!planForm.employeeId && employeeOptions[0]?.id) {
+      setPlanForm((prev) => ({ ...prev, employeeId: employeeOptions[0]!.id }));
+    }
+  }, [employeeOptions, planForm.employeeId]);
 
   useEffect(() => {
     if (!activePlanId && planOptions[0]?.id) {
@@ -145,9 +161,22 @@ export function SsmTrainingSuiteManager() {
 
   useEffect(() => {
     if (activePlan?.id) {
-      setTestForm((prev) => ({ ...prev, trainingPlanId: activePlan.id }));
+      setTestQuestions([]);
+      setTestResult(null);
+      setTestStartedAt(null);
     }
   }, [activePlan?.id]);
+
+  useEffect(() => {
+    if (activePlan?.score != null && activePlan.status !== "BLOCKED") {
+      setTestResult({
+        score: activePlan.score,
+        passed: true,
+        correctCount: 0,
+        totalCount: 0
+      });
+    }
+  }, [activePlan?.id, activePlan?.score, activePlan?.status]);
 
   const calendarBuckets = useMemo(() => {
     const events = calendarQuery.data?.events ?? [];
@@ -188,17 +217,33 @@ export function SsmTrainingSuiteManager() {
   const onStartElearning = () => {
     if (!activePlan?.id) return;
     startTest.mutate(activePlan.id, {
-      onSuccess: () => setTestStartedAt(Date.now())
+      onSuccess: (data) => {
+        setTestStartedAt(Date.now());
+        setTestQuestions(data.questions);
+        setTestResult(null);
+      }
     });
   };
 
-  const onCompleteTest = (event: FormEvent) => {
-    event.preventDefault();
+  const onCompleteTest = (answers: Record<string, number>) => {
+    if (!activePlan?.id) return;
     const durationSeconds = testStartedAt
       ? Math.max(60, Math.round((Date.now() - testStartedAt) / 1000))
-      : testForm.durationSeconds;
-    completeTest.mutate({ ...testForm, durationSeconds });
+      : 900;
+    completeTest.mutate(
+      { trainingPlanId: activePlan.id, answers, durationSeconds },
+      {
+        onSuccess: (data) => {
+          setTestResult(data);
+          setTestQuestions([]);
+        }
+      }
+    );
   };
+
+  const materialReady = activePlan
+    ? !planHasMaterial(activePlan) || Boolean(activePlan.materialCompletedAt)
+    : false;
 
   return (
     <section className="ssm-documents" aria-labelledby="training-suite-title">
@@ -326,11 +371,12 @@ export function SsmTrainingSuiteManager() {
           <form className="card form-stack ssm-doc-card" onSubmit={onCreatePlan}>
             <h3 className="card-title">3.3.3 Planificare</h3>
             <div className="field">
-              <label htmlFor="plan-employee">Angajat (ID)</label>
-              <input
+              <EmployeeSelect
                 id="plan-employee"
+                label="Angajat"
                 value={planForm.employeeId}
-                onChange={(e) => setPlanForm((p) => ({ ...p, employeeId: e.target.value }))}
+                required
+                onChange={(employeeId) => setPlanForm((p) => ({ ...p, employeeId }))}
               />
             </div>
             <div className="field">
@@ -385,7 +431,7 @@ export function SsmTrainingSuiteManager() {
                 onChange={(e) => setPlanForm((p) => ({ ...p, dueAt: new Date(e.target.value).toISOString() }))}
               />
             </div>
-            <button className="btn-primary" type="submit" disabled={createPlan.isPending || !planForm.trainingTypeId}>
+            <button className="btn-primary" type="submit" disabled={createPlan.isPending || !planForm.trainingTypeId || !planForm.employeeId}>
               {createPlan.isPending ? "Se planifică..." : "Planifică instruire"}
             </button>
             <p className="field-hint">Notificare email la alocare; remindere 30/15/7 zile (configurabile per tip).</p>
@@ -485,71 +531,76 @@ export function SsmTrainingSuiteManager() {
         {activePlan ? (
           <>
             <ol className="ssm-training-flow-steps">
-              <li className={activePlan.materialCompletedAt ? "done" : ""}>Notificare și acces material</li>
-              <li className={activePlan.materialCompletedAt ? "done" : ""}>Parcurgere material (PDF / Word / video)</li>
-              <li>Test verificare cunoștințe</li>
-              <li>Înregistrare automată dată, scor, timp</li>
+              <li className={activePlan.materialCompletedAt || !planHasMaterial(activePlan) ? "done" : ""}>Notificare și acces material</li>
+              <li className={activePlan.materialCompletedAt || !planHasMaterial(activePlan) ? "done" : ""}>Parcurgere material (PDF / Word / video)</li>
+              <li className={activePlan.score != null ? "done" : ""}>Test verificare cunoștințe</li>
+              <li className={activePlan.score != null ? "done" : ""}>Înregistrare automată dată, scor, timp</li>
               <li>Generare fișă individuală</li>
-              <li>Semnătură angajat</li>
-              <li>Semnătură responsabil SSM (pachet)</li>
-              <li>Arhivare în dosar digital</li>
+              <li className={activePlan.employeeSignedAt ? "done" : ""}>Semnătură angajat</li>
+              <li className={activePlan.responsibleSignedAt ? "done" : ""}>Semnătură responsabil SSM (pachet)</li>
+              <li className={activePlan.responsibleSignedAt ? "done" : ""}>Arhivare în dosar digital</li>
             </ol>
             <p className="field-hint">
               <strong>{activePlan.trainingTypeName}</strong>
               {activePlan.trainingTypeCategory
                 ? ` (${trainingCategoryLabel(activePlan.trainingTypeCategory)})`
                 : ""}{" "}
-              — {activePlan.employeeName}
+              — {activePlan.employeeName} · {planWorkflowLabel(activePlan)}
             </p>
-            {activePlan.materialUrl ? (
-              <p>
-                <a href={activePlan.materialUrl} target="_blank" rel="noreferrer" className="btn-text-link">
-                  Deschide material: {activePlan.materialTitle ?? "Instruire"}
-                </a>
-              </p>
+            {planHasMaterial(activePlan) ? (
+              activePlan.materialUrl ? (
+                <p>
+                  <a href={activePlan.materialUrl} target="_blank" rel="noreferrer" className="btn-text-link">
+                    Deschide material: {activePlan.materialTitle ?? "Instruire"}
+                  </a>
+                </p>
+              ) : (
+                <p className="field-hint">Nu este setat URL material — adaugă la planificare.</p>
+              )
             ) : (
-              <p className="field-hint">Nu este setat URL material — adaugă la planificare.</p>
+              <p className="field-hint">Fără material — testul poate fi pornit direct.</p>
             )}
             <div className="ssm-inline-actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={!activePlan.id || completeMaterial.isPending}
-                onClick={() => activePlan.id && completeMaterial.mutate(activePlan.id)}
-              >
-                Material parcurs
-              </button>
-              <button type="button" className="btn-secondary" disabled={startTest.isPending} onClick={onStartElearning}>
-                {startTest.isPending ? "Se pornește..." : "Pornește testul"}
-              </button>
+              {planHasMaterial(activePlan) ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={!activePlan.id || completeMaterial.isPending || Boolean(activePlan.materialCompletedAt)}
+                  onClick={() => activePlan.id && completeMaterial.mutate(activePlan.id)}
+                >
+                  {activePlan.materialCompletedAt ? "Material parcurs" : "Material parcurs"}
+                </button>
+              ) : null}
+              {materialReady && activePlan.score == null && activePlan.status !== "BLOCKED" ? (
+                testQuestions.length === 0 ? (
+                  <button type="button" className="btn-secondary" disabled={startTest.isPending} onClick={onStartElearning}>
+                    {startTest.isPending ? "Se pornește..." : "Pornește testul"}
+                  </button>
+                ) : null
+              ) : null}
             </div>
-            <form className="form-stack ssm-risk-version-form" onSubmit={onCompleteTest}>
-              <div className="ssm-form-grid">
-                <div className="field">
-                  <label htmlFor="test-score">Scor test (%)</label>
-                  <input
-                    id="test-score"
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={testForm.score}
-                    onChange={(e) => setTestForm((p) => ({ ...p, score: Number(e.target.value || 0) }))}
-                  />
-                </div>
-                <div className="field inline-check">
-                  <input
-                    id="test-pass"
-                    type="checkbox"
-                    checked={testForm.passed}
-                    onChange={(e) => setTestForm((p) => ({ ...p, passed: e.target.checked }))}
-                  />
-                  <label htmlFor="test-pass">Test trecut</label>
-                </div>
-              </div>
-              <button type="submit" className="btn-primary" disabled={completeTest.isPending || !testForm.trainingPlanId}>
-                {completeTest.isPending ? "Se salvează..." : "Finalizează test (înregistrare automată)"}
-              </button>
-            </form>
+            {materialReady && activePlan.score == null && activePlan.status !== "BLOCKED" && testQuestions.length > 0 ? (
+              <SsmTrainingTestPanel
+                questions={testQuestions}
+                disabled={completeTest.isPending}
+                isSubmitting={completeTest.isPending}
+                onSubmit={onCompleteTest}
+              />
+            ) : null}
+            {activePlan.score != null && activePlan.status !== "BLOCKED" ? (
+              <SsmTrainingTestPanel
+                questions={[]}
+                result={
+                  testResult ?? {
+                    score: activePlan.score,
+                    passed: true,
+                    correctCount: 0,
+                    totalCount: 0
+                  }
+                }
+                onSubmit={() => undefined}
+              />
+            ) : null}
             <SignatureCanvas value={signature} onChange={setSignature} />
             <div className="ssm-inline-actions">
               {canSignAsEmployee ? (
@@ -659,15 +710,13 @@ export function SsmTrainingSuiteManager() {
 
         <div className="card ssm-doc-card">
           <h3 className="card-title">Dosar digital angajat</h3>
-          <div className="field">
-            <label htmlFor="digital-employee">Angajat (ID)</label>
-            <input
-              id="digital-employee"
-              value={digitalEmployeeId}
-              onChange={(e) => setDigitalEmployeeId(e.target.value)}
-              readOnly={Boolean(session?.linkedEmployeeId)}
-            />
-          </div>
+          <EmployeeSelect
+            id="digital-employee"
+            label="Angajat"
+            value={digitalEmployeeId}
+            disabled={Boolean(session?.linkedEmployeeId)}
+            onChange={setDigitalEmployeeId}
+          />
           <div className="ssm-inline-actions">
             <button
               type="button"

@@ -4,7 +4,7 @@ import { LoginPage } from "../features/auth/pages/LoginPage";
 import { AppLayout } from "./AppLayout";
 import { MasterDataPage } from "../features/master-data/pages/MasterDataPage";
 import { useAuthSession } from "../shared/auth/use-auth-session";
-import { canAccessTenantAdmin, isEmployeePortalUser } from "../shared/auth/roles";
+import { canAccessTenantAdmin, canAccessEmployeePortal, getAppHomePath, hasSsmBackofficeAccess, isEmployeePortalUser } from "../shared/auth/roles";
 import { ChatbotPage } from "../features/chatbot/pages/ChatbotPage";
 import { SurveysPage } from "../features/surveys/pages/SurveysPage";
 import { PublicSurveyPage } from "../features/surveys/pages/PublicSurveyPage";
@@ -23,7 +23,7 @@ function MasterDataRoute() {
     return <Navigate to="/portal" replace />;
   }
   if (!canAccessTenantAdmin(session)) {
-    return <Navigate to="/ssm" replace />;
+    return <Navigate to={getAppHomePath(session)} replace />;
   }
   return <MasterDataPage />;
 }
@@ -34,6 +34,14 @@ function BackofficeOnlyRoute({ children, employeeRedirect }: { children: ReactNo
     return <Navigate to={employeeRedirect} replace />;
   }
   return <>{children}</>;
+}
+
+function AdminRoute() {
+  const session = useAuthSession();
+  if (!canAccessTenantAdmin(session)) {
+    return <Navigate to={getAppHomePath(session)} replace />;
+  }
+  return <AdminPage />;
 }
 
 export function AppRouter() {
@@ -73,7 +81,7 @@ export function AppRouter() {
               </BackofficeOnlyRoute>
             }
           />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin" element={<AdminRoute />} />
           <Route path="/informatii" element={<EmployeeStaticListPage />} />
           <Route path="*" element={<HomeRedirect />} />
         </Route>

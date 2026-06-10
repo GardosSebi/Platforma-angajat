@@ -3,6 +3,7 @@ export * from "./tenant";
 export * from "./employee";
 export * from "./ssm";
 export * from "./ssm-training-catalog";
+export * from "./ssm-training-test";
 export * from "./communications";
 export * from "./surveys";
 export * from "./ticketing";

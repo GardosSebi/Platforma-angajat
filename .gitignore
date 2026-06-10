@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+build/
+apps/web/src/**/*.js
+apps/web/src/**/*.js.map
+.next/
+out/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# local uploads / storage
+storage/
+apps/api/uploads/
+
+# turbo / cache
+.turbo/
+.pnpm-store/
+.cache/
+coverage/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# prisma
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# playwright / e2e
+apps/e2e/test-results/
+apps/e2e/playwright-report/
+apps/e2e/blob-report/
+apps/e2e/.cache/

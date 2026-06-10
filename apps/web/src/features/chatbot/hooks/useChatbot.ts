@@ -3,10 +3,11 @@ import type { CreateCommunicationAnnouncementRequest, CreateCommunicationTemplat
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { chatbotApi } from "../api/chatbot.api";
 
-export function useChatbotDashboard() {
+export function useChatbotDashboard(enabled = true) {
   return useQuery({
     queryKey: ["chatbot", "dashboard"],
-    queryFn: chatbotApi.dashboard
+    queryFn: chatbotApi.dashboard,
+    enabled
   });
 }
 

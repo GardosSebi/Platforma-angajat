@@ -33,6 +33,21 @@ export function isEmployeePortalUser(session: SessionData | null): boolean {
   return !hasSsmBackofficeAccess(session) && !isItmInspectorUser(session);
 }
 
+/** Poate deschide portalul angajat (inclusiv conturi cu rol dublu EMPLOYEE + backoffice). */
+export function canAccessEmployeePortal(session: SessionData | null): boolean {
+  return Boolean(session?.roles?.includes("EMPLOYEE"));
+}
+
+/** Pagina implicită după autentificare — evită bucle de redirect. */
+export function getAppHomePath(session: SessionData | null): string {
+  if (!session) return "/login";
+  if (isEmployeePortalUser(session)) return "/portal";
+  if (isItmInspectorUser(session)) return "/itm";
+  if (hasSsmBackofficeAccess(session)) return "/ssm";
+  if (canAccessEmployeePortal(session)) return "/portal";
+  return "/informatii";
+}
+
 export function requireLinkedEmployeeId(session: SessionData | null): string | null {
   return session?.linkedEmployeeId?.trim() || null;
 }

@@ -9,6 +9,7 @@ import type {
   SsmAccidentType
 } from "@repo/shared-types/ssm";
 import { downloadWithAuth } from "../../../shared/api/http-download";
+import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { ssmApi } from "../api/ssm.api";
 import {
   useAccidentCases,
@@ -19,13 +20,8 @@ import {
   useCreateAccidentCase
 } from "../hooks/useSsmAccidents";
 
-const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
-
-const ACCIDENT_TYPES: SsmAccidentType[] = ["ACCIDENT", "INCIDENT", "OCCUPATIONAL_DISEASE"];
-const ACCIDENT_SEVERITIES: SsmAccidentSeverity[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
-
 const EMPTY_CASE: CreateSsmAccidentCaseRequest = {
-  employeeId: DEMO_EMPLOYEE_ID,
+  employeeId: "",
   type: "INCIDENT",
   severity: "LOW",
   title: "Incident near-miss",
@@ -38,6 +34,9 @@ const EMPTY_CASE: CreateSsmAccidentCaseRequest = {
   isFatality: false,
   legalDaysDeadline: 30
 };
+
+const ACCIDENT_TYPES: SsmAccidentType[] = ["ACCIDENT", "INCIDENT", "OCCUPATIONAL_DISEASE"];
+const ACCIDENT_SEVERITIES: SsmAccidentSeverity[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 const EMPTY_TASK: CreateSsmAccidentTaskRequest = {
   accidentCaseId: "",
@@ -190,14 +189,14 @@ export function SsmAccidentsManager() {
       <div className="ssm-doc-grid">
         <form className="card form-stack ssm-doc-card" onSubmit={onCreateCase}>
           <h3 className="card-title">Pasul 1: Înregistrare caz</h3>
-          <div className="field">
-            <label htmlFor="acc-emp">Employee ID</label>
-            <input
-              id="acc-emp"
-              value={caseForm.employeeId ?? ""}
-              onChange={(e) => setCaseForm((p) => ({ ...p, employeeId: e.target.value }))}
-            />
-          </div>
+          <EmployeeSelect
+            id="acc-emp"
+            label="Angajat (opțional)"
+            value={caseForm.employeeId ?? ""}
+            allowEmpty
+            emptyLabel="Fără angajat asociat"
+            onChange={(employeeId) => setCaseForm((p) => ({ ...p, employeeId: employeeId || undefined }))}
+          />
           <div className="field">
             <label htmlFor="acc-type">Tip</label>
             <select

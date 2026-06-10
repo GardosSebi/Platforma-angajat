@@ -140,12 +140,21 @@ export const ssmApi = {
     });
   },
   startTest(trainingPlanId: string) {
-    return httpClient<{ id: string }>(`/ssm/training-suite/tests/start/${trainingPlanId}`, {
-      method: "POST"
-    });
+    return httpClient<import("@repo/shared-types/ssm-training-test").StartSsmTrainingTestResponse>(
+      `/ssm/training-suite/tests/start/${trainingPlanId}`,
+      {
+        method: "POST"
+      }
+    );
   },
   completeTest(payload: CompleteSsmTestRequest) {
-    return httpClient<{ passed: boolean; score: number }>("/ssm/training-suite/tests/complete", {
+    return httpClient<{
+      passed: boolean;
+      score: number;
+      correctCount: number;
+      totalCount: number;
+      passThresholdPercent: number;
+    }>("/ssm/training-suite/tests/complete", {
       method: "POST",
       body: JSON.stringify(payload)
     });

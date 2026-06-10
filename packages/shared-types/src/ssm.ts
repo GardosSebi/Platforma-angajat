@@ -175,10 +175,9 @@ export interface CreateSsmTrainingPlanRequest {
 
 export interface CompleteSsmTestRequest {
   trainingPlanId: string;
-  score: number;
+  /** Map questionId → selected option index (0-based, în ordinea afișată). */
+  answers: Record<string, number>;
   durationSeconds: number;
-  passed: boolean;
-  answersJson?: Record<string, unknown>;
 }
 
 export interface SignSsmTrainingPlanRequest {

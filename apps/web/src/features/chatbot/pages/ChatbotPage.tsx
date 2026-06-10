@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { isWorksiteScopedViewer } from "../../../shared/auth/worksite-scope";
 import type {
   CommunicationAnnouncementItem,
@@ -134,6 +135,10 @@ function statusChip(status: CommunicationAnnouncementItem["status"]): string {
 
 export function ChatbotPage() {
   const session = useAuthSession();
+  const roles = session?.roles;
+  const canViewDashboard = hasPermission(roles, "communications:dashboard:view");
+  const canEditAnnouncements = hasPermission(roles, "communications:announcements:edit");
+  const canEditTemplates = hasPermission(roles, "communications:templates:edit");
   const worksiteRestricted = isWorksiteScopedViewer(session?.roles);
   const audienceTypesForForm = useMemo(
     () => (worksiteRestricted ? AUDIENCE_TYPES.filter((t) => t !== "ALL") : AUDIENCE_TYPES),
@@ -149,7 +154,7 @@ export function ChatbotPage() {
   }, [worksiteRestricted]);
 
   const announcementsPage = usePagination();
-  const dashboardQuery = useChatbotDashboard();
+  const dashboardQuery = useChatbotDashboard(canViewDashboard);
   const announcementsQuery = useAnnouncements(announcementsPage.params);
   const templatesQuery = useCommunicationTemplates();
   const remindersQuery = useCommunicationReminders();
@@ -314,6 +319,18 @@ export function ChatbotPage() {
           SSM, manager sau angajat).
         </div>
       ) : null}
+      {!canViewDashboard ? (
+        <div className="callout-warn" role="status">
+          Panoul KPI este disponibil doar conturilor cu drept de administrare comunicări. Poți consulta lista de anunțuri
+          mai jos.
+        </div>
+      ) : null}
+      {!canEditAnnouncements ? (
+        <div className="callout-warn" role="status">
+          Contul tău are acces doar în citire la anunțuri. Crearea și publicarea necesită rol de administrator sau responsabil
+          SSM.
+        </div>
+      ) : null}
 
       <section className="ssm-documents" aria-labelledby="communications-title">
         <div className="ssm-module-hero">
@@ -380,6 +397,7 @@ export function ChatbotPage() {
             </div>
           </div>
 
+          {canEditAnnouncements ? (
           <form className="card form-stack ssm-doc-card" onSubmit={onAnnouncementSubmit}>
             <div className="ssm-card-header">
               <div>
@@ -555,6 +573,7 @@ export function ChatbotPage() {
               </div>
             ) : null}
           </form>
+          ) : null}
         </div>
 
         <div className="ssm-doc-grid second">
@@ -583,6 +602,8 @@ export function ChatbotPage() {
                     <button className="btn-secondary" type="button" onClick={() => setOpenedAnnouncementId(item.id)}>
                       Deschide
                     </button>
+                    {canEditAnnouncements ? (
+                      <>
                     <button className="btn-secondary" type="button" onClick={() => runAnnouncementAction("publish", item.id)}>
                       Publică
                     </button>
@@ -592,6 +613,8 @@ export function ChatbotPage() {
                     <button className="btn-secondary" type="button" onClick={() => runAnnouncementAction("duplicate", item.id)}>
                       Duplică
                     </button>
+                      </>
+                    ) : null}
                   </div>
                 </article>
               ))}
@@ -614,9 +637,11 @@ export function ChatbotPage() {
                 <h3 className="card-title">Mementouri</h3>
                 <p className="field-hint">Previzualizare pentru anunțurile cu memento planificat.</p>
               </div>
+              {canEditAnnouncements ? (
               <button className="btn-secondary" type="button" onClick={() => dispatchReminders.mutate()} disabled={dispatchReminders.isPending}>
                 Trimite mementourile scadente
               </button>
+              ) : null}
             </div>
             <div className="ssm-doc-items">
               {reminders.map((item) => (
@@ -634,6 +659,7 @@ export function ChatbotPage() {
           </div>
         </div>
 
+        {canEditTemplates ? (
         <form className="card form-stack ssm-doc-card ssm-documents" onSubmit={onTemplateSubmit}>
           <div className="ssm-card-header">
             <div>
@@ -679,6 +705,7 @@ export function ChatbotPage() {
             </div>
           ) : null}
         </form>
+        ) : null}
       </section>
 
       {openedAnnouncement ? (

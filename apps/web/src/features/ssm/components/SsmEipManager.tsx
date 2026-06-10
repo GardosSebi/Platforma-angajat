@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import type {
   CreateSsmEipMovementRequest,
   CreateSsmEipNormRequest,
@@ -7,10 +7,8 @@ import type {
 } from "@repo/shared-types/ssm";
 import { useEipNorms, useEipNotifications, useEipRegister, useEipStockGap, useEipTypes, useCreateEipType, useRegisterEipMovement, useUpsertEipNorm } from "../hooks/useSsmEip";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
+import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { useEmployeeOptions, useJobPositionsLookup } from "../../master-data/hooks/useMasterData";
-
-const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
-const DEMO_JOB_POSITION_ID = import.meta.env.VITE_DEMO_JOB_POSITION_ID ?? "";
 
 const EMPTY_TYPE: CreateSsmEipTypeRequest = {
   code: "CASCA",
@@ -19,7 +17,7 @@ const EMPTY_TYPE: CreateSsmEipTypeRequest = {
 };
 
 const EMPTY_NORM: CreateSsmEipNormRequest = {
-  jobPositionId: DEMO_JOB_POSITION_ID,
+  jobPositionId: "",
   eipTypeId: "",
   requiredQuantity: 1,
   lifetimeDays: 365,
@@ -27,7 +25,7 @@ const EMPTY_NORM: CreateSsmEipNormRequest = {
 };
 
 const EMPTY_MOVEMENT: CreateSsmEipMovementRequest = {
-  employeeId: DEMO_EMPLOYEE_ID,
+  employeeId: "",
   eipTypeId: "",
   movementType: "DISTRIBUTION",
   quantity: 1,
@@ -59,6 +57,12 @@ export function SsmEipManager() {
   const [typeForm, setTypeForm] = useState<CreateSsmEipTypeRequest>(EMPTY_TYPE);
   const [normForm, setNormForm] = useState<CreateSsmEipNormRequest>(EMPTY_NORM);
   const [movementForm, setMovementForm] = useState<CreateSsmEipMovementRequest>(EMPTY_MOVEMENT);
+
+  useEffect(() => {
+    if (!movementForm.employeeId && employeeOptions[0]?.id) {
+      setMovementForm((prev) => ({ ...prev, employeeId: employeeOptions[0]!.id }));
+    }
+  }, [employeeOptions, movementForm.employeeId]);
 
   const onTypeSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -201,21 +205,12 @@ export function SsmEipManager() {
       <div className="ssm-doc-grid second">
         <form className="card form-stack ssm-doc-card" onSubmit={onMovementSubmit}>
           <h3 className="card-title">Distribuții / returnări / casări + semnătură</h3>
-          <div className="field">
-            <label htmlFor="mov-emp">Angajat</label>
-            <select
-              id="mov-emp"
-              value={movementForm.employeeId}
-              onChange={(e) => setMovementForm((p) => ({ ...p, employeeId: e.target.value }))}
-            >
-              <option value="">Selectează angajat</option>
-              {employeeOptions.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.fullName} ({emp.email})
-                </option>
-              ))}
-            </select>
-          </div>
+          <EmployeeSelect
+            id="mov-emp"
+            value={movementForm.employeeId}
+            required
+            onChange={(employeeId) => setMovementForm((p) => ({ ...p, employeeId }))}
+          />
           <div className="field">
             <label htmlFor="mov-type">Tip EIP</label>
             <select

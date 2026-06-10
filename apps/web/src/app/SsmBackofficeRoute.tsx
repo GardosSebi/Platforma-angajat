@@ -1,7 +1,12 @@
 import { Navigate } from "react-router-dom";
 import { SsmDashboardPage } from "../features/ssm/pages/SsmDashboardPage";
 import { useAuthSession } from "../shared/auth/use-auth-session";
-import { hasSsmBackofficeAccess, isEmployeePortalUser, isItmInspectorUser } from "../shared/auth/roles";
+import {
+  getAppHomePath,
+  hasSsmBackofficeAccess,
+  isEmployeePortalUser,
+  isItmInspectorUser
+} from "../shared/auth/roles";
 
 export function SsmBackofficeRoute() {
   const session = useAuthSession();
@@ -12,7 +17,7 @@ export function SsmBackofficeRoute() {
     return <Navigate to="/itm" replace />;
   }
   if (!hasSsmBackofficeAccess(session)) {
-    return <Navigate to="/portal" replace />;
+    return <Navigate to={getAppHomePath(session)} replace />;
   }
   return <SsmDashboardPage />;
 }

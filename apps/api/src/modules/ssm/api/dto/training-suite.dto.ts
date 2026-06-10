@@ -1,9 +1,9 @@
 import {
   IsArray,
-  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -91,17 +91,12 @@ export class CompleteTestDto {
   @MinLength(2)
   trainingPlanId!: string;
 
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  score!: number;
+  @IsObject()
+  answers!: Record<string, number>;
 
   @IsInt()
   @Min(0)
   durationSeconds!: number;
-
-  @IsBoolean()
-  passed!: boolean;
 }
 
 export class SignPlanDto {

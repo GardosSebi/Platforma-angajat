@@ -20,6 +20,40 @@ export const PORTAL_TAB_LABELS: Record<EmployeePortalTab, string> = {
   tickets: "Solicitări"
 };
 
+export function planHasMaterial(plan: Pick<SsmTrainingPlanItem, "materialTitle" | "materialUrl">): boolean {
+  return Boolean(plan.materialUrl?.trim() || plan.materialTitle?.trim());
+}
+
+export function trainingStep(plan: SsmTrainingPlanItem): number {
+  if (plan.responsibleSignedAt) return 5;
+  if (plan.employeeSignedAt) return 4;
+  if (plan.score != null && plan.status !== "BLOCKED") return 3;
+  if (plan.materialCompletedAt || !planHasMaterial(plan)) return 2;
+  return plan.materialUrl || plan.materialTitle ? 1 : 2;
+}
+
+export function planWorkflowLabel(plan: SsmTrainingPlanItem): string {
+  if (plan.status === "COMPLETED" || plan.responsibleSignedAt) {
+    return "Finalizată";
+  }
+  if (plan.status === "BLOCKED") {
+    return "Nevalidată";
+  }
+  if (plan.status === "OVERDUE") {
+    return "Expirată";
+  }
+  if (plan.employeeSignedAt && !plan.responsibleSignedAt) {
+    return "Așteaptă validare SSM";
+  }
+  if (plan.score != null) {
+    return "De semnat";
+  }
+  if (plan.materialCompletedAt || !planHasMaterial(plan)) {
+    return "Test de parcurs";
+  }
+  return planStatusLabel(plan.status);
+}
+
 export function planStatusLabel(status: SsmTrainingPlanStatus): string {
   switch (status) {
     case "PENDING":
@@ -39,6 +73,13 @@ export function planStatusClass(status: SsmTrainingPlanStatus): string {
   if (status === "COMPLETED") return "ssm-chip good";
   if (status === "OVERDUE" || status === "BLOCKED") return "ssm-chip bad";
   return "ssm-chip warn";
+}
+
+export function planWorkflowClass(plan: SsmTrainingPlanItem): string {
+  if (plan.status === "COMPLETED" || plan.responsibleSignedAt) return "ssm-chip good";
+  if (plan.status === "OVERDUE" || plan.status === "BLOCKED") return "ssm-chip bad";
+  if (plan.score != null || plan.employeeSignedAt) return "ssm-chip warn";
+  return planStatusClass(plan.status);
 }
 
 export function planCategoryLabel(plan: SsmTrainingPlanItem): string {

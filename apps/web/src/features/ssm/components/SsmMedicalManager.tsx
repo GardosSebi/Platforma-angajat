@@ -1,9 +1,11 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
   CreateSsmMedicalControlRequest,
   CreateSsmMedicalControlTypeRequest,
   SsmMedicalControlResult
 } from "@repo/shared-types/ssm";
+import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { useEmployeeOptions, useJobPositionsLookup } from "../../master-data/hooks/useMasterData";
 import {
   useCreateMedicalControl,
   useCreateMedicalControlType,
@@ -12,21 +14,18 @@ import {
   useMedicalReminders
 } from "../hooks/useSsmMedical";
 
-const DEMO_EMPLOYEE_ID = import.meta.env.VITE_DEMO_EMPLOYEE_ID ?? "seed-demo-employee-e01";
-const DEMO_JOB_POSITION_ID = import.meta.env.VITE_DEMO_JOB_POSITION_ID ?? "";
-
 const CONTROL_RESULTS: Array<SsmMedicalControlResult | ""> = ["", "FIT", "FIT_CONDITIONAL", "TEMPORARY_UNFIT", "UNFIT"];
 
 const EMPTY_TYPE: CreateSsmMedicalControlTypeRequest = {
   code: "CTRL-ANUAL",
   name: "Control periodic anual",
-  jobPositionId: DEMO_JOB_POSITION_ID,
+  jobPositionId: "",
   recurrenceDays: 365,
   reminderDays: [30, 15, 7]
 };
 
 const EMPTY_CONTROL: CreateSsmMedicalControlRequest = {
-  employeeId: DEMO_EMPLOYEE_ID,
+  employeeId: "",
   controlTypeId: "",
   scheduledAt: new Date().toISOString(),
   performedAt: new Date().toISOString(),
@@ -43,6 +42,10 @@ export function SsmMedicalManager() {
   const typesQuery = useMedicalControlTypes();
   const controlsQuery = useMedicalControls();
   const remindersQuery = useMedicalReminders();
+  const jobPositionsQuery = useJobPositionsLookup();
+  const employeesQuery = useEmployeeOptions();
+  const jobPositions = jobPositionsQuery.data?.items ?? [];
+  const employeeOptions = employeesQuery.data?.items ?? [];
 
   const createType = useCreateMedicalControlType();
   const createControl = useCreateMedicalControl();
@@ -50,6 +53,12 @@ export function SsmMedicalManager() {
   const [typeForm, setTypeForm] = useState<CreateSsmMedicalControlTypeRequest>(EMPTY_TYPE);
   const [controlForm, setControlForm] = useState<CreateSsmMedicalControlRequest>(EMPTY_CONTROL);
   const [aptitudeSheet, setAptitudeSheet] = useState<File>();
+
+  useEffect(() => {
+    if (!controlForm.employeeId && employeeOptions[0]?.id) {
+      setControlForm((prev) => ({ ...prev, employeeId: employeeOptions[0]!.id }));
+    }
+  }, [employeeOptions, controlForm.employeeId]);
 
   const typeOptions = typesQuery.data ?? [];
   const selectedTypeName = useMemo(
@@ -101,13 +110,19 @@ export function SsmMedicalManager() {
             <input id="med-name" value={typeForm.name} onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))} />
           </div>
           <div className="field">
-            <label htmlFor="med-job-position">Job Position ID (opțional)</label>
-            <input
+            <label htmlFor="med-job-position">Post (opțional)</label>
+            <select
               id="med-job-position"
               value={typeForm.jobPositionId ?? ""}
               onChange={(e) => setTypeForm((p) => ({ ...p, jobPositionId: e.target.value }))}
-              placeholder="ID post din master-data"
-            />
+            >
+              <option value="">Orice post</option>
+              {jobPositions.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.code} — {job.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label htmlFor="med-recurrence">Recurență (zile)</label>
@@ -136,14 +151,12 @@ export function SsmMedicalManager() {
 
         <form className="card form-stack ssm-doc-card" onSubmit={onCreateControl}>
           <h3 className="card-title">Rezultat control + fișă aptitudini</h3>
-          <div className="field">
-            <label htmlFor="med-employee">Employee ID</label>
-            <input
-              id="med-employee"
-              value={controlForm.employeeId}
-              onChange={(e) => setControlForm((p) => ({ ...p, employeeId: e.target.value }))}
-            />
-          </div>
+          <EmployeeSelect
+            id="med-employee"
+            value={controlForm.employeeId}
+            required
+            onChange={(employeeId) => setControlForm((p) => ({ ...p, employeeId }))}
+          />
           <div className="field">
             <label htmlFor="med-type">Tip control</label>
             <select
