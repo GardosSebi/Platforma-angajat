@@ -7,6 +7,9 @@ import type {
   SsmPsiResponsibleRole
 } from "@repo/shared-types/ssm";
 import { useEmployeeOptions, useWorksitesLookup } from "../../master-data/hooks/useMasterData";
+import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
 import {
   useCreatePsiEquipment,
   useCreatePsiResponsible,
@@ -224,18 +227,25 @@ export function SsmPsiManager() {
             </div>
           </div>
           <div className="ssm-form-grid">
-            <div className="field wide">
-              <label htmlFor="psi-worksite">Punct de lucru</label>
-              <select id="psi-worksite" value={equipmentForm.worksiteId} onChange={(e) => setEquipmentForm((p) => ({ ...p, worksiteId: e.target.value }))} required>
-                <option value="">Selectează punctul</option>
-                {(worksitesLookup.data?.items ?? []).map((worksite) => (
-                  <option key={worksite.id} value={worksite.id}>
-                    {worksite.code} - {worksite.name}
-                  </option>
-                ))}
-              </select>
-              {(worksitesLookup.data?.items?.length ?? 0) === 0 ? <p className="field-hint">Nu există puncte de lucru pentru tenant.</p> : null}
-            </div>
+            <FieldSelect
+              id="psi-worksite"
+              label="Punct de lucru"
+              value={equipmentForm.worksiteId}
+              onChange={(worksiteId) => setEquipmentForm((p) => ({ ...p, worksiteId }))}
+              required
+              allowEmpty
+              emptyLabel="Selectează punctul"
+              options={mapToOptions(
+                worksitesLookup.data?.items ?? [],
+                (worksite) => worksite.id,
+                (worksite) => `${worksite.code} - ${worksite.name}`
+              )}
+              hint={
+                (worksitesLookup.data?.items?.length ?? 0) === 0
+                  ? "Nu există puncte de lucru pentru tenant."
+                  : undefined
+              }
+            />
             <div className="field">
               <label htmlFor="psi-code">Cod</label>
               <input id="psi-code" value={equipmentForm.code} onChange={(e) => setEquipmentForm((p) => ({ ...p, code: e.target.value }))} />
@@ -274,23 +284,25 @@ export function SsmPsiManager() {
               <p className="field-hint">O verificare actualizează automat următoarea scadență.</p>
             </div>
           </div>
-          <div className="field">
-            <label htmlFor="psi-equipment">Echipament</label>
-            <select
-              id="psi-equipment"
-              value={verificationForm.equipmentId}
-              onChange={(e) => setVerificationForm((p) => ({ ...p, equipmentId: e.target.value }))}
-              required
-            >
-              <option value="">Selectează echipamentul</option>
-              {(equipmentQuery.data?.items ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.code} - {item.name}
-                </option>
-              ))}
-            </select>
-            {(equipmentQuery.data?.items.length ?? 0) === 0 ? <p className="field-hint">Nu există echipamente PSI. Adaugă primul echipament.</p> : null}
-          </div>
+          <FieldSelect
+            id="psi-equipment"
+            label="Echipament"
+            value={verificationForm.equipmentId}
+            onChange={(equipmentId) => setVerificationForm((p) => ({ ...p, equipmentId }))}
+            required
+            allowEmpty
+            emptyLabel="Selectează echipamentul"
+            options={mapToOptions(
+              equipmentQuery.data?.items ?? [],
+              (item) => item.id,
+              (item) => `${item.code} - ${item.name}`
+            )}
+            hint={
+              (equipmentQuery.data?.items.length ?? 0) === 0
+                ? "Nu există echipamente PSI. Adaugă primul echipament."
+                : undefined
+            }
+          />
           <div className="field">
             <label htmlFor="psi-performed">Data verificării</label>
             <input id="psi-performed" type="date" value={verificationForm.performedAt} onChange={(e) => setVerificationForm((p) => ({ ...p, performedAt: e.target.value }))} />
@@ -349,28 +361,28 @@ export function SsmPsiManager() {
               <p className="field-hint">Înregistrează instruiri individuale sau colective.</p>
             </div>
           </div>
-          <div className="field">
-            <label htmlFor="psi-training-worksite">Punct de lucru</label>
-            <select id="psi-training-worksite" value={trainingForm.worksiteId} onChange={(e) => setTrainingForm((p) => ({ ...p, worksiteId: e.target.value }))} required>
-              <option value="">Selectează punctul</option>
-              {(worksitesLookup.data?.items ?? []).map((worksite) => (
-                <option key={worksite.id} value={worksite.id}>
-                  {worksite.code} - {worksite.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="psi-training-employee">Angajat</label>
-            <select id="psi-training-employee" value={trainingForm.employeeId ?? ""} onChange={(e) => setTrainingForm((p) => ({ ...p, employeeId: e.target.value }))}>
-              <option value="">Instruire colectivă / fără angajat</option>
-              {(employeesOptions.data?.items ?? []).map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.fullName}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="psi-training-worksite"
+            label="Punct de lucru"
+            value={trainingForm.worksiteId}
+            onChange={(worksiteId) => setTrainingForm((p) => ({ ...p, worksiteId }))}
+            required
+            allowEmpty
+            emptyLabel="Selectează punctul"
+            options={mapToOptions(
+              worksitesLookup.data?.items ?? [],
+              (worksite) => worksite.id,
+              (worksite) => `${worksite.code} - ${worksite.name}`
+            )}
+          />
+          <EmployeeSelect
+            id="psi-training-employee"
+            label="Angajat"
+            value={trainingForm.employeeId ?? ""}
+            allowEmpty
+            emptyLabel="Instruire colectivă / fără angajat"
+            onChange={(employeeId) => setTrainingForm((p) => ({ ...p, employeeId }))}
+          />
           <div className="field">
             <label htmlFor="psi-topic">Temă</label>
             <input id="psi-topic" value={trainingForm.topic} onChange={(e) => setTrainingForm((p) => ({ ...p, topic: e.target.value }))} />
@@ -403,27 +415,27 @@ export function SsmPsiManager() {
               <p className="field-hint">Persoane cheie pentru punctul de lucru.</p>
             </div>
           </div>
-          <div className="field">
-            <label htmlFor="psi-resp-worksite">Punct de lucru</label>
-            <select id="psi-resp-worksite" value={responsibleForm.worksiteId} onChange={(e) => setResponsibleForm((p) => ({ ...p, worksiteId: e.target.value }))} required>
-              <option value="">Selectează punctul</option>
-              {(worksitesLookup.data?.items ?? []).map((worksite) => (
-                <option key={worksite.id} value={worksite.id}>
-                  {worksite.code} - {worksite.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="psi-role">Rol</label>
-            <select id="psi-role" value={responsibleForm.role} onChange={(e) => setResponsibleForm((p) => ({ ...p, role: e.target.value as SsmPsiResponsibleRole }))}>
-              {RESPONSIBLE_ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="psi-resp-worksite"
+            label="Punct de lucru"
+            value={responsibleForm.worksiteId}
+            onChange={(worksiteId) => setResponsibleForm((p) => ({ ...p, worksiteId }))}
+            required
+            allowEmpty
+            emptyLabel="Selectează punctul"
+            options={mapToOptions(
+              worksitesLookup.data?.items ?? [],
+              (worksite) => worksite.id,
+              (worksite) => `${worksite.code} - ${worksite.name}`
+            )}
+          />
+          <FieldSelect
+            id="psi-role"
+            label="Rol"
+            value={responsibleForm.role}
+            onChange={(role) => setResponsibleForm((p) => ({ ...p, role: role as SsmPsiResponsibleRole }))}
+            options={stringOptions(RESPONSIBLE_ROLES)}
+          />
           <div className="field">
             <label htmlFor="psi-person">Nume responsabil</label>
             <input id="psi-person" value={responsibleForm.personName} onChange={(e) => setResponsibleForm((p) => ({ ...p, personName: e.target.value }))} required />

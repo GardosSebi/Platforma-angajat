@@ -7,6 +7,8 @@ import type {
 } from "@repo/shared-types/ssm";
 import { useEipNorms, useEipNotifications, useEipRegister, useEipStockGap, useEipTypes, useCreateEipType, useRegisterEipMovement, useUpsertEipNorm } from "../hooks/useSsmEip";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { useEmployeeOptions, useJobPositionsLookup } from "../../master-data/hooks/useMasterData";
 
@@ -137,36 +139,32 @@ export function SsmEipManager() {
 
         <form className="card form-stack ssm-doc-card" onSubmit={onNormSubmit}>
           <h3 className="card-title">Normativ EIP pe post</h3>
-          <div className="field">
-            <label htmlFor="norm-job">Job Position ID</label>
-            <select
-              id="norm-job"
-              value={normForm.jobPositionId}
-              onChange={(e) => setNormForm((p) => ({ ...p, jobPositionId: e.target.value }))}
-            >
-              <option value="">Selecteaza postul</option>
-              {jobPositions.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.code} - {job.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="norm-type">Tip EIP</label>
-            <select
-              id="norm-type"
-              value={normForm.eipTypeId}
-              onChange={(e) => setNormForm((p) => ({ ...p, eipTypeId: e.target.value }))}
-            >
-              <option value="">Selectează tip</option>
-              {(typesQuery.data ?? []).map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.code} - {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="norm-job"
+            label="Job Position ID"
+            value={normForm.jobPositionId}
+            onChange={(jobPositionId) => setNormForm((p) => ({ ...p, jobPositionId }))}
+            allowEmpty
+            emptyLabel="Selecteaza postul"
+            options={mapToOptions(
+              jobPositions,
+              (job) => job.id,
+              (job) => `${job.code} - ${job.name}`
+            )}
+          />
+          <FieldSelect
+            id="norm-type"
+            label="Tip EIP"
+            value={normForm.eipTypeId}
+            onChange={(eipTypeId) => setNormForm((p) => ({ ...p, eipTypeId }))}
+            allowEmpty
+            emptyLabel="Selectează tip"
+            options={mapToOptions(
+              typesQuery.data ?? [],
+              (type) => type.id,
+              (type) => `${type.code} - ${type.name}`
+            )}
+          />
           <div className="field">
             <label htmlFor="norm-qty">Cantitate necesară</label>
             <input
@@ -211,35 +209,28 @@ export function SsmEipManager() {
             required
             onChange={(employeeId) => setMovementForm((p) => ({ ...p, employeeId }))}
           />
-          <div className="field">
-            <label htmlFor="mov-type">Tip EIP</label>
-            <select
-              id="mov-type"
-              value={movementForm.eipTypeId}
-              onChange={(e) => setMovementForm((p) => ({ ...p, eipTypeId: e.target.value }))}
-            >
-              <option value="">Selectează tip</option>
-              {(typesQuery.data ?? []).map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.code} - {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="mov-kind">Operațiune</label>
-            <select
-              id="mov-kind"
-              value={movementForm.movementType}
-              onChange={(e) => setMovementForm((p) => ({ ...p, movementType: e.target.value as SsmEipMovementType }))}
-            >
-              {MOVEMENT_TYPES.map((kind) => (
-                <option key={kind} value={kind}>
-                  {kind}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="mov-type"
+            label="Tip EIP"
+            value={movementForm.eipTypeId}
+            onChange={(eipTypeId) => setMovementForm((p) => ({ ...p, eipTypeId }))}
+            allowEmpty
+            emptyLabel="Selectează tip"
+            options={mapToOptions(
+              typesQuery.data ?? [],
+              (type) => type.id,
+              (type) => `${type.code} - ${type.name}`
+            )}
+          />
+          <FieldSelect
+            id="mov-kind"
+            label="Operațiune"
+            value={movementForm.movementType}
+            onChange={(movementType) =>
+              setMovementForm((p) => ({ ...p, movementType: movementType as SsmEipMovementType }))
+            }
+            options={stringOptions(MOVEMENT_TYPES)}
+          />
           <div className="field">
             <label htmlFor="mov-qty">Cantitate</label>
             <input

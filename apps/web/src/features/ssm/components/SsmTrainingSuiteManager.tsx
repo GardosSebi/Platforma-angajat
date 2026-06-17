@@ -18,6 +18,9 @@ import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { TrainingTypeSelect } from "./TrainingTypeSelect";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { stringOptions } from "../../../shared/components/field-select-options";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 import {
   useCompleteTest,
@@ -323,20 +326,13 @@ export function SsmTrainingSuiteManager() {
                 onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
               />
             </div>
-            <div className="field">
-              <label htmlFor="training-category">Categorie legală</label>
-              <select
-                id="training-category"
-                value={typeForm.category ?? "PERIODIC"}
-                onChange={(e) => onCategoryChange(e.target.value as SsmTrainingCategory)}
-              >
-                {TRAINING_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {trainingCategoryLabel(category)}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FieldSelect
+              id="training-category"
+              label="Categorie legală"
+              value={typeForm.category ?? "PERIODIC"}
+              onChange={(category) => onCategoryChange(category as SsmTrainingCategory)}
+              options={stringOptions(TRAINING_CATEGORIES, trainingCategoryLabel)}
+            />
             <div className="field">
               <label htmlFor="training-legal-hours">Durată minimă legală (ore)</label>
               <input
@@ -370,30 +366,23 @@ export function SsmTrainingSuiteManager() {
 
           <form className="card form-stack ssm-doc-card" onSubmit={onCreatePlan}>
             <h3 className="card-title">3.3.3 Planificare</h3>
-            <div className="field">
-              <EmployeeSelect
-                id="plan-employee"
-                label="Angajat"
-                value={planForm.employeeId}
-                required
-                onChange={(employeeId) => setPlanForm((p) => ({ ...p, employeeId }))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="plan-type">Tip instruire</label>
-              <select
-                id="plan-type"
-                value={planForm.trainingTypeId}
-                onChange={(e) => setPlanForm((p) => ({ ...p, trainingTypeId: e.target.value }))}
-              >
-                <option value="">Selectează tip</option>
-                {(typesQuery.data ?? []).map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.code} — {type.name} ({trainingCategoryLabel(type.category)})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <EmployeeSelect
+              id="plan-employee"
+              label="Angajat"
+              value={planForm.employeeId}
+              required
+              onChange={(employeeId) => setPlanForm((p) => ({ ...p, employeeId }))}
+            />
+            <TrainingTypeSelect
+              id="plan-type"
+              label="Tip instruire"
+              value={planForm.trainingTypeId}
+              valueField="id"
+              allowEmpty
+              emptyLabel="Selectează tip"
+              activeOnly={false}
+              onChange={(trainingTypeId) => setPlanForm((p) => ({ ...p, trainingTypeId }))}
+            />
             <div className="field">
               <label htmlFor="plan-material-title">Titlu material (PDF / video)</label>
               <input

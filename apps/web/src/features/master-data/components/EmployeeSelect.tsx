@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { useEmployeeOptions } from "../hooks/useMasterData";
 
 type Props = {
@@ -22,28 +24,33 @@ export function EmployeeSelect({
   disabled = false
 }: Props) {
   const employeesQuery = useEmployeeOptions();
-  const options = employeesQuery.data?.items ?? [];
+  const options = useMemo(
+    () =>
+      (employeesQuery.data?.items ?? []).map((emp) => ({
+        value: emp.id,
+        label: `${emp.fullName} (${emp.email})`
+      })),
+    [employeesQuery.data?.items]
+  );
 
   return (
-    <div className="field">
-      <label htmlFor={id}>{label}</label>
-      <select
-        id={id}
-        value={value}
-        required={required}
-        disabled={disabled || employeesQuery.isLoading}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {allowEmpty ? <option value="">{emptyLabel}</option> : null}
-        {options.map((emp) => (
-          <option key={emp.id} value={emp.id}>
-            {emp.fullName} ({emp.email})
-          </option>
-        ))}
-      </select>
-      {employeesQuery.isError ? (
-        <p className="feedback error">{employeesQuery.error instanceof Error ? employeesQuery.error.message : "Eroare"}</p>
-      ) : null}
-    </div>
+    <FieldSelect
+      id={id}
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={options}
+      required={required}
+      allowEmpty={allowEmpty}
+      emptyLabel={emptyLabel}
+      disabled={disabled || employeesQuery.isLoading}
+      error={
+        employeesQuery.isError
+          ? employeesQuery.error instanceof Error
+            ? employeesQuery.error.message
+            : "Eroare"
+          : undefined
+      }
+    />
   );
 }

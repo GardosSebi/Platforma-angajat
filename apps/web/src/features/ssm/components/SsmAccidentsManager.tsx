@@ -10,6 +10,8 @@ import type {
 } from "@repo/shared-types/ssm";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
 import { ssmApi } from "../api/ssm.api";
 import {
   useAccidentCases,
@@ -197,34 +199,20 @@ export function SsmAccidentsManager() {
             emptyLabel="Fără angajat asociat"
             onChange={(employeeId) => setCaseForm((p) => ({ ...p, employeeId: employeeId || undefined }))}
           />
-          <div className="field">
-            <label htmlFor="acc-type">Tip</label>
-            <select
-              id="acc-type"
-              value={caseForm.type}
-              onChange={(e) => setCaseForm((p) => ({ ...p, type: e.target.value as SsmAccidentType }))}
-            >
-              {ACCIDENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {typeLabel(type)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="acc-severity">Severitate</label>
-            <select
-              id="acc-severity"
-              value={caseForm.severity}
-              onChange={(e) => setCaseForm((p) => ({ ...p, severity: e.target.value as SsmAccidentSeverity }))}
-            >
-              {ACCIDENT_SEVERITIES.map((severity) => (
-                <option key={severity} value={severity}>
-                  {severityLabel(severity)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="acc-type"
+            label="Tip"
+            value={caseForm.type}
+            onChange={(type) => setCaseForm((p) => ({ ...p, type: type as SsmAccidentType }))}
+            options={stringOptions(ACCIDENT_TYPES, typeLabel)}
+          />
+          <FieldSelect
+            id="acc-severity"
+            label="Severitate"
+            value={caseForm.severity}
+            onChange={(severity) => setCaseForm((p) => ({ ...p, severity: severity as SsmAccidentSeverity }))}
+            options={stringOptions(ACCIDENT_SEVERITIES, severityLabel)}
+          />
           <div className="field">
             <label htmlFor="acc-title">Titlu</label>
             <input id="acc-title" value={caseForm.title} onChange={(e) => setCaseForm((p) => ({ ...p, title: e.target.value }))} />
@@ -312,24 +300,22 @@ export function SsmAccidentsManager() {
 
         <form className="card form-stack ssm-doc-card" onSubmit={onAddTask}>
           <h3 className="card-title">Pasul 2: Flux cercetare (task-uri)</h3>
-          <div className="field">
-            <label htmlFor="task-case">Caz</label>
-            <select
-              id="task-case"
-              value={taskForm.accidentCaseId}
-              onChange={(e) => {
-                setTaskForm((p) => ({ ...p, accidentCaseId: e.target.value }));
-                setSelectedCaseId(e.target.value);
-              }}
-            >
-              <option value="">Selectează caz</option>
-              {(casesPaged.items ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title} ({typeLabel(item.type)} - {item.status})
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="task-case"
+            label="Caz"
+            value={taskForm.accidentCaseId}
+            onChange={(accidentCaseId) => {
+              setTaskForm((p) => ({ ...p, accidentCaseId }));
+              setSelectedCaseId(accidentCaseId);
+            }}
+            allowEmpty
+            emptyLabel="Selectează caz"
+            options={mapToOptions(
+              casesPaged.items ?? [],
+              (item) => item.id,
+              (item) => `${item.title} (${typeLabel(item.type)} - ${item.status})`
+            )}
+          />
           <div className="field">
             <label htmlFor="task-title">Task</label>
             <input id="task-title" value={taskForm.title} onChange={(e) => setTaskForm((p) => ({ ...p, title: e.target.value }))} />
@@ -409,17 +395,19 @@ export function SsmAccidentsManager() {
       <div className="ssm-doc-grid second">
         <form className="card form-stack ssm-doc-card" onSubmit={onCloseCase}>
           <h3 className="card-title">Pasul 3: Concluzii + măsuri + export raport</h3>
-          <div className="field">
-            <label htmlFor="close-case">Caz</label>
-            <select id="close-case" value={selectedCaseId} onChange={(e) => setSelectedCaseId(e.target.value)}>
-              <option value="">Selectează caz</option>
-              {(casesPaged.items ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title} ({typeLabel(item.type)} - {item.status})
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="close-case"
+            label="Caz"
+            value={selectedCaseId}
+            onChange={setSelectedCaseId}
+            allowEmpty
+            emptyLabel="Selectează caz"
+            options={mapToOptions(
+              casesPaged.items ?? [],
+              (item) => item.id,
+              (item) => `${item.title} (${typeLabel(item.type)} - ${item.status})`
+            )}
+          />
           <div className="field">
             <label htmlFor="close-conc">Concluzii</label>
             <input

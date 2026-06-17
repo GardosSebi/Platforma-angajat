@@ -5,6 +5,8 @@ import type {
   SsmMedicalControlResult
 } from "@repo/shared-types/ssm";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
 import { useEmployeeOptions, useJobPositionsLookup } from "../../master-data/hooks/useMasterData";
 import {
   useCreateMedicalControl,
@@ -109,21 +111,19 @@ export function SsmMedicalManager() {
             <label htmlFor="med-name">Denumire control</label>
             <input id="med-name" value={typeForm.name} onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))} />
           </div>
-          <div className="field">
-            <label htmlFor="med-job-position">Post (opțional)</label>
-            <select
-              id="med-job-position"
-              value={typeForm.jobPositionId ?? ""}
-              onChange={(e) => setTypeForm((p) => ({ ...p, jobPositionId: e.target.value }))}
-            >
-              <option value="">Orice post</option>
-              {jobPositions.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.code} — {job.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="med-job-position"
+            label="Post (opțional)"
+            value={typeForm.jobPositionId ?? ""}
+            onChange={(jobPositionId) => setTypeForm((p) => ({ ...p, jobPositionId }))}
+            allowEmpty
+            emptyLabel="Orice post"
+            options={mapToOptions(
+              jobPositions,
+              (job) => job.id,
+              (job) => `${job.code} — ${job.name}`
+            )}
+          />
           <div className="field">
             <label htmlFor="med-recurrence">Recurență (zile)</label>
             <input
@@ -157,21 +157,19 @@ export function SsmMedicalManager() {
             required
             onChange={(employeeId) => setControlForm((p) => ({ ...p, employeeId }))}
           />
-          <div className="field">
-            <label htmlFor="med-type">Tip control</label>
-            <select
-              id="med-type"
-              value={controlForm.controlTypeId}
-              onChange={(e) => setControlForm((p) => ({ ...p, controlTypeId: e.target.value }))}
-            >
-              <option value="">Selectează tip</option>
-              {typeOptions.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.code} - {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="med-type"
+            label="Tip control"
+            value={controlForm.controlTypeId}
+            onChange={(controlTypeId) => setControlForm((p) => ({ ...p, controlTypeId }))}
+            allowEmpty
+            emptyLabel="Selectează tip"
+            options={mapToOptions(
+              typeOptions,
+              (type) => type.id,
+              (type) => `${type.code} - ${type.name}`
+            )}
+          />
           <div className="field">
             <label htmlFor="med-scheduled">Programare (ISO)</label>
             <input
@@ -188,20 +186,18 @@ export function SsmMedicalManager() {
               onChange={(e) => setControlForm((p) => ({ ...p, performedAt: e.target.value }))}
             />
           </div>
-          <div className="field">
-            <label htmlFor="med-result">Rezultat aptitudine</label>
-            <select
-              id="med-result"
-              value={controlForm.result ?? ""}
-              onChange={(e) => setControlForm((p) => ({ ...p, result: (e.target.value as SsmMedicalControlResult) || undefined }))}
-            >
-              {CONTROL_RESULTS.map((result) => (
-                <option key={result || "none"} value={result}>
-                  {result || "Neselectat"}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="med-result"
+            label="Rezultat aptitudine"
+            value={controlForm.result ?? ""}
+            onChange={(result) =>
+              setControlForm((p) => ({ ...p, result: (result as SsmMedicalControlResult) || undefined }))
+            }
+            options={CONTROL_RESULTS.map((result) => ({
+              value: result,
+              label: result || "Neselectat"
+            }))}
+          />
           <div className="field">
             <label htmlFor="med-validity">Valabil până la (ISO, opțional)</label>
             <input

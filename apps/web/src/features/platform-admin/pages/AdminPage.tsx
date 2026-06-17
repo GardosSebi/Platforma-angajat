@@ -11,6 +11,8 @@ import {
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import type { UpdateEmployeePayload } from "../../master-data/api/master-data.api";
 import {
@@ -560,64 +562,58 @@ export function AdminPage() {
                   autoComplete="off"
                 />
               </div>
-              <div className="field">
-                <label htmlFor="new-user-worksite">Punct de lucru</label>
-                <select
-                  id="new-user-worksite"
-                  value={newUserForm.worksiteId}
-                  onChange={(e) =>
-                    setNewUserForm((f) => ({
-                      ...f,
-                      worksiteId: e.target.value,
-                      departmentId: "",
-                      jobPositionId: ""
-                    }))
-                  }
-                >
-                  <option value="">— Neselectat —</option>
-                  {(worksitesLookup.data?.items ?? []).map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.code} — {w.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="new-user-department">Departament</label>
-                <select
-                  id="new-user-department"
-                  value={newUserForm.departmentId}
-                  onChange={(e) =>
-                    setNewUserForm((f) => ({
-                      ...f,
-                      departmentId: e.target.value,
-                      jobPositionId: ""
-                    }))
-                  }
-                >
-                  <option value="">— Neselectat —</option>
-                  {filteredDepartmentsForNewUser.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.code} — {d.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="new-user-position">Post</label>
-                <select
-                  id="new-user-position"
-                  value={newUserForm.jobPositionId}
-                  onChange={(e) => setNewUserForm((f) => ({ ...f, jobPositionId: e.target.value }))}
-                >
-                  <option value="">— Neselectat —</option>
-                  {filteredPositionsForNewUser.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code} — {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FieldSelect
+                id="new-user-worksite"
+                label="Punct de lucru"
+                value={newUserForm.worksiteId}
+                onChange={(worksiteId) =>
+                  setNewUserForm((f) => ({
+                    ...f,
+                    worksiteId,
+                    departmentId: "",
+                    jobPositionId: ""
+                  }))
+                }
+                allowEmpty
+                emptyLabel="— Neselectat —"
+                options={mapToOptions(
+                  worksitesLookup.data?.items ?? [],
+                  (w) => w.id,
+                  (w) => `${w.code} — ${w.name}`
+                )}
+              />
+              <FieldSelect
+                id="new-user-department"
+                label="Departament"
+                value={newUserForm.departmentId}
+                onChange={(departmentId) =>
+                  setNewUserForm((f) => ({
+                    ...f,
+                    departmentId,
+                    jobPositionId: ""
+                  }))
+                }
+                allowEmpty
+                emptyLabel="— Neselectat —"
+                options={mapToOptions(
+                  filteredDepartmentsForNewUser,
+                  (d) => d.id,
+                  (d) => `${d.code} — ${d.name}`
+                )}
+              />
+              <FieldSelect
+                id="new-user-position"
+                label="Post"
+                value={newUserForm.jobPositionId}
+                onChange={(jobPositionId) => setNewUserForm((f) => ({ ...f, jobPositionId }))}
+                allowEmpty
+                emptyLabel="— Neselectat —"
+                options={mapToOptions(
+                  filteredPositionsForNewUser,
+                  (p) => p.id,
+                  (p) => `${p.code} — ${p.name}`
+                )}
+              />
               <div className="field">
                 <label htmlFor="new-user-hire-date">Data angajării</label>
                 <input
@@ -746,64 +742,58 @@ export function AdminPage() {
                         autoComplete="off"
                       />
                     </div>
-                    <div className="field">
-                      <label htmlFor="detail-user-worksite">Punct de lucru</label>
-                      <select
-                        id="detail-user-worksite"
-                        value={detailWorksiteId}
-                        onChange={(e) =>
-                          setEmployeeDraft((d) => ({
-                            ...d,
-                            worksiteId: e.target.value,
-                            departmentId: "",
-                            jobPositionId: ""
-                          }))
-                        }
-                      >
-                        <option value="">— Neselectat —</option>
-                        {detailWorksites.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.code} — {w.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="detail-user-department">Departament</label>
-                      <select
-                        id="detail-user-department"
-                        value={detailDepartmentId}
-                        onChange={(e) =>
-                          setEmployeeDraft((d) => ({
-                            ...d,
-                            departmentId: e.target.value,
-                            jobPositionId: ""
-                          }))
-                        }
-                      >
-                        <option value="">— Neselectat —</option>
-                        {detailDepartments.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.code} — {d.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="detail-user-position">Post</label>
-                      <select
-                        id="detail-user-position"
-                        value={employeeDraft.jobPositionId || selectedEmployee?.jobPositionId || ""}
-                        onChange={(e) => setEmployeeDraft((d) => ({ ...d, jobPositionId: e.target.value }))}
-                      >
-                        <option value="">— Neselectat —</option>
-                        {detailPositions.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.code} — {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <FieldSelect
+                      id="detail-user-worksite"
+                      label="Punct de lucru"
+                      value={detailWorksiteId}
+                      onChange={(worksiteId) =>
+                        setEmployeeDraft((d) => ({
+                          ...d,
+                          worksiteId,
+                          departmentId: "",
+                          jobPositionId: ""
+                        }))
+                      }
+                      allowEmpty
+                      emptyLabel="— Neselectat —"
+                      options={mapToOptions(
+                        detailWorksites,
+                        (w) => w.id,
+                        (w) => `${w.code} — ${w.name}`
+                      )}
+                    />
+                    <FieldSelect
+                      id="detail-user-department"
+                      label="Departament"
+                      value={detailDepartmentId}
+                      onChange={(departmentId) =>
+                        setEmployeeDraft((d) => ({
+                          ...d,
+                          departmentId,
+                          jobPositionId: ""
+                        }))
+                      }
+                      allowEmpty
+                      emptyLabel="— Neselectat —"
+                      options={mapToOptions(
+                        detailDepartments,
+                        (d) => d.id,
+                        (d) => `${d.code} — ${d.name}`
+                      )}
+                    />
+                    <FieldSelect
+                      id="detail-user-position"
+                      label="Post"
+                      value={employeeDraft.jobPositionId || selectedEmployee?.jobPositionId || ""}
+                      onChange={(jobPositionId) => setEmployeeDraft((d) => ({ ...d, jobPositionId }))}
+                      allowEmpty
+                      emptyLabel="— Neselectat —"
+                      options={mapToOptions(
+                        detailPositions,
+                        (p) => p.id,
+                        (p) => `${p.code} — ${p.name}`
+                      )}
+                    />
                     <div className="field">
                       <label htmlFor="detail-user-hire-date">Data angajării</label>
                       <input
@@ -890,22 +880,22 @@ export function AdminPage() {
                   required
                 />
               </div>
-              <div className="field">
-                <label>Audiență</label>
-                <select
-                  value={staticForm.audienceType}
-                  onChange={(e) =>
-                    setStaticForm((f) => ({
-                      ...f,
-                      audienceType: e.target.value as CreateStaticPagePayload["audienceType"]
-                    }))
-                  }
-                >
-                  <option value="ALL">Toți angajații</option>
-                  <option value="WORKSITE">Un worksite</option>
-                  <option value="EMPLOYEE_GROUP">Un grup</option>
-                </select>
-              </div>
+              <FieldSelect
+                id="static-audience"
+                label="Audiență"
+                value={staticForm.audienceType}
+                onChange={(audienceType) =>
+                  setStaticForm((f) => ({
+                    ...f,
+                    audienceType: audienceType as CreateStaticPagePayload["audienceType"]
+                  }))
+                }
+                options={[
+                  { value: "ALL", label: "Toți angajații" },
+                  { value: "WORKSITE", label: "Un worksite" },
+                  { value: "EMPLOYEE_GROUP", label: "Un grup" }
+                ]}
+              />
               {staticForm.audienceType !== "ALL" ? (
                 <div className="field">
                   <label>ID referință (worksite sau grup)</label>

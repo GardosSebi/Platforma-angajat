@@ -9,6 +9,8 @@ import {
   type HelpdeskTicketStatus
 } from "@repo/shared-types/ticketing";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import { TicketFilters } from "../api/ticketing.api";
 import { useAssignTicket, useCreateTicket, useMoveTicket, useTicketingKanban, useTicketingStats } from "../hooks/useTicketing";
 
@@ -232,45 +234,42 @@ export function TicketingPage() {
                   ))}
                 </datalist>
               </div>
-              <div className="field">
-                <label htmlFor="ticket-priority">Prioritate</label>
-                <select
-                  id="ticket-priority"
-                  value={ticketForm.priority}
-                  onChange={(event) => setTicketForm((prev) => ({ ...prev, priority: event.target.value as HelpdeskTicketPriority }))}
-                >
-                  {PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {PRIORITY_LABELS[priority]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="ticket-source">Sursă</label>
-                <select id="ticket-source" value={ticketForm.source} onChange={(event) => setTicketForm((prev) => ({ ...prev, source: event.target.value as HelpdeskTicketSource }))}>
-                  {SOURCES.map((source) => (
-                    <option key={source} value={source}>
-                      {source}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FieldSelect
+                id="ticket-priority"
+                label="Prioritate"
+                value={ticketForm.priority ?? "MEDIUM"}
+                onChange={(priority) =>
+                  setTicketForm((prev) => ({ ...prev, priority: priority as HelpdeskTicketPriority }))
+                }
+                options={PRIORITIES.map((priority) => ({
+                  value: priority,
+                  label: PRIORITY_LABELS[priority]
+                }))}
+              />
+              <FieldSelect
+                id="ticket-source"
+                label="Sursă"
+                value={ticketForm.source ?? "PORTAL"}
+                onChange={(source) => setTicketForm((prev) => ({ ...prev, source: source as HelpdeskTicketSource }))}
+                options={SOURCES.map((source) => ({ value: source, label: source }))}
+              />
               <div className="field">
                 <label htmlFor="ticket-due">Scadență</label>
                 <input id="ticket-due" type="datetime-local" value={ticketForm.dueAt ?? ""} onChange={(event) => setTicketForm((prev) => ({ ...prev, dueAt: event.target.value }))} />
               </div>
-              <div className="field">
-                <label htmlFor="ticket-reporter">Solicitant angajat</label>
-                <select id="ticket-reporter" value={ticketForm.reporterEmployeeId ?? ""} onChange={(event) => onReporterChange(event.target.value)}>
-                  <option value="">Fără angajat</option>
-                  {(employeesQuery.data?.items ?? []).map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.fullName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FieldSelect
+                id="ticket-reporter"
+                label="Solicitant angajat"
+                value={ticketForm.reporterEmployeeId ?? ""}
+                onChange={onReporterChange}
+                allowEmpty
+                emptyLabel="Fără angajat"
+                options={mapToOptions(
+                  employeesQuery.data?.items ?? [],
+                  (employee) => employee.id,
+                  (employee) => employee.fullName
+                )}
+              />
               <div className="field">
                 <label htmlFor="ticket-assignee">Operator ID</label>
                 <input
@@ -335,43 +334,49 @@ export function TicketingPage() {
                   placeholder="userId"
                 />
               </div>
-              <div className="field">
-                <label htmlFor="filter-reporter">Solicitant (angajat)</label>
-                <select
-                  id="filter-reporter"
-                  value={filters.reporterEmployeeId ?? ""}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, reporterEmployeeId: event.target.value || undefined }))}
-                >
-                  <option value="">Toți</option>
-                  {(employeesQuery.data?.items ?? []).map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.fullName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="filter-status">Status</label>
-                <select id="filter-status" value={filters.status ?? ""} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value as HelpdeskTicketStatus || undefined }))}>
-                  <option value="">Toate</option>
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {STATUS_LABELS[status]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="filter-priority">Prioritate</label>
-                <select id="filter-priority" value={filters.priority ?? ""} onChange={(event) => setFilters((prev) => ({ ...prev, priority: event.target.value as HelpdeskTicketPriority || undefined }))}>
-                  <option value="">Toate</option>
-                  {PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {PRIORITY_LABELS[priority]}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FieldSelect
+                id="filter-reporter"
+                label="Solicitant (angajat)"
+                value={filters.reporterEmployeeId ?? ""}
+                onChange={(reporterEmployeeId) =>
+                  setFilters((prev) => ({ ...prev, reporterEmployeeId: reporterEmployeeId || undefined }))
+                }
+                allowEmpty
+                emptyLabel="Toți"
+                options={mapToOptions(
+                  employeesQuery.data?.items ?? [],
+                  (employee) => employee.id,
+                  (employee) => employee.fullName
+                )}
+              />
+              <FieldSelect
+                id="filter-status"
+                label="Status"
+                value={filters.status ?? ""}
+                onChange={(status) =>
+                  setFilters((prev) => ({ ...prev, status: (status as HelpdeskTicketStatus) || undefined }))
+                }
+                allowEmpty
+                emptyLabel="Toate"
+                options={STATUSES.map((status) => ({
+                  value: status,
+                  label: STATUS_LABELS[status]
+                }))}
+              />
+              <FieldSelect
+                id="filter-priority"
+                label="Prioritate"
+                value={filters.priority ?? ""}
+                onChange={(priority) =>
+                  setFilters((prev) => ({ ...prev, priority: (priority as HelpdeskTicketPriority) || undefined }))
+                }
+                allowEmpty
+                emptyLabel="Toate"
+                options={PRIORITIES.map((priority) => ({
+                  value: priority,
+                  label: PRIORITY_LABELS[priority]
+                }))}
+              />
               <div className="field wide">
                 <label htmlFor="filter-search">Căutare în descriere / solicitant</label>
                 <input id="filter-search" value={filters.search ?? ""} onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value || undefined }))} />
@@ -510,16 +515,18 @@ export function TicketingPage() {
               </div>
 
               <div className="ssm-form-grid">
-                <label className="ticket-move-select">
-                  <span>Mută în status</span>
-                  <select value={openedTicket.status} disabled={moveTicket.isPending} onChange={(event) => moveToStatus(openedTicket, event.target.value as HelpdeskTicketStatus)}>
-                    {STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <FieldSelect
+                  id={`move-status-${openedTicket.id}`}
+                  label="Mută în status"
+                  className="ticket-move-select"
+                  value={openedTicket.status}
+                  disabled={moveTicket.isPending}
+                  onChange={(status) => moveToStatus(openedTicket, status as HelpdeskTicketStatus)}
+                  options={STATUSES.map((status) => ({
+                    value: status,
+                    label: STATUS_LABELS[status]
+                  }))}
+                />
                 <div className="field">
                   <label htmlFor={`assign-${openedTicket.id}`}>Operator ID</label>
                   <input

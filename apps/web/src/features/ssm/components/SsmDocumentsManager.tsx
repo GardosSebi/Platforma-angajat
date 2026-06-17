@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { stringOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   type CreateSsmDocumentRequest,
@@ -191,41 +193,27 @@ export function SsmDocumentsManager() {
               required
             />
           </div>
-          <div className="field">
-            <label htmlFor="doc-type">Tip document</label>
-            <select
-              id="doc-type"
-              value={createPayload.type}
-              onChange={(event) =>
-                setCreatePayload((prev) => ({ ...prev, type: event.target.value as CreateSsmDocumentRequest["type"] }))
-              }
-            >
-              {SSM_DOCUMENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="doc-target-type">Alocare</label>
-            <select
-              id="doc-target-type"
-              value={createPayload.targetType}
-              onChange={(event) =>
-                setCreatePayload((prev) => ({
-                  ...prev,
-                  targetType: event.target.value as CreateSsmDocumentRequest["targetType"]
-                }))
-              }
-            >
-              {SSM_DOCUMENT_TARGET_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="doc-type"
+            label="Tip document"
+            value={createPayload.type}
+            onChange={(type) =>
+              setCreatePayload((prev) => ({ ...prev, type: type as CreateSsmDocumentRequest["type"] }))
+            }
+            options={stringOptions(SSM_DOCUMENT_TYPES)}
+          />
+          <FieldSelect
+            id="doc-target-type"
+            label="Alocare"
+            value={createPayload.targetType}
+            onChange={(targetType) =>
+              setCreatePayload((prev) => ({
+                ...prev,
+                targetType: targetType as CreateSsmDocumentRequest["targetType"]
+              }))
+            }
+            options={stringOptions(SSM_DOCUMENT_TARGET_TYPES)}
+          />
           <div className="field">
             <label htmlFor="doc-target-label">Etichetă alocare</label>
             <input
@@ -301,36 +289,33 @@ export function SsmDocumentsManager() {
               value={filters.q}
               onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))}
             />
-            <select value={filters.type} onChange={(event) => setFilters((prev) => ({ ...prev, type: event.target.value }))}>
-              <option value="">Toate tipurile</option>
-              {SSM_DOCUMENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <select
+            <FieldSelect
+              variant="inline"
+              id="doc-filter-type"
+              value={filters.type}
+              onChange={(type) => setFilters((prev) => ({ ...prev, type }))}
+              allowEmpty
+              emptyLabel="Toate tipurile"
+              options={stringOptions(SSM_DOCUMENT_TYPES)}
+            />
+            <FieldSelect
+              variant="inline"
+              id="doc-filter-target"
               value={filters.targetType}
-              onChange={(event) => setFilters((prev) => ({ ...prev, targetType: event.target.value }))}
-            >
-              <option value="">Toate alocările</option>
-              {SSM_DOCUMENT_TARGET_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={(targetType) => setFilters((prev) => ({ ...prev, targetType }))}
+              allowEmpty
+              emptyLabel="Toate alocările"
+              options={stringOptions(SSM_DOCUMENT_TARGET_TYPES)}
+            />
+            <FieldSelect
+              variant="inline"
+              id="doc-filter-status"
               value={filters.status}
-              onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
-            >
-              <option value="">Toate statusurile</option>
-              {STATUS_OPTIONS.filter(Boolean).map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+              onChange={(status) => setFilters((prev) => ({ ...prev, status }))}
+              allowEmpty
+              emptyLabel="Toate statusurile"
+              options={stringOptions(STATUS_OPTIONS.filter(Boolean) as string[])}
+            />
             <label className="inline-check">
               <input
                 type="checkbox"

@@ -14,6 +14,8 @@ import {
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import type { EmployeeItem, UpdateEmployeePayload } from "../../master-data/api/master-data.api";
 
@@ -282,21 +284,19 @@ export function AdminOrganizationTab() {
                     required
                   />
                 </div>
-                <div className="field">
-                  <label htmlFor="org-dep-ws">Punct de lucru</label>
-                  <select
-                    id="org-dep-ws"
-                    value={orgEdit.worksiteId}
-                    onChange={(e) => setOrgEdit({ ...orgEdit, worksiteId: e.target.value })}
-                  >
-                    <option value="">— (fără punct de lucru)</option>
-                    {(worksitesLookup.data?.items ?? []).map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FieldSelect
+                  id="org-dep-ws"
+                  label="Punct de lucru"
+                  value={orgEdit.worksiteId}
+                  onChange={(worksiteId) => setOrgEdit({ ...orgEdit, worksiteId })}
+                  allowEmpty
+                  emptyLabel="— (fără punct de lucru)"
+                  options={mapToOptions(
+                    worksitesLookup.data?.items ?? [],
+                    (w) => w.id,
+                    (w) => w.name
+                  )}
+                />
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -328,21 +328,19 @@ export function AdminOrganizationTab() {
                     required
                   />
                 </div>
-                <div className="field">
-                  <label htmlFor="org-job-dep">Departament</label>
-                  <select
-                    id="org-job-dep"
-                    value={orgEdit.departmentId}
-                    onChange={(e) => setOrgEdit({ ...orgEdit, departmentId: e.target.value })}
-                  >
-                    <option value="">— (fără departament)</option>
-                    {(departmentsLookup.data?.items ?? []).map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.code} — {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FieldSelect
+                  id="org-job-dep"
+                  label="Departament"
+                  value={orgEdit.departmentId}
+                  onChange={(departmentId) => setOrgEdit({ ...orgEdit, departmentId })}
+                  allowEmpty
+                  emptyLabel="— (fără departament)"
+                  options={mapToOptions(
+                    departmentsLookup.data?.items ?? [],
+                    (d) => d.id,
+                    (d) => `${d.code} — ${d.name}`
+                  )}
+                />
                 <div className="field">
                   <label htmlFor="org-job-cor">Cod COR</label>
                   <input
@@ -401,64 +399,58 @@ export function AdminOrganizationTab() {
                     placeholder={orgEdit.cnp === "***" ? " mascat — introduceți valoarea nouă pentru a schimba" : ""}
                   />
                 </div>
-                <div className="field">
-                  <label htmlFor="org-em-ws">Punct de lucru</label>
-                  <select
-                    id="org-em-ws"
-                    value={orgEdit.worksiteId}
-                    onChange={(e) =>
-                      setOrgEdit({
-                        ...orgEdit,
-                        worksiteId: e.target.value,
-                        departmentId: "",
-                        jobPositionId: ""
-                      })
-                    }
-                  >
-                    <option value="">—</option>
-                    {(worksitesLookup.data?.items ?? []).map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label htmlFor="org-em-dep">Departament</label>
-                  <select
-                    id="org-em-dep"
-                    value={orgEdit.departmentId}
-                    onChange={(e) =>
-                      setOrgEdit({
-                        ...orgEdit,
-                        departmentId: e.target.value,
-                        jobPositionId: ""
-                      })
-                    }
-                  >
-                    <option value="">—</option>
-                    {filteredDepartmentsForEmployee.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.code} — {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label htmlFor="org-em-job">Post</label>
-                  <select
-                    id="org-em-job"
-                    value={orgEdit.jobPositionId}
-                    onChange={(e) => setOrgEdit({ ...orgEdit, jobPositionId: e.target.value })}
-                  >
-                    <option value="">—</option>
-                    {filteredPositionsForEmployee.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {j.code} — {j.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FieldSelect
+                  id="org-em-ws"
+                  label="Punct de lucru"
+                  value={orgEdit.worksiteId}
+                  onChange={(worksiteId) =>
+                    setOrgEdit({
+                      ...orgEdit,
+                      worksiteId,
+                      departmentId: "",
+                      jobPositionId: ""
+                    })
+                  }
+                  allowEmpty
+                  emptyLabel="—"
+                  options={mapToOptions(
+                    worksitesLookup.data?.items ?? [],
+                    (w) => w.id,
+                    (w) => w.name
+                  )}
+                />
+                <FieldSelect
+                  id="org-em-dep"
+                  label="Departament"
+                  value={orgEdit.departmentId}
+                  onChange={(departmentId) =>
+                    setOrgEdit({
+                      ...orgEdit,
+                      departmentId,
+                      jobPositionId: ""
+                    })
+                  }
+                  allowEmpty
+                  emptyLabel="—"
+                  options={mapToOptions(
+                    filteredDepartmentsForEmployee,
+                    (d) => d.id,
+                    (d) => `${d.code} — ${d.name}`
+                  )}
+                />
+                <FieldSelect
+                  id="org-em-job"
+                  label="Post"
+                  value={orgEdit.jobPositionId}
+                  onChange={(jobPositionId) => setOrgEdit({ ...orgEdit, jobPositionId })}
+                  allowEmpty
+                  emptyLabel="—"
+                  options={mapToOptions(
+                    filteredPositionsForEmployee,
+                    (j) => j.id,
+                    (j) => `${j.code} — ${j.name}`
+                  )}
+                />
                 <div className="field">
                   <label htmlFor="org-em-hire">Data angajării</label>
                   <input

@@ -9,6 +9,8 @@ import {
   useJobPositionsLookup,
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
 import {
   useAddRiskAssessmentVersion,
   useArchiveRiskAssessment,
@@ -202,32 +204,34 @@ export function SsmRiskManager() {
               <label htmlFor="risk-title-input">Titlu</label>
               <input id="risk-title-input" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} required />
             </div>
-            <div className="field">
-              <label htmlFor="risk-target-type">Țintă</label>
-              <select
-                id="risk-target-type"
-                value={form.targetType}
-                onChange={(e) => setForm((p) => ({ ...p, targetType: e.target.value as SsmRiskTargetType, targetId: "" }))}
-              >
-                {TARGET_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              {targetOptions.length === 0 ? <p className="field-hint">Nu există date pentru ținta selectată. Rulează seed-ul extins.</p> : null}
-            </div>
-            <div className="field">
-              <label htmlFor="risk-target-id">Post / punct / departament</label>
-              <select id="risk-target-id" value={form.targetId} onChange={(e) => setForm((p) => ({ ...p, targetId: e.target.value }))} required>
-                <option value="">Selectează ținta</option>
-                {targetOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FieldSelect
+              id="risk-target-type"
+              label="Țintă"
+              value={form.targetType}
+              onChange={(targetType) =>
+                setForm((p) => ({ ...p, targetType: targetType as SsmRiskTargetType, targetId: "" }))
+              }
+              options={stringOptions(TARGET_TYPES)}
+              hint={
+                targetOptions.length === 0
+                  ? "Nu există date pentru ținta selectată. Rulează seed-ul extins."
+                  : undefined
+              }
+            />
+            <FieldSelect
+              id="risk-target-id"
+              label="Post / punct / departament"
+              value={form.targetId}
+              onChange={(targetId) => setForm((p) => ({ ...p, targetId }))}
+              required
+              allowEmpty
+              emptyLabel="Selectează ținta"
+              options={mapToOptions(
+                targetOptions,
+                (option) => option.id,
+                (option) => option.label
+              )}
+            />
             <div className="field">
               <label htmlFor="risk-level">Nivel risc global</label>
               <input id="risk-level" type="number" min={1} max={25} value={form.riskLevel} onChange={(e) => setForm((p) => ({ ...p, riskLevel: Number(e.target.value || 1) }))} />
@@ -261,19 +265,24 @@ export function SsmRiskManager() {
               <span className="ssm-chip">{assessmentItems.length} total</span>
             </div>
             <div className="ssm-filters">
-              <select value={filters.targetType} onChange={(e) => setFilters((p) => ({ ...p, targetType: e.target.value }))}>
-                <option value="">Toate țintele</option>
-                {TARGET_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              <select value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
-                <option value="">Toate statusurile</option>
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="ARCHIVED">ARCHIVED</option>
-              </select>
+              <FieldSelect
+                variant="inline"
+                id="risk-filter-target"
+                value={filters.targetType}
+                onChange={(targetType) => setFilters((p) => ({ ...p, targetType }))}
+                allowEmpty
+                emptyLabel="Toate țintele"
+                options={stringOptions(TARGET_TYPES)}
+              />
+              <FieldSelect
+                variant="inline"
+                id="risk-filter-status"
+                value={filters.status}
+                onChange={(status) => setFilters((p) => ({ ...p, status }))}
+                allowEmpty
+                emptyLabel="Toate statusurile"
+                options={stringOptions(["ACTIVE", "ARCHIVED"])}
+              />
             </div>
             <div className="ssm-doc-items">
               {assessmentsQuery.isLoading ? <p className="field-hint">Se încarcă evaluările...</p> : null}

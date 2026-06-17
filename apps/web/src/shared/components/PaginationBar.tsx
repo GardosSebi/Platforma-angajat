@@ -1,4 +1,6 @@
 import type { PaginatedResult } from "@repo/shared-types/pagination";
+import { FieldSelect } from "./FieldSelect";
+import { stringOptions } from "./field-select-options";
 import { PAGE_SIZE_OPTIONS } from "../preferences/page-size-preference";
 
 type PaginationBarProps = {
@@ -55,17 +57,14 @@ export function PaginationBar({
         {onPageSizeChange ? (
           <label className="pagination-bar-size">
             Pe pagină{" "}
-            <select
-              value={pageSize}
+            <FieldSelect
+              variant="inline"
+              id="pagination-page-size"
+              value={String(pageSize)}
               disabled={disabled}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => onPageSizeChange(Number(next))}
+              options={stringOptions(PAGE_SIZE_OPTIONS.map(String))}
+            />
           </label>
         ) : null}
       </div>

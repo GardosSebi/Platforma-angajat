@@ -24,6 +24,8 @@ import {
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { surveysApi } from "../api/surveys.api";
 import {
@@ -381,22 +383,18 @@ export function SurveysPage() {
                     onChange={(event) => setSurveyForm((prev) => ({ ...prev, description: event.target.value }))}
                   />
                 </div>
-                <div className="field">
-                  <label htmlFor="survey-type">Tip sondaj</label>
-                  <select
-                    id="survey-type"
-                    value={surveyForm.surveyType ?? "ENGAGEMENT"}
-                    onChange={(event) =>
-                      setSurveyForm((prev) => ({ ...prev, surveyType: event.target.value as SurveyType }))
-                    }
-                  >
-                    {SURVEY_TYPE_OPTIONS.map((type) => (
-                      <option key={type} value={type}>
-                        {SURVEY_TYPE_LABELS[type]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FieldSelect
+                  id="survey-type"
+                  label="Tip sondaj"
+                  value={surveyForm.surveyType ?? "ENGAGEMENT"}
+                  onChange={(surveyType) =>
+                    setSurveyForm((prev) => ({ ...prev, surveyType: surveyType as SurveyType }))
+                  }
+                  options={SURVEY_TYPE_OPTIONS.map((type) => ({
+                    value: type,
+                    label: SURVEY_TYPE_LABELS[type]
+                  }))}
+                />
                 <div className="field">
                   <label htmlFor="survey-closes">Închidere automată</label>
                   <input
@@ -406,34 +404,37 @@ export function SurveysPage() {
                     onChange={(event) => setSurveyForm((prev) => ({ ...prev, closesAtInput: event.target.value }))}
                   />
                 </div>
-                <div className="field">
-                  <label htmlFor="survey-audience">Destinatari</label>
-                  <select
-                    id="survey-audience"
-                    value={surveyForm.audienceType}
-                    onChange={(event) =>
-                      setSurveyForm((prev) => ({ ...prev, audienceType: event.target.value as SurveyAudienceType, audienceRefId: "", audienceLabel: "" }))
-                    }
-                  >
-                    {AUDIENCE_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {AUDIENCE_LABELS[type]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FieldSelect
+                  id="survey-audience"
+                  label="Destinatari"
+                  value={surveyForm.audienceType ?? "ALL"}
+                  onChange={(audienceType) =>
+                    setSurveyForm((prev) => ({
+                      ...prev,
+                      audienceType: audienceType as SurveyAudienceType,
+                      audienceRefId: "",
+                      audienceLabel: ""
+                    }))
+                  }
+                  options={AUDIENCE_TYPES.map((type) => ({
+                    value: type,
+                    label: AUDIENCE_LABELS[type]
+                  }))}
+                />
                 {audienceOptions.length > 0 ? (
-                  <div className="field">
-                    <label htmlFor="survey-audience-ref">Segment</label>
-                    <select id="survey-audience-ref" value={surveyForm.audienceRefId ?? ""} onChange={(event) => onAudienceRefChange(event.target.value)}>
-                      <option value="">Selectează segmentul</option>
-                      {audienceOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <FieldSelect
+                    id="survey-audience-ref"
+                    label="Segment"
+                    value={surveyForm.audienceRefId ?? ""}
+                    onChange={onAudienceRefChange}
+                    allowEmpty
+                    emptyLabel="Selectează segmentul"
+                    options={mapToOptions(
+                      audienceOptions,
+                      (option) => option.id,
+                      (option) => option.label
+                    )}
+                  />
                 ) : null}
                 {surveyForm.audienceType === "CUSTOM" ? (
                   <div className="field wide">
@@ -458,20 +459,16 @@ export function SurveysPage() {
                 </div>
               </div>
               <div className="ssm-form-grid">
-                <div className="field">
-                  <label htmlFor="question-type">Tip întrebare</label>
-                  <select
-                    id="question-type"
-                    value={questionForm.type}
-                    onChange={(event) => setQuestionForm((prev) => ({ ...prev, type: event.target.value as SurveyQuestionType }))}
-                  >
-                    {QUESTION_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {SURVEY_QUESTION_TYPE_LABELS[type]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FieldSelect
+                  id="question-type"
+                  label="Tip întrebare"
+                  value={questionForm.type}
+                  onChange={(type) => setQuestionForm((prev) => ({ ...prev, type: type as SurveyQuestionType }))}
+                  options={QUESTION_TYPES.map((type) => ({
+                    value: type,
+                    label: SURVEY_QUESTION_TYPE_LABELS[type]
+                  }))}
+                />
                 <div className="field wide">
                   <label htmlFor="question-title">Întrebare</label>
                   <input id="question-title" value={questionForm.title} onChange={(event) => setQuestionForm((prev) => ({ ...prev, title: event.target.value }))} />

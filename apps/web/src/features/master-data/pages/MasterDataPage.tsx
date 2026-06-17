@@ -4,6 +4,8 @@ import type {
   CreateJobPositionPayload,
   CreateWorksitePayload
 } from "../api/master-data.api";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import {
   useCreateDepartment,
   useCreateJobPosition,
@@ -152,21 +154,19 @@ export function MasterDataPage() {
               required
             />
           </div>
-          <div className="field">
-            <label htmlFor="md-department-worksite">Punct de lucru (opțional)</label>
-            <select
-              id="md-department-worksite"
-              value={departmentForm.worksiteId ?? ""}
-              onChange={(event) => setDepartmentForm((prev) => ({ ...prev, worksiteId: event.target.value }))}
-            >
-              <option value="">Neselectat</option>
-              {(worksitesLookup.data?.items ?? []).map((worksite) => (
-                <option key={worksite.id} value={worksite.id}>
-                  {worksite.code} - {worksite.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="md-department-worksite"
+            label="Punct de lucru (opțional)"
+            value={departmentForm.worksiteId ?? ""}
+            onChange={(worksiteId) => setDepartmentForm((prev) => ({ ...prev, worksiteId }))}
+            allowEmpty
+            emptyLabel="Neselectat"
+            options={mapToOptions(
+              worksitesLookup.data?.items ?? [],
+              (worksite) => worksite.id,
+              (worksite) => `${worksite.code} - ${worksite.name}`
+            )}
+          />
           <button className="btn-primary" type="submit" disabled={createDepartment.isPending}>
             {createDepartment.isPending ? "Se salvează..." : "Adaugă departament"}
           </button>
@@ -195,21 +195,19 @@ export function MasterDataPage() {
               required
             />
           </div>
-          <div className="field">
-            <label htmlFor="md-job-department">Departament (opțional)</label>
-            <select
-              id="md-job-department"
-              value={jobForm.departmentId ?? ""}
-              onChange={(event) => setJobForm((prev) => ({ ...prev, departmentId: event.target.value }))}
-            >
-              <option value="">Neselectat</option>
-              {(departmentsLookup.data?.items ?? []).map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.code} - {department.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FieldSelect
+            id="md-job-department"
+            label="Departament (opțional)"
+            value={jobForm.departmentId ?? ""}
+            onChange={(departmentId) => setJobForm((prev) => ({ ...prev, departmentId }))}
+            allowEmpty
+            emptyLabel="Neselectat"
+            options={mapToOptions(
+              departmentsLookup.data?.items ?? [],
+              (department) => department.id,
+              (department) => `${department.code} - ${department.name}`
+            )}
+          />
           <button className="btn-primary" type="submit" disabled={createJobPosition.isPending}>
             {createJobPosition.isPending ? "Se salvează..." : "Adaugă post"}
           </button>

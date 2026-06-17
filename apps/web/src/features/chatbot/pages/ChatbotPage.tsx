@@ -18,6 +18,8 @@ import {
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   useAnnouncements,
@@ -406,36 +408,32 @@ export function ChatbotPage() {
               </div>
             </div>
             <div className="ssm-form-grid">
-              <div className="field wide">
-                <label htmlFor="template-select">Șablon</label>
-                <select id="template-select" value={selectedTemplateId} onChange={(event) => selectTemplate(event.target.value)}>
-                  <option value="">Fără șablon</option>
-                  {(templatesQuery.data?.items ?? []).map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="announcement-category">Categorie mesaj</label>
-                <select
-                  id="announcement-category"
-                  value={announcementForm.category ?? "GENERAL"}
-                  onChange={(event) =>
-                    setAnnouncementForm((prev) => ({
-                      ...prev,
-                      category: event.target.value as CommunicationCategory
-                    }))
-                  }
-                >
-                  {COMMUNICATION_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {COMMUNICATION_CATEGORY_LABELS[cat]}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FieldSelect
+                id="template-select"
+                label="Șablon"
+                className="wide"
+                value={selectedTemplateId}
+                onChange={selectTemplate}
+                allowEmpty
+                emptyLabel="Fără șablon"
+                options={mapToOptions(
+                  templatesQuery.data?.items ?? [],
+                  (template) => template.id,
+                  (template) => template.name
+                )}
+              />
+              <FieldSelect
+                id="announcement-category"
+                label="Categorie mesaj"
+                value={announcementForm.category ?? "GENERAL"}
+                onChange={(category) =>
+                  setAnnouncementForm((prev) => ({
+                    ...prev,
+                    category: category as CommunicationCategory
+                  }))
+                }
+                options={stringOptions(COMMUNICATION_CATEGORIES, (cat) => COMMUNICATION_CATEGORY_LABELS[cat])}
+              />
               <div className="field wide">
                 <label htmlFor="announcement-title">Titlu</label>
                 <input
@@ -454,22 +452,15 @@ export function ChatbotPage() {
                   required
                 />
               </div>
-              <div className="field">
-                <label htmlFor="content-type">Tip conținut</label>
-                <select
-                  id="content-type"
-                  value={announcementForm.contentType}
-                  onChange={(event) =>
-                    setAnnouncementForm((prev) => ({ ...prev, contentType: event.target.value as CommunicationContentType }))
-                  }
-                >
-                  {CONTENT_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {CONTENT_TYPE_LABELS[type]}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FieldSelect
+                id="content-type"
+                label="Tip conținut"
+                value={announcementForm.contentType}
+                onChange={(contentType) =>
+                  setAnnouncementForm((prev) => ({ ...prev, contentType: contentType as CommunicationContentType }))
+                }
+                options={stringOptions(CONTENT_TYPES, (type) => CONTENT_TYPE_LABELS[type])}
+              />
               <div className="field">
                 <label htmlFor="content-url">Link / document</label>
                 <input
@@ -479,39 +470,34 @@ export function ChatbotPage() {
                   placeholder="https://..."
                 />
               </div>
-              <div className="field">
-                <label htmlFor="audience-type">Destinatari</label>
-                <select
-                  id="audience-type"
-                  value={announcementForm.audienceType}
-                  onChange={(event) =>
-                    setAnnouncementForm((prev) => ({
-                      ...prev,
-                      audienceType: event.target.value as CommunicationAudienceType,
-                      audienceRefId: "",
-                      audienceLabel: ""
-                    }))
-                  }
-                >
-                  {audienceTypesForForm.map((type) => (
-                    <option key={type} value={type}>
-                      {AUDIENCE_LABELS[type]}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FieldSelect
+                id="audience-type"
+                label="Destinatari"
+                value={announcementForm.audienceType}
+                onChange={(audienceType) =>
+                  setAnnouncementForm((prev) => ({
+                    ...prev,
+                    audienceType: audienceType as CommunicationAudienceType,
+                    audienceRefId: "",
+                    audienceLabel: ""
+                  }))
+                }
+                options={stringOptions(audienceTypesForForm, (type) => AUDIENCE_LABELS[type])}
+              />
               {audienceOptions.length > 0 ? (
-                <div className="field">
-                  <label htmlFor="audience-ref">Segment</label>
-                  <select id="audience-ref" value={announcementForm.audienceRefId ?? ""} onChange={(event) => onAudienceRefChange(event.target.value)}>
-                    <option value="">Selectează segmentul</option>
-                    {audienceOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <FieldSelect
+                  id="audience-ref"
+                  label="Segment"
+                  value={announcementForm.audienceRefId ?? ""}
+                  onChange={onAudienceRefChange}
+                  allowEmpty
+                  emptyLabel="Selectează segmentul"
+                  options={mapToOptions(
+                    audienceOptions,
+                    (option) => option.id,
+                    (option) => option.label
+                  )}
+                />
               ) : null}
               {announcementForm.audienceType === "CUSTOM" ? (
                 <div className="field wide">
@@ -525,17 +511,18 @@ export function ChatbotPage() {
                   <p className="field-hint">Angajați disponibili: {(employeesOptions.data?.items ?? []).slice(0, 4).map((item) => item.fullName).join(", ")}</p>
                 </div>
               ) : null}
-              <div className="field">
-                <label htmlFor="announcement-status">Stare inițială</label>
-                <select
-                  id="announcement-status"
-                  value={announcementForm.status}
-                  onChange={(event) => setAnnouncementForm((prev) => ({ ...prev, status: event.target.value as "DRAFT" | "PUBLISHED" }))}
-                >
-                  <option value="DRAFT">Ciornă</option>
-                  <option value="PUBLISHED">Publicat / programat</option>
-                </select>
-              </div>
+              <FieldSelect
+                id="announcement-status"
+                label="Stare inițială"
+                value={announcementForm.status}
+                onChange={(status) =>
+                  setAnnouncementForm((prev) => ({ ...prev, status: status as "DRAFT" | "PUBLISHED" }))
+                }
+                options={[
+                  { value: "DRAFT", label: "Ciornă" },
+                  { value: "PUBLISHED", label: "Publicat / programat" }
+                ]}
+              />
               <div className="field">
                 <label htmlFor="publish-at">Programare</label>
                 <input
@@ -673,20 +660,15 @@ export function ChatbotPage() {
               <label htmlFor="template-name">Nume șablon</label>
               <input id="template-name" value={templateForm.name} onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))} required />
             </div>
-            <div className="field">
-              <label htmlFor="template-content-type">Tip</label>
-              <select
-                id="template-content-type"
-                value={templateForm.contentType}
-                onChange={(event) => setTemplateForm((prev) => ({ ...prev, contentType: event.target.value as CommunicationContentType }))}
-              >
-                {CONTENT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {CONTENT_TYPE_LABELS[type]}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FieldSelect
+              id="template-content-type"
+              label="Tip"
+              value={templateForm.contentType}
+              onChange={(contentType) =>
+                setTemplateForm((prev) => ({ ...prev, contentType: contentType as CommunicationContentType }))
+              }
+              options={stringOptions(CONTENT_TYPES, (type) => CONTENT_TYPE_LABELS[type])}
+            />
             <div className="field wide">
               <label htmlFor="template-title">Titlu</label>
               <input id="template-title" value={templateForm.title} onChange={(event) => setTemplateForm((prev) => ({ ...prev, title: event.target.value }))} required />
