@@ -11,7 +11,7 @@ import type {
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
-import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import { ssmApi } from "../api/ssm.api";
 import {
   useAccidentCases,
@@ -204,14 +204,14 @@ export function SsmAccidentsManager() {
             label="Tip"
             value={caseForm.type}
             onChange={(type) => setCaseForm((p) => ({ ...p, type: type as SsmAccidentType }))}
-            options={stringOptions(ACCIDENT_TYPES, typeLabel)}
+            options={ACCIDENT_TYPES.map((type) => ({ value: type, label: typeLabel(type) }))}
           />
           <FieldSelect
             id="acc-severity"
             label="Severitate"
             value={caseForm.severity}
             onChange={(severity) => setCaseForm((p) => ({ ...p, severity: severity as SsmAccidentSeverity }))}
-            options={stringOptions(ACCIDENT_SEVERITIES, severityLabel)}
+            options={ACCIDENT_SEVERITIES.map((severity) => ({ value: severity, label: severityLabel(severity) }))}
           />
           <div className="field">
             <label htmlFor="acc-title">Titlu</label>

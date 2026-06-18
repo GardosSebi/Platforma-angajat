@@ -20,7 +20,6 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { TrainingTypeSelect } from "./TrainingTypeSelect";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
-import { stringOptions } from "../../../shared/components/field-select-options";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 import {
   useCompleteTest,
@@ -331,7 +330,10 @@ export function SsmTrainingSuiteManager() {
               label="Categorie legală"
               value={typeForm.category ?? "PERIODIC"}
               onChange={(category) => onCategoryChange(category as SsmTrainingCategory)}
-              options={stringOptions(TRAINING_CATEGORIES, trainingCategoryLabel)}
+              options={TRAINING_CATEGORIES.map((category) => ({
+                value: category,
+                label: trainingCategoryLabel(category)
+              }))}
             />
             <div className="field">
               <label htmlFor="training-legal-hours">Durată minimă legală (ore)</label>

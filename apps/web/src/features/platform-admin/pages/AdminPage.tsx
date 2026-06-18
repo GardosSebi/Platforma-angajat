@@ -883,7 +883,7 @@ export function AdminPage() {
               <FieldSelect
                 id="static-audience"
                 label="Audiență"
-                value={staticForm.audienceType}
+                value={staticForm.audienceType ?? "ALL"}
                 onChange={(audienceType) =>
                   setStaticForm((f) => ({
                     ...f,

@@ -19,7 +19,7 @@ import {
 } from "../../master-data/hooks/useMasterData";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
-import { mapToOptions, stringOptions } from "../../../shared/components/field-select-options";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   useAnnouncements,
@@ -432,7 +432,10 @@ export function ChatbotPage() {
                     category: category as CommunicationCategory
                   }))
                 }
-                options={stringOptions(COMMUNICATION_CATEGORIES, (cat) => COMMUNICATION_CATEGORY_LABELS[cat])}
+                options={COMMUNICATION_CATEGORIES.map((cat) => ({
+                  value: cat,
+                  label: COMMUNICATION_CATEGORY_LABELS[cat]
+                }))}
               />
               <div className="field wide">
                 <label htmlFor="announcement-title">Titlu</label>
@@ -455,11 +458,14 @@ export function ChatbotPage() {
               <FieldSelect
                 id="content-type"
                 label="Tip conținut"
-                value={announcementForm.contentType}
+                value={announcementForm.contentType ?? "TEXT"}
                 onChange={(contentType) =>
                   setAnnouncementForm((prev) => ({ ...prev, contentType: contentType as CommunicationContentType }))
                 }
-                options={stringOptions(CONTENT_TYPES, (type) => CONTENT_TYPE_LABELS[type])}
+                options={CONTENT_TYPES.map((type) => ({
+                  value: type,
+                  label: CONTENT_TYPE_LABELS[type]
+                }))}
               />
               <div className="field">
                 <label htmlFor="content-url">Link / document</label>
@@ -473,7 +479,7 @@ export function ChatbotPage() {
               <FieldSelect
                 id="audience-type"
                 label="Destinatari"
-                value={announcementForm.audienceType}
+                value={announcementForm.audienceType ?? "ALL"}
                 onChange={(audienceType) =>
                   setAnnouncementForm((prev) => ({
                     ...prev,
@@ -482,7 +488,10 @@ export function ChatbotPage() {
                     audienceLabel: ""
                   }))
                 }
-                options={stringOptions(audienceTypesForForm, (type) => AUDIENCE_LABELS[type])}
+                options={audienceTypesForForm.map((type) => ({
+                  value: type,
+                  label: AUDIENCE_LABELS[type]
+                }))}
               />
               {audienceOptions.length > 0 ? (
                 <FieldSelect
@@ -514,7 +523,7 @@ export function ChatbotPage() {
               <FieldSelect
                 id="announcement-status"
                 label="Stare inițială"
-                value={announcementForm.status}
+                value={announcementForm.status ?? "DRAFT"}
                 onChange={(status) =>
                   setAnnouncementForm((prev) => ({ ...prev, status: status as "DRAFT" | "PUBLISHED" }))
                 }
@@ -663,11 +672,14 @@ export function ChatbotPage() {
             <FieldSelect
               id="template-content-type"
               label="Tip"
-              value={templateForm.contentType}
+              value={templateForm.contentType ?? "TEXT"}
               onChange={(contentType) =>
                 setTemplateForm((prev) => ({ ...prev, contentType: contentType as CommunicationContentType }))
               }
-              options={stringOptions(CONTENT_TYPES, (type) => CONTENT_TYPE_LABELS[type])}
+              options={CONTENT_TYPES.map((type) => ({
+                value: type,
+                label: CONTENT_TYPE_LABELS[type]
+              }))}
             />
             <div className="field wide">
               <label htmlFor="template-title">Titlu</label>
