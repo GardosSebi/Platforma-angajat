@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   useMarkAllNotificationsRead,
@@ -9,6 +9,7 @@ import {
 
 export function NotificationBell() {
   const navigate = useNavigate();
+  const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const countQuery = useUnreadNotificationCount();
   const listQuery = useNotifications(false);
@@ -17,6 +18,24 @@ export function NotificationBell() {
 
   const unreadCount = countQuery.data?.unreadCount ?? 0;
   const items = listQuery.data?.items ?? [];
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   const onOpenItem = (id: string, linkPath?: string | null, readAt?: string | null) => {
     if (!readAt) {
@@ -29,7 +48,7 @@ export function NotificationBell() {
   };
 
   return (
-    <div className="notification-bell">
+    <div className="notification-bell" ref={rootRef}>
       <button
         type="button"
         className="notification-bell-trigger"

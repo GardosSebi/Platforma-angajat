@@ -2,20 +2,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
-import type {
-  CreateSurveyRequest,
-  SurveyAudienceType,
-  SurveyQuestion,
-  SurveyQuestionOption,
-  SurveyQuestionType,
-  SurveyType
-} from "@repo/shared-types/surveys";
-import {
-  SURVEY_QUESTION_TYPE_LABELS,
-  SURVEY_QUESTION_TYPES,
-  SURVEY_TYPE_LABELS,
-  SURVEY_TYPES
-} from "@repo/shared-types/surveys";
+import type { CreateSurveyRequest, SurveyQuestion, SurveyQuestionOption } from "@repo/shared-types/surveys";
+import { surveyQuestionNeedsOptions } from "@repo/shared-types/surveys";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import {
   useDepartmentsLookup,
@@ -23,9 +11,7 @@ import {
   useJobPositionsLookup,
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
-import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
-import { FieldSelect } from "../../../shared/components/FieldSelect";
-import { mapToOptions } from "../../../shared/components/field-select-options";
+import { paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { surveysApi } from "../api/surveys.api";
 import {
@@ -33,45 +19,19 @@ import {
   useCloseSurvey,
   useCreatePublicSurveyLink,
   useCreateSurvey,
-  useSurveyStats,
   useRespondedSurveyIds,
+  useSurveyStats,
   useSurveys,
   useSurveysOverview
 } from "../hooks/useSurveys";
+import { SurveyCreateForm, type QuestionFormState, type SurveyFormState } from "../components/SurveyCreateForm";
+import { SurveyListPanel } from "../components/SurveyListPanel";
+import { SurveyManagePanel } from "../components/SurveyManagePanel";
+import { mutationErrorMessage, type SurveyTab } from "../surveys-shared";
 
-const QUESTION_TYPES = [...SURVEY_QUESTION_TYPES];
-const SURVEY_TYPE_OPTIONS = [...SURVEY_TYPES];
-const AUDIENCE_TYPES: SurveyAudienceType[] = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE", "CUSTOM"];
-
-const SURVEY_STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Ciornă",
-  ACTIVE: "Activ",
-  CLOSED: "Închis",
-  ARCHIVED: "Arhivat"
-};
-
-const AUDIENCE_LABELS: Record<SurveyAudienceType, string> = {
-  ALL: "Toți angajații",
-  WORKSITE: "Punct de lucru",
-  DEPARTMENT: "Departament",
-  JOB_POSITION: "Post",
-  EMPLOYEE_GROUP: "Grup angajați",
-  EMPLOYEE: "Angajat",
-  CUSTOM: "Listă personalizată"
-};
-
-type SurveyForm = Omit<CreateSurveyRequest, "questionSchema" | "conditionalLogic" | "targetEmployeeIds"> & {
-  targetEmployeeIdsCsv: string;
-  closesAtInput: string;
-};
-
-type QuestionForm = Omit<SurveyQuestion, "options"> & {
-  options: SurveyQuestionOption[];
-};
-
-const EMPTY_SURVEY: SurveyForm = {
-  title: "Sondaj satisfacție angajați",
-  description: "Chestionar scurt pentru feedback intern.",
+const EMPTY_SURVEY: SurveyFormState = {
+  title: "",
+  description: "",
   surveyType: "ENGAGEMENT",
   audienceType: "ALL",
   audienceRefId: "",
@@ -81,10 +41,10 @@ const EMPTY_SURVEY: SurveyForm = {
   closesAtInput: ""
 };
 
-const EMPTY_QUESTION: QuestionForm = {
+const EMPTY_QUESTION: QuestionFormState = {
   id: "q1",
   type: "SINGLE_CHOICE",
-  title: "Cum evaluezi experiența în platformă?",
+  title: "",
   required: true,
   options: [
     { value: "Foarte bine", label: "Foarte bine" },
@@ -95,14 +55,6 @@ const EMPTY_QUESTION: QuestionForm = {
   max: 5
 };
 
-function mutationErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "A apărut o eroare neașteptată.";
-}
-
-function formatDate(value?: string | null): string {
-  return value ? new Date(value).toLocaleString() : "-";
-}
-
 function cleanOptions(options: SurveyQuestionOption[]) {
   return options
     .map((option) => option.label.trim())
@@ -112,10 +64,6 @@ function cleanOptions(options: SurveyQuestionOption[]) {
 
 function canOpenSurveyToComplete(roles: string[] | undefined): boolean {
   return hasPermission(roles, "surveys:respond") || hasPermission(roles, "surveys:edit");
-}
-
-function questionNeedsOptions(type: SurveyQuestionType): boolean {
-  return type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE";
 }
 
 export function SurveysPage() {
@@ -136,25 +84,33 @@ export function SurveysPage() {
 
   const surveysPaged = paginationFromResult(surveysQuery.data, surveysPage.page, surveysPage.pageSize);
   const surveys = surveysPaged.items;
-  const [surveyForm, setSurveyForm] = useState<SurveyForm>(EMPTY_SURVEY);
-  const [questionForm, setQuestionForm] = useState<QuestionForm>(EMPTY_QUESTION);
+
+  const [tab, setTab] = useState<SurveyTab>("list");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [surveyForm, setSurveyForm] = useState<SurveyFormState>(EMPTY_SURVEY);
+  const [questionForm, setQuestionForm] = useState<QuestionFormState>(EMPTY_QUESTION);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [selectedSurveyId, setSelectedSurveyId] = useState("");
   const [publicExpiresAt, setPublicExpiresAt] = useState("");
   const [publicResponseLimit, setPublicResponseLimit] = useState("100");
-  const [formError, setFormError] = useState<string | null>(null);
+  const [listFeedback, setListFeedback] = useState<string | null>(null);
+  const [createFeedback, setCreateFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [publicLinkError, setPublicLinkError] = useState<string | null>(null);
   const [openingSurveyId, setOpeningSurveyId] = useState<string | null>(null);
 
-  const statsQuery = useSurveyStats(selectedSurveyId);
+  const statsQuery = useSurveyStats(selectedSurveyId || undefined);
   const canComplete = canOpenSurveyToComplete(session?.roles);
   const respondedIdsQuery = useRespondedSurveyIds(canComplete);
   const respondedSurveyIds = respondedIdsQuery.data ?? new Set<string>();
   const kpi = overviewQuery.data?.kpi;
   const selectedSurvey = surveys.find((survey) => survey.id === selectedSurveyId);
+
   const currentQuestionOptions = cleanOptions(questionForm.options);
   const currentQuestionReady =
-    questionForm.title.trim().length > 0 && (!questionNeedsOptions(questionForm.type) || currentQuestionOptions.length > 0);
+    questionForm.title.trim().length > 0 &&
+    (!surveyQuestionNeedsOptions(questionForm.type) || currentQuestionOptions.length > 0);
   const canSaveSurvey = questions.length > 0 || currentQuestionReady;
 
   useEffect(() => {
@@ -162,6 +118,15 @@ export function SurveysPage() {
       setSelectedSurveyId(surveys[0].id);
     }
   }, [selectedSurveyId, surveys]);
+
+  const filteredSurveys = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return surveys.filter((item) => {
+      if (statusFilter && item.status !== statusFilter) return false;
+      if (!query) return true;
+      return item.title.toLowerCase().includes(query);
+    });
+  }, [surveys, search, statusFilter]);
 
   const audienceOptions = useMemo(() => {
     if (surveyForm.audienceType === "WORKSITE") {
@@ -185,57 +150,55 @@ export function SurveysPage() {
     worksitesLookup.data?.items
   ]);
 
+  const buildQuestionFromForm = (position: number): SurveyQuestion => ({
+    id: `q${position}`,
+    title: questionForm.title.trim(),
+    type: questionForm.type,
+    required: questionForm.required,
+    options: surveyQuestionNeedsOptions(questionForm.type) ? cleanOptions(questionForm.options) : undefined,
+    min: questionForm.type === "SCALE" ? questionForm.min : undefined,
+    max: questionForm.type === "SCALE" ? questionForm.max : undefined
+  });
+
   const addQuestion = () => {
-    setFormError(null);
+    setCreateFeedback(null);
     if (!currentQuestionReady) {
-      setFormError("Completează întrebarea și, dacă este cazul, opțiunile.");
+      setCreateFeedback({ type: "error", message: "Completează întrebarea și, dacă este cazul, opțiunile." });
       return;
     }
     setQuestions((prev) => [...prev, buildQuestionFromForm(prev.length + 1)]);
     setQuestionForm((prev) => ({ ...prev, id: `q${questions.length + 2}`, title: "" }));
   };
 
-  const updateQuestionOption = (index: number, label: string) => {
-    setQuestionForm((prev) => ({
-      ...prev,
-      options: prev.options.map((option, optionIndex) => (optionIndex === index ? { value: label, label } : option))
-    }));
-  };
-
-  const addQuestionOption = () => {
-    setQuestionForm((prev) => ({ ...prev, options: [...prev.options, { value: "", label: "" }] }));
-  };
-
-  const removeQuestionOption = (index: number) => {
-    setQuestionForm((prev) => ({ ...prev, options: prev.options.filter((_, optionIndex) => optionIndex !== index) }));
-  };
-
-  const buildQuestionFromForm = (position: number): SurveyQuestion => ({
-    id: `q${position}`,
-    title: questionForm.title.trim(),
-    type: questionForm.type,
-    required: questionForm.required,
-    options: questionNeedsOptions(questionForm.type) ? cleanOptions(questionForm.options) : undefined,
-    min: questionForm.type === "SCALE" ? questionForm.min : undefined,
-    max: questionForm.type === "SCALE" ? questionForm.max : undefined
-  });
-
   const onAudienceRefChange = (value: string) => {
     const option = audienceOptions.find((item) => item.id === value);
     setSurveyForm((prev) => ({ ...prev, audienceRefId: value, audienceLabel: option?.label ?? "" }));
   };
 
+  const openCreate = () => {
+    setCreateFeedback(null);
+    setTab("create");
+  };
+
+  const openManage = (surveyId: string) => {
+    setSelectedSurveyId(surveyId);
+    setListFeedback(null);
+    setPublicLinkError(null);
+    setDownloadError(null);
+    setTab("manage");
+  };
+
   const onSurveySubmit = (event: FormEvent) => {
     event.preventDefault();
-    setFormError(null);
+    setCreateFeedback(null);
     if (!canSaveSurvey) {
-      setFormError("Adaugă cel puțin o întrebare pentru a salva sondajul.");
+      setCreateFeedback({ type: "error", message: "Adaugă cel puțin o întrebare pentru a salva sondajul." });
       return;
     }
     const questionSchema = questions.length > 0 ? questions : [buildQuestionFromForm(1)];
     const payload: CreateSurveyRequest = {
-      title: surveyForm.title,
-      description: surveyForm.description || undefined,
+      title: surveyForm.title.trim(),
+      description: surveyForm.description?.trim() || undefined,
       surveyType: surveyForm.surveyType,
       closesAt: surveyForm.closesAtInput ? new Date(`${surveyForm.closesAtInput}T23:59:59`).toISOString() : undefined,
       audienceType: surveyForm.audienceType,
@@ -251,9 +214,14 @@ export function SurveysPage() {
     createSurvey.mutate(payload, {
       onSuccess: (created) => {
         setSelectedSurveyId(created.id);
+        setSurveyForm(EMPTY_SURVEY);
         setQuestions([]);
         setQuestionForm(EMPTY_QUESTION);
-        setFormError(null);
+        setCreateFeedback({ type: "success", message: "Sondaj salvat. Poți continua din listă sau gestionare." });
+        setTab("list");
+      },
+      onError: (error) => {
+        setCreateFeedback({ type: "error", message: mutationErrorMessage(error) });
       }
     });
   };
@@ -262,18 +230,18 @@ export function SurveysPage() {
     async (surveyId: string) => {
       const survey = surveys.find((item) => item.id === surveyId);
       if (!survey) {
-        setFormError("Selectați un sondaj din listă.");
+        setListFeedback("Selectați un sondaj din listă.");
         return;
       }
       if (respondedSurveyIds.has(surveyId)) {
-        setFormError("Ați completat deja acest sondaj.");
+        setListFeedback("Ați completat deja acest sondaj.");
         return;
       }
       if (survey.status === "CLOSED" || survey.status === "ARCHIVED") {
-        setFormError("Sondajul este închis sau arhivat și nu mai poate fi completat.");
+        setListFeedback("Sondajul este închis sau arhivat și nu mai poate fi completat.");
         return;
       }
-      setFormError(null);
+      setListFeedback(null);
       setOpeningSurveyId(surveyId);
       try {
         if (survey.status === "DRAFT") {
@@ -281,7 +249,7 @@ export function SurveysPage() {
         }
         navigate(`/surveys/respond/${surveyId}`);
       } catch (error) {
-        setFormError(mutationErrorMessage(error));
+        setListFeedback(mutationErrorMessage(error));
       } finally {
         setOpeningSurveyId(null);
       }
@@ -291,444 +259,170 @@ export function SurveysPage() {
 
   const generatePublicLink = () => {
     if (!selectedSurveyId || !publicExpiresAt) {
-      setFormError("Selectează un sondaj și completează expirarea pentru linkul public.");
+      setPublicLinkError("Completează data de expirare pentru linkul public.");
       return;
     }
-    createPublicLink.mutate({
-      id: selectedSurveyId,
-      payload: {
-        expiresAt: publicExpiresAt,
-        responseLimit: publicResponseLimit ? Number(publicResponseLimit) : undefined
+    setPublicLinkError(null);
+    createPublicLink.mutate(
+      {
+        id: selectedSurveyId,
+        payload: {
+          expiresAt: publicExpiresAt,
+          responseLimit: publicResponseLimit ? Number(publicResponseLimit) : undefined
+        }
+      },
+      {
+        onError: (error) => setPublicLinkError(mutationErrorMessage(error))
       }
-    });
+    );
   };
 
   const download = async (type: "json" | "xlsx" | "pdf") => {
     if (!selectedSurveyId) return;
     setDownloadError(null);
     try {
-      await downloadWithAuth(surveysApi.getExportUrl(selectedSurveyId, type), `survey-${selectedSurveyId}.${type === "xlsx" ? "xls" : type}`);
+      await downloadWithAuth(
+        surveysApi.getExportUrl(selectedSurveyId, type),
+        `survey-${selectedSurveyId}.${type === "xlsx" ? "xls" : type}`
+      );
     } catch (error) {
       setDownloadError(mutationErrorMessage(error));
     }
   };
 
+  const publicLinkUrl =
+    createPublicLink.isSuccess && createPublicLink.data
+      ? typeof window !== "undefined"
+        ? `${window.location.origin}${createPublicLink.data.url}`
+        : createPublicLink.data.url
+      : undefined;
+
+  const tabs: Array<{ id: SurveyTab; label: string }> = [
+    { id: "list", label: "Lista sondaje" },
+    { id: "create", label: "Sondaj nou" },
+    { id: "manage", label: selectedSurvey ? `Gestionează: ${selectedSurvey.title.slice(0, 24)}${selectedSurvey.title.length > 24 ? "…" : ""}` : "Gestionează" }
+  ];
+
   return (
-    <>
-      <h1 className="page-title">Sondaje</h1>
-      <p className="page-lead">Partea M · 4.3: editor chestionar, link privat/public securizat, colectare răspunsuri și export.</p>
-
-      <section className="ssm-documents" aria-labelledby="surveys-title">
-        <div className="ssm-module-hero">
-          <div className="card ssm-hero-card">
-            <p className="ssm-card-eyebrow">Partea M · 4.3</p>
-            <h2 id="surveys-title" className="card-title">
-              Sondaje angajați
-            </h2>
-            <p className="ssm-hero-lead">
-              Creează chestionare, distribuie întâi prin link privat autentificat, apoi public cu token, expirare și limită de răspunsuri.
-            </p>
-            <div className="ssm-badge-row">
-              <span className="ssm-chip">Editor întrebări</span>
-              <span className="ssm-chip">Link privat</span>
-              <span className="ssm-chip">Export JSON/Excel/PDF</span>
-            </div>
-          </div>
-
-          <div className="ssm-summary-strip">
-            <div className="ssm-stat-card">
-              <span>Active</span>
-              <strong>{kpi?.activeSurveys ?? "-"}</strong>
-            </div>
-            <div className="ssm-stat-card">
-              <span>Răspunsuri</span>
-              <strong>{kpi?.totalResponses ?? "-"}</strong>
-            </div>
-            <div className="ssm-stat-card">
-              <span>Linkuri publice</span>
-              <strong>{kpi?.publicLinks ?? "-"}</strong>
-            </div>
-          </div>
+    <div className="comms-page surveys-page">
+      <header className="comms-header">
+        <div>
+          <h1 className="page-title">Sondaje</h1>
+          <p className="page-lead">Creează chestionare, distribuie linkuri și analizează răspunsurile.</p>
         </div>
+      </header>
 
-        <div className="survey-workspace">
-          <form className="card form-stack ssm-doc-card survey-builder-card survey-builder-layout" onSubmit={onSurveySubmit}>
-            <div className="ssm-card-header">
-              <div>
-                <h3 className="card-title">Editor chestionar</h3>
-                <p className="field-hint">Completează pașii de mai jos și salvează sondajul.</p>
-              </div>
-              <span className="ssm-chip">{questions.length} întrebări</span>
-            </div>
-
-            <div className="survey-builder-scroll">
-            <div className="survey-section">
-              <div className="survey-section-title">
-                <span>1</span>
-                <div>
-                  <strong>Date sondaj</strong>
-                  <p>Completează titlul, descrierea și cine primește sondajul.</p>
-                </div>
-              </div>
-              <div className="ssm-form-grid">
-                <div className="field wide">
-                  <label htmlFor="survey-title">Titlu</label>
-                  <input id="survey-title" value={surveyForm.title} onChange={(event) => setSurveyForm((prev) => ({ ...prev, title: event.target.value }))} required />
-                </div>
-                <div className="field wide">
-                  <label htmlFor="survey-description">Descriere</label>
-                  <textarea
-                    id="survey-description"
-                    value={surveyForm.description ?? ""}
-                    onChange={(event) => setSurveyForm((prev) => ({ ...prev, description: event.target.value }))}
-                  />
-                </div>
-                <FieldSelect
-                  id="survey-type"
-                  label="Tip sondaj"
-                  value={surveyForm.surveyType ?? "ENGAGEMENT"}
-                  onChange={(surveyType) =>
-                    setSurveyForm((prev) => ({ ...prev, surveyType: surveyType as SurveyType }))
-                  }
-                  options={SURVEY_TYPE_OPTIONS.map((type) => ({
-                    value: type,
-                    label: SURVEY_TYPE_LABELS[type]
-                  }))}
-                />
-                <div className="field">
-                  <label htmlFor="survey-closes">Închidere automată</label>
-                  <input
-                    id="survey-closes"
-                    type="date"
-                    value={surveyForm.closesAtInput}
-                    onChange={(event) => setSurveyForm((prev) => ({ ...prev, closesAtInput: event.target.value }))}
-                  />
-                </div>
-                <FieldSelect
-                  id="survey-audience"
-                  label="Destinatari"
-                  value={surveyForm.audienceType ?? "ALL"}
-                  onChange={(audienceType) =>
-                    setSurveyForm((prev) => ({
-                      ...prev,
-                      audienceType: audienceType as SurveyAudienceType,
-                      audienceRefId: "",
-                      audienceLabel: ""
-                    }))
-                  }
-                  options={AUDIENCE_TYPES.map((type) => ({
-                    value: type,
-                    label: AUDIENCE_LABELS[type]
-                  }))}
-                />
-                {audienceOptions.length > 0 ? (
-                  <FieldSelect
-                    id="survey-audience-ref"
-                    label="Segment"
-                    value={surveyForm.audienceRefId ?? ""}
-                    onChange={onAudienceRefChange}
-                    allowEmpty
-                    emptyLabel="Selectează segmentul"
-                    options={mapToOptions(
-                      audienceOptions,
-                      (option) => option.id,
-                      (option) => option.label
-                    )}
-                  />
-                ) : null}
-                {surveyForm.audienceType === "CUSTOM" ? (
-                  <div className="field wide">
-                    <label htmlFor="survey-custom-employees">ID-uri angajați</label>
-                    <textarea
-                      id="survey-custom-employees"
-                      value={surveyForm.targetEmployeeIdsCsv}
-                      onChange={(event) => setSurveyForm((prev) => ({ ...prev, targetEmployeeIdsCsv: event.target.value }))}
-                      placeholder="idAngajat1, idAngajat2"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="survey-section survey-question-builder">
-              <div className="survey-section-title">
-                <span>2</span>
-                <div>
-                  <strong>Întrebări</strong>
-                  <p>Scrie întrebarea, alege tipul și salvează direct sau adaugă mai multe întrebări.</p>
-                </div>
-              </div>
-              <div className="ssm-form-grid">
-                <FieldSelect
-                  id="question-type"
-                  label="Tip întrebare"
-                  value={questionForm.type}
-                  onChange={(type) => setQuestionForm((prev) => ({ ...prev, type: type as SurveyQuestionType }))}
-                  options={QUESTION_TYPES.map((type) => ({
-                    value: type,
-                    label: SURVEY_QUESTION_TYPE_LABELS[type]
-                  }))}
-                />
-                <div className="field wide">
-                  <label htmlFor="question-title">Întrebare</label>
-                  <input id="question-title" value={questionForm.title} onChange={(event) => setQuestionForm((prev) => ({ ...prev, title: event.target.value }))} />
-                </div>
-                {questionNeedsOptions(questionForm.type) ? (
-                  <div className="field wide">
-                    <span className="field-label">Opțiuni de răspuns</span>
-                    <div className="survey-option-list">
-                      {questionForm.options.map((option, index) => (
-                        <div className="survey-option-row" key={`option-${index}`}>
-                          <input
-                            aria-label={`Opțiunea ${index + 1}`}
-                            value={option.label}
-                            onChange={(event) => updateQuestionOption(index, event.target.value)}
-                            placeholder={`Opțiunea ${index + 1}`}
-                          />
-                          <button type="button" className="btn-secondary" onClick={() => removeQuestionOption(index)}>
-                            Șterge
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" className="btn-secondary survey-add-option" onClick={addQuestionOption}>
-                      Adaugă opțiune de răspuns
-                    </button>
-                    <p className="field-hint">Adaugă câte variante de răspuns ai nevoie. Opțiunile goale nu se salvează.</p>
-                  </div>
-                ) : null}
-              </div>
-              <button type="button" className="btn-secondary survey-add-question" onClick={addQuestion} disabled={!currentQuestionReady}>
-                Adaugă încă o întrebare
-              </button>
-              <div className="ssm-doc-items survey-question-list">
-                {questions.map((question) => (
-                  <article key={question.id} className="ssm-doc-item survey-question-item">
-                    <strong>
-                      {question.id} · {question.title}
-                    </strong>
-                    <span>{SURVEY_QUESTION_TYPE_LABELS[question.type]}</span>
-                  </article>
-                ))}
-                {questions.length === 0 ? (
-                  <p className="field-hint">Poți salva direct cu întrebarea completată acum sau poți adăuga mai multe întrebări.</p>
-                ) : null}
-              </div>
-            </div>
-            </div>
-
-            <div className="survey-save-bar">
-              <div>
-                <strong>Finalizează chestionarul</strong>
-                <span>
-                  {canSaveSurvey
-                    ? questions.length > 0
-                      ? `${questions.length} întrebări pregătite pentru salvare.`
-                      : "Sondajul va fi salvat cu întrebarea completată acum."
-                    : "Completează întrebarea pentru a putea salva."}
-                </span>
-              </div>
-              <button className="btn-primary" type="submit" disabled={createSurvey.isPending || !canSaveSurvey}>
-                {createSurvey.isPending ? "Se salvează..." : "Salvează sondaj"}
-              </button>
-            </div>
-            {formError ? <div className="feedback error">{formError}</div> : null}
-            {createSurvey.isSuccess ? (
-              <p className="feedback success" role="status">
-                Sondaj salvat. Din lista din dreapta apasă <strong>Completează</strong> sau „Activează și completează”.
-              </p>
-            ) : null}
-            {createSurvey.isError ? <div className="feedback error">{mutationErrorMessage(createSurvey.error)}</div> : null}
-          </form>
-
-          <div className="card ssm-doc-card survey-side-panel">
-            <div className="ssm-card-header">
-              <div>
-                <h3 className="card-title">Sondaje create</h3>
-                <p className="field-hint">Activează, închide și selectează pentru statistici/export.</p>
-              </div>
-              <span className="ssm-chip">{surveysPaged.total} total</span>
-            </div>
-            <div className="ssm-doc-items">
-              {surveys.map((survey) => (
-                <button
-                  key={survey.id}
-                  type="button"
-                  className={`ssm-doc-item ${selectedSurveyId === survey.id ? "selected" : ""}`}
-                  onClick={() => setSelectedSurveyId(survey.id)}
-                >
-                  <strong>{survey.title}</strong>
-                  <span>
-                    {SURVEY_STATUS_LABELS[survey.status]} · {survey.stats.questionCount} întrebări · {survey.stats.responseCount} răspunsuri
-                  </span>
-                  <div className="ssm-badge-row">
-                    <span className={`ssm-chip ${survey.status === "ACTIVE" ? "good" : "warn"}`}>{AUDIENCE_LABELS[survey.audienceType]}</span>
-                    {canComplete && !respondedSurveyIds.has(survey.id) ? (
-                      <button
-                        type="button"
-                        className="ssm-chip survey-list-complete-btn"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void openSurveyForRespond(survey.id);
-                        }}
-                      >
-                        Completează
-                      </button>
-                    ) : null}
-                    {canComplete && respondedSurveyIds.has(survey.id) ? (
-                      <span className="ssm-chip good">Completat</span>
-                    ) : null}
-                  </div>
-                </button>
-              ))}
-              {!surveysQuery.isLoading && surveys.length === 0 ? <p className="field-hint">Nu există sondaje încă.</p> : null}
-            </div>
-            <PaginationBar
-              page={surveysPaged.page}
-              pageSize={surveysPaged.pageSize}
-              total={surveysPaged.total}
-              totalPages={surveysPaged.totalPages}
-              onPageChange={surveysPage.setPage}
-              onPageSizeChange={surveysPage.setPageSize}
-              disabled={surveysQuery.isFetching}
-            />
-          </div>
+      <div className="comms-kpi" aria-label="Indicatori sondaje">
+        <div>
+          <span>Active</span>
+          <strong>{kpi?.activeSurveys ?? "—"}</strong>
         </div>
-
-        <div className="survey-bottom-grid">
-          <div className="card ssm-doc-card survey-action-card">
-            <div className="ssm-card-header">
-              <div>
-                <h3 className="card-title">Distribuire și securitate</h3>
-                <p className="field-hint">Privat primul; public doar cu token, expirare și limită.</p>
-              </div>
-              {selectedSurvey ? <span className="ssm-chip good">{selectedSurvey.title}</span> : null}
-            </div>
-            {!selectedSurvey ? (
-              <div className="callout-warn" role="status">
-                Creează sau selectează un sondaj din lista de mai sus pentru a activa distribuirea și exporturile.
-              </div>
-            ) : null}
-            <div className="ssm-inline-actions">
-              {canComplete && selectedSurvey && respondedSurveyIds.has(selectedSurvey.id) ? (
-                <span className="ssm-chip good" role="status">
-                  Ați completat deja acest sondaj
-                </span>
-              ) : null}
-              {canComplete && (!selectedSurvey || !respondedSurveyIds.has(selectedSurvey.id)) ? (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  disabled={!selectedSurvey || openingSurveyId !== null}
-                  onClick={() => selectedSurvey && void openSurveyForRespond(selectedSurvey.id)}
-                >
-                  {openingSurveyId === selectedSurvey?.id
-                    ? "Se pregătește…"
-                    : selectedSurvey?.status === "DRAFT"
-                      ? "Activează și completează"
-                      : "Deschide și completează"}
-                </button>
-              ) : null}
-              <button type="button" className="btn-secondary" disabled={!selectedSurveyId} onClick={() => selectedSurveyId && activateSurvey.mutate(selectedSurveyId)}>
-                Activează
-              </button>
-              <button type="button" className="btn-secondary" disabled={!selectedSurveyId} onClick={() => selectedSurveyId && closeSurvey.mutate(selectedSurveyId)}>
-                Închide
-              </button>
-            </div>
-            <div className="ssm-form-grid">
-              <div className="field">
-                <label htmlFor="public-expires">Expirare link public</label>
-                <input
-                  id="public-expires"
-                  type="datetime-local"
-                  value={publicExpiresAt}
-                  onChange={(event) => setPublicExpiresAt(event.target.value)}
-                  disabled={!selectedSurvey}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="public-limit">Limită răspunsuri</label>
-                <input
-                  id="public-limit"
-                  type="number"
-                  min="1"
-                  value={publicResponseLimit}
-                  onChange={(event) => setPublicResponseLimit(event.target.value)}
-                  disabled={!selectedSurvey}
-                />
-              </div>
-            </div>
-            <button type="button" className="btn-primary" disabled={!selectedSurvey || !publicExpiresAt || createPublicLink.isPending} onClick={generatePublicLink}>
-              Generează link public
-            </button>
-            {createPublicLink.isSuccess ? (
-              <div className="feedback success">
-                Link public (copiază în browser):{" "}
-                <code>
-                  {typeof window !== "undefined" ? `${window.location.origin}${createPublicLink.data.url}` : createPublicLink.data.url}
-                </code>
-              </div>
-            ) : null}
-            {createPublicLink.isError ? <div className="feedback error">{mutationErrorMessage(createPublicLink.error)}</div> : null}
-            {selectedSurvey ? (
-              <p className="field-hint">
-                Link privat (autentificare obligatorie):{" "}
-                <code>
-                  {typeof window !== "undefined"
-                    ? `${window.location.origin}/surveys/respond/${selectedSurvey.id}`
-                    : `/surveys/respond/${selectedSurvey.id}`}
-                </code>
-              </p>
-            ) : null}
-          </div>
-
-          <div className="card ssm-doc-card survey-action-card">
-            <div className="ssm-card-header">
-              <div>
-                <h3 className="card-title">Statistici și export</h3>
-                <p className="field-hint">Agregări pe întrebări și exporturi JSON/Excel/PDF.</p>
-              </div>
-              {selectedSurvey ? <span className="ssm-chip good">{selectedSurvey.stats.responseCount} răspunsuri</span> : null}
-              <div className="ssm-inline-actions">
-                <button type="button" className="btn-secondary" disabled={!selectedSurveyId} onClick={() => void download("json")}>
-                  JSON
-                </button>
-                <button type="button" className="btn-secondary" disabled={!selectedSurveyId} onClick={() => void download("xlsx")}>
-                  Excel
-                </button>
-                <button type="button" className="btn-secondary" disabled={!selectedSurveyId} onClick={() => void download("pdf")}>
-                  PDF
-                </button>
-              </div>
-            </div>
-            {downloadError ? <div className="feedback error">{downloadError}</div> : null}
-            <div className="ssm-doc-items">
-              {(statsQuery.data?.questionStats ?? []).map((item) => (
-                <article key={item.questionId} className="ssm-doc-item">
-                  <strong>{item.title}</strong>
-                  <span>
-                    {item.type} · {item.responseCount} răspunsuri {item.average !== null && item.average !== undefined ? `· medie ${item.average}` : ""}
-                  </span>
-                  {item.options?.length ? (
-                    <div className="ssm-badge-row">
-                      {item.options.map((option) => (
-                        <span key={option.value} className="ssm-chip">
-                          {option.label}: {option.count}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </article>
-              ))}
-              {!selectedSurveyId ? <p className="field-hint">Selectează un sondaj pentru statistici.</p> : null}
-              {selectedSurveyId && !statsQuery.isLoading && (statsQuery.data?.questionStats.length ?? 0) === 0 ? (
-                <p className="field-hint">Nu există statistici încă.</p>
-              ) : null}
-            </div>
-          </div>
+        <div>
+          <span>Răspunsuri</span>
+          <strong>{kpi?.totalResponses ?? "—"}</strong>
         </div>
-      </section>
-    </>
+        <div>
+          <span>Linkuri publice</span>
+          <strong>{kpi?.publicLinks ?? "—"}</strong>
+        </div>
+      </div>
+
+      <nav className="comms-tabs" aria-label="Secțiuni sondaje">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`comms-tab${tab === item.id ? " active" : ""}`}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "list" ? (
+        <SurveyListPanel
+          items={filteredSurveys}
+          total={surveysPaged.total}
+          page={surveysPaged.page}
+          pageSize={surveysPaged.pageSize}
+          totalPages={surveysPaged.totalPages}
+          isLoading={surveysQuery.isLoading}
+          isFetching={surveysQuery.isFetching}
+          search={search}
+          statusFilter={statusFilter}
+          selectedId={selectedSurveyId}
+          canComplete={canComplete}
+          respondedIds={respondedSurveyIds}
+          openingSurveyId={openingSurveyId}
+          feedback={listFeedback}
+          onSearchChange={setSearch}
+          onStatusFilterChange={setStatusFilter}
+          onPageChange={surveysPage.setPage}
+          onPageSizeChange={surveysPage.setPageSize}
+          onSelect={setSelectedSurveyId}
+          onManage={openManage}
+          onCreateClick={openCreate}
+          onComplete={(id) => void openSurveyForRespond(id)}
+        />
+      ) : null}
+
+      {tab === "create" ? (
+        <SurveyCreateForm
+          surveyForm={surveyForm}
+          questionForm={questionForm}
+          questions={questions}
+          audienceOptions={audienceOptions}
+          canSave={canSaveSurvey}
+          isPending={createSurvey.isPending}
+          feedback={createFeedback}
+          onSurveyChange={(patch) => setSurveyForm((prev) => ({ ...prev, ...patch }))}
+          onQuestionChange={(patch) => setQuestionForm((prev) => ({ ...prev, ...patch }))}
+          onAudienceRefChange={onAudienceRefChange}
+          onAddQuestion={addQuestion}
+          onUpdateOption={(index, label) =>
+            setQuestionForm((prev) => ({
+              ...prev,
+              options: prev.options.map((option, optionIndex) =>
+                optionIndex === index ? { value: label, label } : option
+              )
+            }))
+          }
+          onAddOption={() => setQuestionForm((prev) => ({ ...prev, options: [...prev.options, { value: "", label: "" }] }))}
+          onRemoveOption={(index) =>
+            setQuestionForm((prev) => ({ ...prev, options: prev.options.filter((_, optionIndex) => optionIndex !== index) }))
+          }
+          onSubmit={onSurveySubmit}
+          onCancel={() => setTab("list")}
+        />
+      ) : null}
+
+      {tab === "manage" ? (
+        <SurveyManagePanel
+          survey={selectedSurvey}
+          stats={statsQuery.data?.questionStats}
+          statsLoading={statsQuery.isLoading}
+          canComplete={canComplete}
+          responded={selectedSurvey ? respondedSurveyIds.has(selectedSurvey.id) : false}
+          openingSurveyId={openingSurveyId}
+          publicExpiresAt={publicExpiresAt}
+          publicResponseLimit={publicResponseLimit}
+          activatePending={activateSurvey.isPending}
+          closePending={closeSurvey.isPending}
+          publicLinkPending={createPublicLink.isPending}
+          publicLinkUrl={publicLinkUrl}
+          publicLinkError={publicLinkError}
+          downloadError={downloadError}
+          onComplete={() => selectedSurvey && void openSurveyForRespond(selectedSurvey.id)}
+          onActivate={() => selectedSurveyId && activateSurvey.mutate(selectedSurveyId)}
+          onClose={() => selectedSurveyId && closeSurvey.mutate(selectedSurveyId)}
+          onPublicExpiresChange={setPublicExpiresAt}
+          onPublicLimitChange={setPublicResponseLimit}
+          onGeneratePublicLink={generatePublicLink}
+          onDownload={(type) => void download(type)}
+          onBackToList={() => setTab("list")}
+        />
+      ) : null}
+    </div>
   );
 }

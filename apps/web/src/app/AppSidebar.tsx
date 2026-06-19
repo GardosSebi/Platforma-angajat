@@ -95,11 +95,11 @@ export function AppSidebar({ groups, tenantId, onSignOut, mobileOpen, onMobileOp
 
         <div className="app-sidebar-foot">
           <div className="app-sidebar-user">
-            <NotificationBell />
             <div className="app-sidebar-tenant" title="Tenant activ">
               <span className="app-sidebar-tenant-label">Organizație</span>
               <strong>{tenantId}</strong>
             </div>
+            <NotificationBell />
           </div>
           <button type="button" className="app-sidebar-signout" onClick={onSignOut}>
             Deconectare
