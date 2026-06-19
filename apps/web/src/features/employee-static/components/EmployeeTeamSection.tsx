@@ -5,27 +5,29 @@ function TeamMembersTable({ members }: { members: EmployeeTeamMemberSummary[] })
     return <p className="text-muted">Niciun membru activ în această echipă.</p>;
   }
   return (
-    <table className="data-table team-members-table">
-      <thead>
-        <tr>
-          <th scope="col">Nume</th>
-          <th scope="col">E-mail</th>
-          <th scope="col">Post</th>
-        </tr>
-      </thead>
-      <tbody>
-        {members.map((m) => (
-          <tr key={m.id} className={m.isSelf ? "team-member-self" : undefined}>
-            <td>
-              {m.fullName}
-              {m.isSelf ? <span className="team-self-badge">tu</span> : null}
-            </td>
-            <td>{m.email}</td>
-            <td>{m.jobPositionName ?? "—"}</td>
+    <div className="table-wrap">
+      <table className="data-table team-members-table team-members-table--cols-3">
+        <thead>
+          <tr>
+            <th scope="col">Nume</th>
+            <th scope="col">E-mail</th>
+            <th scope="col">Post</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {members.map((m) => (
+            <tr key={m.id} className={m.isSelf ? "team-member-self" : undefined}>
+              <td data-label="Nume">
+                {m.fullName}
+                {m.isSelf ? <span className="team-self-badge">tu</span> : null}
+              </td>
+              <td data-label="E-mail">{m.email}</td>
+              <td data-label="Post">{m.jobPositionName ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

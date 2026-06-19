@@ -119,9 +119,9 @@ export function AdminOrganizationTab() {
 
   const filteredPositionsForEmployee = useMemo(() => {
     if (orgEdit?.kind !== "employee") return [];
-    return (jobPositionsLookup.data?.items ?? []).filter((pos) =>
-      orgEdit.departmentId ? pos.departmentId === orgEdit.departmentId : true
-    );
+    const all = jobPositionsLookup.data?.items ?? [];
+    if (!orgEdit.departmentId) return all;
+    return all.filter((pos) => !pos.departmentId || pos.departmentId === orgEdit.departmentId);
   }, [jobPositionsLookup.data?.items, orgEdit]);
 
   const orgLoading =

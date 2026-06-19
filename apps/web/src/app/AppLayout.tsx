@@ -22,7 +22,8 @@ const ROUTE_TITLES: Record<string, string> = {
   "/ticketing": "Ticketing",
   "/admin": "Administrare",
   "/itm": "Control ITM/ISU",
-  "/informatii": "Informații"
+  "/informatii": "Informații",
+  "/notificari": "Notificări"
 };
 
 function buildNavGroups(session: NonNullable<ReturnType<typeof useAuthSession>>): SidebarNavGroup[] {

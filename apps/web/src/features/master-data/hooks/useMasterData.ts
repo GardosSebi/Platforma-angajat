@@ -14,6 +14,9 @@ import { masterDataApi } from "../api/master-data.api";
 
 type QueryEnabled = { enabled?: boolean };
 
+/** API `PaginationQueryDto` allows max 100 (`MAX_PAGE_SIZE`). */
+const MASTER_DATA_LOOKUP_PAGE_SIZE = 100;
+
 export function useWorksites(params?: PaginationParams, options?: QueryEnabled) {
   return useQuery({
     queryKey: ["master-data", "worksites", params?.page ?? 1, params?.pageSize ?? 25],
@@ -24,7 +27,7 @@ export function useWorksites(params?: PaginationParams, options?: QueryEnabled) 
 
 /** Pentru mapări id → nume în formulare (max 100 înregistrări). */
 export function useWorksitesLookup(options?: QueryEnabled) {
-  return useWorksites({ page: 1, pageSize: 100 }, options);
+  return useWorksites({ page: 1, pageSize: MASTER_DATA_LOOKUP_PAGE_SIZE }, options);
 }
 
 export function useDepartments(params?: PaginationParams, options?: QueryEnabled) {
@@ -36,7 +39,7 @@ export function useDepartments(params?: PaginationParams, options?: QueryEnabled
 }
 
 export function useDepartmentsLookup(options?: QueryEnabled) {
-  return useDepartments({ page: 1, pageSize: 100 }, options);
+  return useDepartments({ page: 1, pageSize: MASTER_DATA_LOOKUP_PAGE_SIZE }, options);
 }
 
 export function useJobPositions(params?: PaginationParams, options?: QueryEnabled) {
@@ -48,7 +51,7 @@ export function useJobPositions(params?: PaginationParams, options?: QueryEnable
 }
 
 export function useJobPositionsLookup(options?: QueryEnabled) {
-  return useJobPositions({ page: 1, pageSize: 100 }, options);
+  return useJobPositions({ page: 1, pageSize: MASTER_DATA_LOOKUP_PAGE_SIZE }, options);
 }
 
 export function useEmployees(params?: PaginationParams, options?: QueryEnabled) {

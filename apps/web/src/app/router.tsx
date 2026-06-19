@@ -16,6 +16,7 @@ import { HomeRedirect } from "./HomeRedirect";
 import { SsmBackofficeRoute } from "./SsmBackofficeRoute";
 import { EmployeePortalRoute } from "./EmployeePortalRoute";
 import { ItmInspectorRoute } from "./ItmInspectorRoute";
+import { NotificationsPage } from "../features/notifications/pages/NotificationsPage";
 
 function MasterDataRoute() {
   const session = useAuthSession();
@@ -83,6 +84,7 @@ export function AppRouter() {
           />
           <Route path="/admin" element={<AdminRoute />} />
           <Route path="/informatii" element={<EmployeeStaticListPage />} />
+          <Route path="/notificari" element={<NotificationsPage />} />
           <Route path="*" element={<HomeRedirect />} />
         </Route>
       </Routes>

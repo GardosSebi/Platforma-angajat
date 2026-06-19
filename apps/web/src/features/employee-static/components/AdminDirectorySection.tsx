@@ -68,32 +68,34 @@ export function AdminDirectorySection({
         {data.administrators.length === 0 ? (
           <p className="text-muted">Nu există conturi cu rol SSM_ADMIN.</p>
         ) : (
-          <table className="data-table team-members-table">
-            <thead>
-              <tr>
-                <th scope="col">Nume / e-mail</th>
-                <th scope="col">Roluri</th>
-                <th scope="col">Angajat legat</th>
-                <th scope="col">Punct de lucru</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.administrators.map((admin) => (
-                <tr key={admin.userId} className={admin.isSelf ? "team-member-self" : undefined}>
-                  <td>
-                    {admin.fullName?.trim() || admin.email}
-                    {admin.isSelf ? <span className="team-self-badge">tu</span> : null}
-                    {admin.fullName?.trim() ? (
-                      <div className="text-muted small">{admin.email}</div>
-                    ) : null}
-                  </td>
-                  <td>{formatRoles(admin.roles)}</td>
-                  <td>{admin.employeeFullName ?? "—"}</td>
-                  <td>{admin.worksiteName ?? "—"}</td>
+          <div className="table-wrap">
+            <table className="data-table team-members-table team-members-table--cols-4">
+              <thead>
+                <tr>
+                  <th scope="col">Nume / e-mail</th>
+                  <th scope="col">Roluri</th>
+                  <th scope="col">Angajat legat</th>
+                  <th scope="col">Punct de lucru</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.administrators.map((admin) => (
+                  <tr key={admin.userId} className={admin.isSelf ? "team-member-self" : undefined}>
+                    <td data-label="Nume / e-mail">
+                      {admin.fullName?.trim() || admin.email}
+                      {admin.isSelf ? <span className="team-self-badge">tu</span> : null}
+                      {admin.fullName?.trim() ? (
+                        <div className="text-muted small">{admin.email}</div>
+                      ) : null}
+                    </td>
+                    <td data-label="Roluri">{formatRoles(admin.roles)}</td>
+                    <td data-label="Angajat legat">{admin.employeeFullName ?? "—"}</td>
+                    <td data-label="Punct de lucru">{admin.worksiteName ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -110,31 +112,33 @@ export function AdminDirectorySection({
           {group.members.length === 0 ? (
             <p className="text-muted">Niciun angajat activ la acest punct de lucru.</p>
           ) : (
-            <table className="data-table team-members-table">
-              <thead>
-                <tr>
-                  <th scope="col">Nume</th>
-                  <th scope="col">E-mail</th>
-                  <th scope="col">Departament</th>
-                  <th scope="col">Post</th>
-                  <th scope="col">Rol platformă</th>
-                </tr>
-              </thead>
-              <tbody>
-                {group.members.map((m) => (
-                  <tr key={m.employeeId} className={m.isSelf ? "team-member-self" : undefined}>
-                    <td>
-                      {m.fullName}
-                      {m.isSelf ? <span className="team-self-badge">tu</span> : null}
-                    </td>
-                    <td>{m.email}</td>
-                    <td>{m.departmentName ?? "—"}</td>
-                    <td>{m.jobPositionName ?? "—"}</td>
-                    <td>{formatRoles(m.platformRoles)}</td>
+            <div className="table-wrap">
+              <table className="data-table team-members-table team-members-table--cols-5">
+                <thead>
+                  <tr>
+                    <th scope="col">Nume</th>
+                    <th scope="col">E-mail</th>
+                    <th scope="col">Departament</th>
+                    <th scope="col">Post</th>
+                    <th scope="col">Rol platformă</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {group.members.map((m) => (
+                    <tr key={m.employeeId} className={m.isSelf ? "team-member-self" : undefined}>
+                      <td data-label="Nume">
+                        {m.fullName}
+                        {m.isSelf ? <span className="team-self-badge">tu</span> : null}
+                      </td>
+                      <td data-label="E-mail">{m.email}</td>
+                      <td data-label="Departament">{m.departmentName ?? "—"}</td>
+                      <td data-label="Post">{m.jobPositionName ?? "—"}</td>
+                      <td data-label="Rol platformă">{formatRoles(m.platformRoles)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       ))}

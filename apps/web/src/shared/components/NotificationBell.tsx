@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import type { InAppNotificationItem } from "@repo/shared-types/notifications";
+import { NotificationListItem } from "./NotificationListItem";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
   useUnreadNotificationCount
 } from "../hooks/use-notifications";
+
+const SIDEBAR_PREVIEW_LIMIT = 5;
 
 export function NotificationBell() {
   const navigate = useNavigate();
@@ -18,6 +22,8 @@ export function NotificationBell() {
 
   const unreadCount = countQuery.data?.unreadCount ?? 0;
   const items = listQuery.data?.items ?? [];
+  const previewItems = items.slice(0, SIDEBAR_PREVIEW_LIMIT);
+  const hasMore = items.length > SIDEBAR_PREVIEW_LIMIT;
 
   useEffect(() => {
     if (!open) return;
@@ -37,14 +43,18 @@ export function NotificationBell() {
     };
   }, [open]);
 
-  const onOpenItem = (id: string, linkPath?: string | null, readAt?: string | null) => {
-    if (!readAt) {
-      markRead.mutate(id);
+  const onOpenItem = (item: InAppNotificationItem) => {
+    if (!item.readAt) {
+      markRead.mutate(item.id);
     }
     setOpen(false);
-    if (linkPath) {
-      navigate(linkPath);
+    if (item.linkPath) {
+      navigate(item.linkPath);
     }
+  };
+
+  const onViewAll = () => {
+    setOpen(false);
   };
 
   return (
@@ -86,26 +96,26 @@ export function NotificationBell() {
             ) : null}
           </div>
           <ul className="notification-bell-list">
-            {items.length === 0 ? (
+            {previewItems.length === 0 ? (
               <li className="notification-bell-empty">Nu există notificări.</li>
             ) : (
-              items.slice(0, 20).map((item) => (
+              previewItems.map((item) => (
                 <li key={item.id}>
-                  <button
-                    type="button"
-                    className={`notification-bell-item${item.readAt ? "" : " unread"}`}
-                    onClick={() => onOpenItem(item.id, item.linkPath, item.readAt)}
-                  >
-                    <span className="notification-bell-item-title">{item.title}</span>
-                    <span className="notification-bell-item-body">{item.body}</span>
-                    <span className="notification-bell-item-time">
-                      {new Date(item.createdAt).toLocaleString("ro-RO")}
-                    </span>
-                  </button>
+                  <NotificationListItem item={item} onOpen={onOpenItem} />
                 </li>
               ))
             )}
           </ul>
+          <div className="notification-bell-panel-foot">
+            {hasMore ? (
+              <p className="notification-bell-panel-hint">
+                Afișate {SIDEBAR_PREVIEW_LIMIT} din {items.length} notificări recente.
+              </p>
+            ) : null}
+            <Link to="/notificari" className="notification-bell-view-all" onClick={onViewAll}>
+              Vezi toate notificările
+            </Link>
+          </div>
         </div>
       ) : null}
     </div>

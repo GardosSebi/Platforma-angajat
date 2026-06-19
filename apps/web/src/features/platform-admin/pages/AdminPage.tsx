@@ -204,11 +204,9 @@ export function AdminPage() {
     return positions.filter((p) => p.departmentId === newUserForm.departmentId || !p.departmentId);
   }, [positionsLookup.data?.items, newUserForm.departmentId]);
 
-  const detailWorksiteId =
-    employeeDraft.worksiteId || selectedEmployee?.worksiteId || "";
+  const detailWorksiteId = employeeDraft.worksiteId;
 
-  const detailDepartmentId =
-    employeeDraft.departmentId || selectedEmployee?.departmentId || "";
+  const detailDepartmentId = employeeDraft.departmentId;
 
   const savedOrgFromEmployee = useMemo(() => {
     if (!selectedEmployee) return { worksite: null, department: null, position: null };
@@ -223,42 +221,45 @@ export function AdminPage() {
 
   const detailWorksites = useMemo(() => {
     const all = worksitesLookup.data?.items ?? [];
-    const savedId = employeeDraft.worksiteId || selectedEmployee?.worksiteId;
-    return orgOptionsWithSaved(all, savedId, all, savedOrgFromEmployee.worksite);
-  }, [
-    worksitesLookup.data?.items,
-    employeeDraft.worksiteId,
-    selectedEmployee?.worksiteId,
-    savedOrgFromEmployee.worksite
-  ]);
+    return orgOptionsWithSaved(all, employeeDraft.worksiteId, all, savedOrgFromEmployee.worksite);
+  }, [worksitesLookup.data?.items, employeeDraft.worksiteId, savedOrgFromEmployee.worksite]);
 
   const detailDepartments = useMemo(() => {
     const all = departmentsLookup.data?.items ?? [];
     const filtered = detailWorksiteId
       ? all.filter((d) => !d.worksiteId || d.worksiteId === detailWorksiteId)
       : all;
-    const savedId = employeeDraft.departmentId || selectedEmployee?.departmentId;
-    return orgOptionsWithSaved(filtered, savedId, all, savedOrgFromEmployee.department);
+    return orgOptionsWithSaved(filtered, employeeDraft.departmentId, all, savedOrgFromEmployee.department);
   }, [
     departmentsLookup.data?.items,
     detailWorksiteId,
     employeeDraft.departmentId,
-    selectedEmployee?.departmentId,
     savedOrgFromEmployee.department
   ]);
 
   const detailPositions = useMemo(() => {
     const all = positionsLookup.data?.items ?? [];
-    const filtered = detailDepartmentId
-      ? all.filter((p) => !p.departmentId || p.departmentId === detailDepartmentId)
-      : all;
-    const savedId = employeeDraft.jobPositionId || selectedEmployee?.jobPositionId;
-    return orgOptionsWithSaved(filtered, savedId, all, savedOrgFromEmployee.position);
+    const departments = departmentsLookup.data?.items ?? [];
+    let filtered = all;
+
+    if (detailDepartmentId) {
+      filtered = all.filter((p) => !p.departmentId || p.departmentId === detailDepartmentId);
+    } else if (detailWorksiteId) {
+      const departmentIdsInWorksite = new Set(
+        departments
+          .filter((d) => !d.worksiteId || d.worksiteId === detailWorksiteId)
+          .map((d) => d.id)
+      );
+      filtered = all.filter((p) => !p.departmentId || departmentIdsInWorksite.has(p.departmentId));
+    }
+
+    return orgOptionsWithSaved(filtered, employeeDraft.jobPositionId, all, savedOrgFromEmployee.position);
   }, [
     positionsLookup.data?.items,
+    departmentsLookup.data?.items,
     detailDepartmentId,
+    detailWorksiteId,
     employeeDraft.jobPositionId,
-    selectedEmployee?.jobPositionId,
     savedOrgFromEmployee.position
   ]);
 
@@ -274,6 +275,8 @@ export function AdminPage() {
       setEmployeeDraft(EMPTY_EMPLOYEE_DRAFT);
       return;
     }
+
+    setEmployeeDraft(EMPTY_EMPLOYEE_DRAFT);
     setEditRole(selectedUser.roles[0] ?? "EMPLOYEE");
     setEditFullName(selectedUser.fullName ?? "");
 
@@ -784,10 +787,17 @@ export function AdminPage() {
                     <FieldSelect
                       id="detail-user-position"
                       label="Post"
-                      value={employeeDraft.jobPositionId || selectedEmployee?.jobPositionId || ""}
+                      value={employeeDraft.jobPositionId}
                       onChange={(jobPositionId) => setEmployeeDraft((d) => ({ ...d, jobPositionId }))}
                       allowEmpty
                       emptyLabel="— Neselectat —"
+                      hint={
+                        !detailDepartmentId
+                          ? "Selectați departamentul pentru a vedea posturile disponibile."
+                          : detailPositions.length === 0
+                            ? "Nu există posturi configurate pentru departamentul selectat."
+                            : undefined
+                      }
                       options={mapToOptions(
                         detailPositions,
                         (p) => p.id,
