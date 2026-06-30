@@ -659,7 +659,9 @@ export class PlatformAdminService {
       userCount,
       employeeCount,
       ticketCount,
-      surveyResponseCount
+      surveyResponseCount,
+      announcementsPublished,
+      announcementReads
     ] = await Promise.all([
       this.prisma.auditLog.groupBy({
         by: ["module"],
@@ -678,8 +680,18 @@ export class PlatformAdminService {
       }),
       this.prisma.surveyResponse.count({
         where: { tenantId, submittedAt: { gte: from, lte: to } }
+      }),
+      this.prisma.communicationAnnouncement.count({
+        where: { tenantId, status: "PUBLISHED", publishAt: { gte: from, lte: to } }
+      }),
+      this.prisma.communicationAnnouncementRead.count({
+        where: { tenantId, readAt: { gte: from, lte: to } }
       })
     ]);
+
+    const activeUsersInPeriod = await this.prisma.user.count({
+      where: { tenantId, active: true, lastLoginAt: { gte: from, lte: to } }
+    });
 
     return {
       period: { from: from.toISOString(), to: to.toISOString() },
@@ -691,8 +703,11 @@ export class PlatformAdminService {
       totals: {
         users: userCount,
         employees: employeeCount,
+        activeUsersInPeriod,
         helpdeskTicketsCreatedInPeriod: ticketCount,
-        surveyResponsesInPeriod: surveyResponseCount
+        surveyResponsesInPeriod: surveyResponseCount,
+        announcementsPublishedInPeriod: announcementsPublished,
+        announcementReadsInPeriod: announcementReads
       }
     };
   }

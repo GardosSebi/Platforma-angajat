@@ -100,6 +100,12 @@ export class SurveysController {
     return this.surveys.submitPrivateResponse(tenantId, user.sub, id, dto, user.email);
   }
 
+  @Get(":id/preview")
+  @RequirePermissions(Permission.SURVEYS_EDIT)
+  preview(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.surveys.preview(tenantId, id);
+  }
+
   @Get(":id/stats")
   @RequirePermissions(Permission.SURVEYS_VIEW)
   stats(@TenantId() tenantId: string, @Param("id") id: string) {

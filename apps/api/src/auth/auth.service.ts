@@ -61,6 +61,11 @@ export class AuthService {
 
     const accessToken = await this.jwt.signAsync(payload);
 
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
+
     const linkedEmployee = await this.prisma.employee.findFirst({
       where: {
         tenantId,

@@ -19,13 +19,19 @@ import {
 const QUESTION_TYPES = [
   "SINGLE_CHOICE",
   "MULTIPLE_CHOICE",
+  "DROPDOWN",
+  "MULTI_DROPDOWN",
   "SCALE",
   "TEXT",
   "LONG_TEXT",
+  "MULTI_TEXT",
   "DATE",
   "BOOLEAN",
   "NUMBER",
-  "RATING_NPS"
+  "RATING_NPS",
+  "RANKING",
+  "FILE_UPLOAD",
+  "IMAGE_SELECT"
 ] as const;
 const SURVEY_TYPES = ["ENGAGEMENT", "COMPLIANCE", "FEEDBACK", "EXIT", "PULSE", "CUSTOM"] as const;
 const AUDIENCE_TYPES = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE_GROUP", "EMPLOYEE", "CUSTOM"] as const;
@@ -48,6 +54,10 @@ export class SurveyQuestionOptionDto {
   @MinLength(1)
   @MaxLength(220)
   label!: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  imageUrl?: string;
 }
 
 export class SurveyQuestionDto {
@@ -81,6 +91,12 @@ export class SurveyQuestionDto {
   @IsOptional()
   @IsInt()
   max?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(10)
+  multiTextCount?: number;
 }
 
 export class SurveyConditionalRuleDto {
@@ -151,6 +167,32 @@ export class CreateSurveyDto {
   @IsOptional()
   @IsBoolean()
   privateLinkEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  anonymousMode?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  emailNotifyOnPublish?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  autoCreateTicket?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  autoTicketTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  autoTicketCategory?: string;
+
+  @IsOptional()
+  @IsObject()
+  translations?: Record<string, { title: string; description?: string; questions?: Record<string, string> }>;
 }
 
 export class UpdateSurveyDto {
@@ -211,6 +253,32 @@ export class UpdateSurveyDto {
   @IsOptional()
   @IsBoolean()
   privateLinkEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  anonymousMode?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  emailNotifyOnPublish?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  autoCreateTicket?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  autoTicketTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  autoTicketCategory?: string;
+
+  @IsOptional()
+  @IsObject()
+  translations?: Record<string, { title: string; description?: string; questions?: Record<string, string> }>;
 }
 
 export class SubmitSurveyResponseDto {

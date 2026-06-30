@@ -1,5 +1,41 @@
-export const COMMUNICATION_CONTENT_TYPES = ["TEXT", "RICH_TEXT", "LINK", "DOCUMENT", "SURVEY"] as const;
+export const COMMUNICATION_CONTENT_TYPES = [
+  "TEXT",
+  "RICH_TEXT",
+  "LINK",
+  "DOCUMENT",
+  "SURVEY",
+  "IMAGE",
+  "VIDEO",
+  "SLIDE",
+  "BUTTON"
+] as const;
 export type CommunicationContentType = (typeof COMMUNICATION_CONTENT_TYPES)[number];
+
+export const COMMUNICATION_MESSAGE_TYPES = ["ANNOUNCEMENT", "QUESTION", "READ_CONFIRMATION"] as const;
+export type CommunicationMessageType = (typeof COMMUNICATION_MESSAGE_TYPES)[number];
+
+export const COMMUNICATION_MESSAGE_TYPE_LABELS: Record<CommunicationMessageType, string> = {
+  ANNOUNCEMENT: "Anunț",
+  QUESTION: "Întrebare",
+  READ_CONFIRMATION: "Anunț cu confirmare citire"
+};
+
+export const COMMUNICATION_REACTIONS = ["THUMBS_UP", "HEART", "CLAP", "CHECK"] as const;
+export type CommunicationReaction = (typeof COMMUNICATION_REACTIONS)[number];
+
+export const COMMUNICATION_REACTION_LABELS: Record<CommunicationReaction, string> = {
+  THUMBS_UP: "👍",
+  HEART: "❤️",
+  CLAP: "👏",
+  CHECK: "✅"
+};
+
+export interface CommunicationTranslation {
+  title: string;
+  body: string;
+}
+
+export type CommunicationTranslations = Record<string, CommunicationTranslation>;
 
 export const COMMUNICATION_CATEGORIES = [
   "GENERAL",
@@ -31,7 +67,13 @@ export const COMMUNICATION_AUDIENCE_TYPES = [
 ] as const;
 export type CommunicationAudienceType = (typeof COMMUNICATION_AUDIENCE_TYPES)[number];
 
-export type CommunicationAnnouncementStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED" | "RETRACTED" | "ARCHIVED";
+export type CommunicationAnnouncementStatus =
+  | "DRAFT"
+  | "READY_TO_SEND"
+  | "SCHEDULED"
+  | "PUBLISHED"
+  | "RETRACTED"
+  | "ARCHIVED";
 
 export interface CreateCommunicationAnnouncementRequest {
   title: string;
@@ -39,11 +81,18 @@ export interface CreateCommunicationAnnouncementRequest {
   category?: CommunicationCategory;
   contentType?: CommunicationContentType;
   contentUrl?: string;
+  messageType?: CommunicationMessageType;
+  requireReadConfirmation?: boolean;
+  linkedSurveyId?: string;
+  buttonLabel?: string;
+  buttonUrl?: string;
+  translations?: CommunicationTranslations;
+  reactionsEnabled?: boolean;
   audienceType: CommunicationAudienceType;
   audienceRefId?: string;
   audienceLabel?: string;
   targetEmployeeIds?: string[];
-  status?: "DRAFT" | "PUBLISHED";
+  status?: "DRAFT" | "PUBLISHED" | "READY_TO_SEND";
   publishAt?: string;
   expiresAt?: string;
   reminderAt?: string;
@@ -56,11 +105,18 @@ export interface UpdateCommunicationAnnouncementRequest {
   category?: CommunicationCategory;
   contentType?: CommunicationContentType;
   contentUrl?: string;
+  messageType?: CommunicationMessageType;
+  requireReadConfirmation?: boolean;
+  linkedSurveyId?: string;
+  buttonLabel?: string;
+  buttonUrl?: string;
+  translations?: CommunicationTranslations;
+  reactionsEnabled?: boolean;
   audienceType?: CommunicationAudienceType;
   audienceRefId?: string;
   audienceLabel?: string;
   targetEmployeeIds?: string[];
-  status?: "DRAFT" | "PUBLISHED" | "SCHEDULED" | "ARCHIVED";
+  status?: "DRAFT" | "PUBLISHED" | "SCHEDULED" | "READY_TO_SEND" | "ARCHIVED";
   publishAt?: string;
   expiresAt?: string;
   reminderAt?: string;
@@ -73,6 +129,13 @@ export interface CommunicationAnnouncementItem {
   category: CommunicationCategory;
   contentType: CommunicationContentType;
   contentUrl?: string | null;
+  messageType: CommunicationMessageType;
+  requireReadConfirmation: boolean;
+  linkedSurveyId?: string | null;
+  buttonLabel?: string | null;
+  buttonUrl?: string | null;
+  translations?: CommunicationTranslations | null;
+  reactionsEnabled: boolean;
   audienceType: CommunicationAudienceType;
   audienceRefId?: string | null;
   audienceLabel?: string | null;
@@ -85,6 +148,8 @@ export interface CommunicationAnnouncementItem {
   templateId?: string | null;
   duplicatedFromId?: string | null;
   retractedAt?: string | null;
+  createdBy: string;
+  createdByName?: string | null;
   createdAt: string;
   updatedAt: string;
   stats: {
@@ -92,13 +157,23 @@ export interface CommunicationAnnouncementItem {
     readCount: number;
     unreadCount: number;
     readRate: number;
+    reactionCount?: number;
   };
+}
+
+export interface CommunicationCalendarEntry {
+  id: string;
+  title: string;
+  status: CommunicationAnnouncementStatus;
+  publishAt: string;
+  audienceLabel?: string | null;
 }
 
 export interface CommunicationDashboardResponse {
   kpi: {
     digitalizationRate: number;
     activeEmployees: number;
+    activeUsers: number;
     activeAnnouncements: number;
     scheduledAnnouncements: number;
     readRate: number;
@@ -106,6 +181,7 @@ export interface CommunicationDashboardResponse {
   };
   latestAnnouncements: CommunicationAnnouncementItem[];
   reminders: CommunicationReminderItem[];
+  calendar: CommunicationCalendarEntry[];
 }
 
 export interface CommunicationReminderItem {
@@ -149,4 +225,9 @@ export interface CreateCommunicationTemplateRequest {
 
 export interface MarkCommunicationReadRequest {
   employeeId: string;
+}
+
+export interface SetCommunicationReactionRequest {
+  employeeId: string;
+  reaction: CommunicationReaction;
 }

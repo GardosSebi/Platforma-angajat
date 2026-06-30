@@ -4,6 +4,7 @@ import { canAccessTenantAdmin } from "../../../shared/auth/roles";
 import { employeeStaticApi } from "../api/employee-static.api";
 import { AdminDirectorySection } from "../components/AdminDirectorySection";
 import { EmployeeTeamSection } from "../components/EmployeeTeamSection";
+import { EmployeeStaticPagesPanel } from "../components/EmployeeStaticPagesPanel";
 
 export function EmployeeStaticListPage() {
   const session = useAuthSession();
@@ -44,11 +45,14 @@ export function EmployeeStaticListPage() {
           error={contextErr}
         />
       ) : (
-        <EmployeeTeamSection
-          context={myContextQuery.data}
-          isLoading={myContextQuery.isLoading}
-          error={contextErr}
-        />
+        <>
+          <EmployeeStaticPagesPanel />
+          <EmployeeTeamSection
+            context={myContextQuery.data}
+            isLoading={myContextQuery.isLoading}
+            error={contextErr}
+          />
+        </>
       )}
     </div>
   );

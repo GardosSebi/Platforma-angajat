@@ -29,6 +29,7 @@ type Props = {
 const STATUS_FILTERS = [
   { value: "", label: "Toate" },
   { value: "DRAFT", label: "Ciorne" },
+  { value: "READY_TO_SEND", label: "Gata de trimis" },
   { value: "PUBLISHED", label: "Publicate" },
   { value: "SCHEDULED", label: "Programate" },
   { value: "RETRACTED", label: "Retrase" }

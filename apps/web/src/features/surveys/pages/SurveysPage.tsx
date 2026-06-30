@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
-import type { CreateSurveyRequest, SurveyQuestion, SurveyQuestionOption } from "@repo/shared-types/surveys";
+import type { CreateSurveyRequest, SurveyConditionalRule, SurveyQuestion, SurveyQuestionOption } from "@repo/shared-types/surveys";
 import { surveyQuestionNeedsOptions } from "@repo/shared-types/surveys";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import {
@@ -38,6 +38,13 @@ const EMPTY_SURVEY: SurveyFormState = {
   audienceLabel: "",
   targetEmployeeIdsCsv: "",
   privateLinkEnabled: true,
+  anonymousMode: false,
+  emailNotifyOnPublish: false,
+  autoCreateTicket: false,
+  autoTicketTitle: "",
+  autoTicketCategory: "",
+  translationRoTitle: "",
+  translationEnTitle: "",
   closesAtInput: ""
 };
 
@@ -91,6 +98,7 @@ export function SurveysPage() {
   const [surveyForm, setSurveyForm] = useState<SurveyFormState>(EMPTY_SURVEY);
   const [questionForm, setQuestionForm] = useState<QuestionFormState>(EMPTY_QUESTION);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
+  const [conditionalLogic, setConditionalLogic] = useState<SurveyConditionalRule[]>([]);
   const [selectedSurveyId, setSelectedSurveyId] = useState("");
   const [publicExpiresAt, setPublicExpiresAt] = useState("");
   const [publicResponseLimit, setPublicResponseLimit] = useState("100");
@@ -196,6 +204,13 @@ export function SurveysPage() {
       return;
     }
     const questionSchema = questions.length > 0 ? questions : [buildQuestionFromForm(1)];
+    const translations: CreateSurveyRequest["translations"] = {};
+    if (surveyForm.translationRoTitle.trim()) {
+      translations.ro = { title: surveyForm.translationRoTitle.trim(), description: surveyForm.description };
+    }
+    if (surveyForm.translationEnTitle.trim()) {
+      translations.en = { title: surveyForm.translationEnTitle.trim() };
+    }
     const payload: CreateSurveyRequest = {
       title: surveyForm.title.trim(),
       description: surveyForm.description?.trim() || undefined,
@@ -209,13 +224,21 @@ export function SurveysPage() {
           ? surveyForm.targetEmployeeIdsCsv.split(",").map((item) => item.trim()).filter(Boolean)
           : undefined,
       questionSchema,
-      privateLinkEnabled: surveyForm.privateLinkEnabled
+      conditionalLogic: conditionalLogic.length ? conditionalLogic : undefined,
+      translations: Object.keys(translations).length ? translations : undefined,
+      privateLinkEnabled: surveyForm.privateLinkEnabled,
+      anonymousMode: surveyForm.anonymousMode,
+      emailNotifyOnPublish: surveyForm.emailNotifyOnPublish,
+      autoCreateTicket: surveyForm.autoCreateTicket,
+      autoTicketTitle: surveyForm.autoTicketTitle || undefined,
+      autoTicketCategory: surveyForm.autoTicketCategory || undefined
     };
     createSurvey.mutate(payload, {
       onSuccess: (created) => {
         setSelectedSurveyId(created.id);
         setSurveyForm(EMPTY_SURVEY);
         setQuestions([]);
+        setConditionalLogic([]);
         setQuestionForm(EMPTY_QUESTION);
         setCreateFeedback({ type: "success", message: "Sondaj salvat. Poți continua din listă sau gestionare." });
         setTab("list");

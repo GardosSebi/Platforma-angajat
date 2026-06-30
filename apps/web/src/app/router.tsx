@@ -12,6 +12,7 @@ import { SurveyRespondPage } from "../features/surveys/pages/SurveyRespondPage";
 import { TicketingPage } from "../features/ticketing/pages/TicketingPage";
 import { AdminPage } from "../features/platform-admin/pages/AdminPage";
 import { EmployeeStaticListPage } from "../features/employee-static/pages/EmployeeStaticListPage";
+import { EmployeeStaticPageView } from "../features/employee-static/pages/EmployeeStaticPageView";
 import { HomeRedirect } from "./HomeRedirect";
 import { SsmBackofficeRoute } from "./SsmBackofficeRoute";
 import { EmployeePortalRoute } from "./EmployeePortalRoute";
@@ -84,6 +85,7 @@ export function AppRouter() {
           />
           <Route path="/admin" element={<AdminRoute />} />
           <Route path="/informatii" element={<EmployeeStaticListPage />} />
+          <Route path="/informatii/:slug" element={<EmployeeStaticPageView />} />
           <Route path="/notificari" element={<NotificationsPage />} />
           <Route path="*" element={<HomeRedirect />} />
         </Route>

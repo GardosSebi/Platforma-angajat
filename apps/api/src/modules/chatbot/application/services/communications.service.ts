@@ -4,7 +4,9 @@ import {
   CommunicationAnnouncementStatus,
   CommunicationAudienceType,
   CommunicationCategory,
-  CommunicationContentType
+  CommunicationContentType,
+  CommunicationMessageType,
+  Prisma
 } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
@@ -15,6 +17,7 @@ import {
   CreateAnnouncementDto,
   CreateTemplateDto,
   MarkAnnouncementReadDto,
+  SetAnnouncementReactionDto,
   UpdateAnnouncementDto
 } from "../../api/dto/communications.dto";
 import { JwtPayload } from "../../../../auth/jwt.strategy";
@@ -59,13 +62,18 @@ function audienceLabel(audienceType: CommunicationAudienceType): string {
 }
 
 function statusForPublish(
-  status: "DRAFT" | "PUBLISHED" | "SCHEDULED" | "ARCHIVED" | undefined,
+  status: "DRAFT" | "PUBLISHED" | "SCHEDULED" | "ARCHIVED" | "READY_TO_SEND" | undefined,
   publishAt?: Date | null
 ): CommunicationAnnouncementStatus {
   if (status === "DRAFT") return CommunicationAnnouncementStatus.DRAFT;
+  if (status === "READY_TO_SEND") return CommunicationAnnouncementStatus.READY_TO_SEND;
   if (status === "ARCHIVED") return CommunicationAnnouncementStatus.ARCHIVED;
   if (publishAt && publishAt.getTime() > Date.now()) return CommunicationAnnouncementStatus.SCHEDULED;
   return status === "SCHEDULED" ? CommunicationAnnouncementStatus.SCHEDULED : CommunicationAnnouncementStatus.PUBLISHED;
+}
+
+function jsonValue<T>(value: T): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 @Injectable()
@@ -84,8 +92,12 @@ export class CommunicationsService {
   async dashboard(tenantId: string, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
     const employeeWhere = applyWorksiteToEmployeeWhere({ tenantId, active: true }, scope);
-    const [activeEmployees, announcements, latest] = await Promise.all([
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [activeEmployees, activeUsers, announcements, latest, calendarRows] = await Promise.all([
       this.prisma.employee.count({ where: employeeWhere }),
+      this.prisma.user.count({
+        where: { tenantId, active: true, lastLoginAt: { gte: thirtyDaysAgo } }
+      }),
       this.prisma.communicationAnnouncement.findMany({
         where: { tenantId, status: { in: [CommunicationAnnouncementStatus.PUBLISHED, CommunicationAnnouncementStatus.SCHEDULED] } },
         include: { readReceipts: { select: { employeeId: true } } }
@@ -94,12 +106,29 @@ export class CommunicationsService {
         where: { tenantId },
         orderBy: { createdAt: "desc" },
         take: 5
+      }),
+      this.prisma.communicationAnnouncement.findMany({
+        where: {
+          tenantId,
+          publishAt: { not: null },
+          status: { in: [CommunicationAnnouncementStatus.SCHEDULED, CommunicationAnnouncementStatus.READY_TO_SEND, CommunicationAnnouncementStatus.PUBLISHED] }
+        },
+        orderBy: { publishAt: "asc" },
+        take: 60
       })
     ]);
 
     const activeAnnouncements = announcements.filter((item) => item.status === CommunicationAnnouncementStatus.PUBLISHED).length;
     const scheduledAnnouncements = announcements.filter((item) => item.status === CommunicationAnnouncementStatus.SCHEDULED).length;
-    const readEmployees = new Set(announcements.flatMap((item) => item.readReceipts.map((receipt) => receipt.employeeId))).size;
+    const employeesWithAccounts = await this.prisma.employee.count({
+      where: {
+        ...employeeWhere,
+        email: { not: "" }
+      }
+    });
+    const digitalizationRate = employeesWithAccounts
+      ? Math.round((activeUsers / employeesWithAccounts) * 100)
+      : 0;
     const latestAnnouncements = await this.withStats(tenantId, latest, scope);
     const totals = latestAnnouncements.reduce(
       (acc, item) => ({
@@ -112,15 +141,56 @@ export class CommunicationsService {
 
     return {
       kpi: {
-        digitalizationRate: activeEmployees ? Math.round((readEmployees / activeEmployees) * 100) : 0,
+        digitalizationRate,
         activeEmployees,
+        activeUsers,
         activeAnnouncements,
         scheduledAnnouncements,
         readRate: totals.targetCount ? Math.round((totals.readCount / totals.targetCount) * 100) : 0,
         unreadEstimate: totals.unreadCount
       },
       latestAnnouncements,
-      reminders: await this.reminders(tenantId)
+      reminders: await this.reminders(tenantId, viewer),
+      calendar: calendarRows
+        .filter((row) => row.publishAt)
+        .map((row) => ({
+          id: row.id,
+          title: row.title,
+          status: row.status,
+          publishAt: row.publishAt!.toISOString(),
+          audienceLabel: row.audienceLabel
+        }))
+    };
+  }
+
+  async calendar(tenantId: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const rows = await this.prisma.communicationAnnouncement.findMany({
+      where: {
+        tenantId,
+        publishAt: { not: null },
+        status: {
+          in: [
+            CommunicationAnnouncementStatus.SCHEDULED,
+            CommunicationAnnouncementStatus.READY_TO_SEND,
+            CommunicationAnnouncementStatus.PUBLISHED
+          ]
+        }
+      },
+      orderBy: { publishAt: "asc" },
+      take: 120
+    });
+    const scoped = await this.filterAnnouncementsForScope(tenantId, rows, scope);
+    return {
+      items: scoped
+        .filter((row) => row.publishAt)
+        .map((row) => ({
+          id: row.id,
+          title: row.title,
+          status: row.status,
+          publishAt: row.publishAt!.toISOString(),
+          audienceLabel: row.audienceLabel
+        }))
     };
   }
 
@@ -145,6 +215,9 @@ export class CommunicationsService {
     }
 
     const publishAt = parseOptionalDate(dto.publishAt);
+    const messageType = (dto.messageType ?? "ANNOUNCEMENT") as CommunicationMessageType;
+    const requireRead =
+      dto.requireReadConfirmation ?? messageType === "READ_CONFIRMATION";
     const created = await this.prisma.communicationAnnouncement.create({
       data: {
         tenantId,
@@ -153,6 +226,13 @@ export class CommunicationsService {
         category: dto.category ?? CommunicationCategory.GENERAL,
         contentType: dto.contentType ?? CommunicationContentType.TEXT,
         contentUrl: clean(dto.contentUrl),
+        messageType,
+        requireReadConfirmation: requireRead,
+        linkedSurveyId: clean(dto.linkedSurveyId),
+        buttonLabel: clean(dto.buttonLabel),
+        buttonUrl: clean(dto.buttonUrl),
+        translations: dto.translations ? jsonValue(dto.translations) : undefined,
+        reactionsEnabled: dto.reactionsEnabled ?? false,
         audienceType: dto.audienceType,
         audienceRefId: clean(dto.audienceRefId),
         audienceLabel: clean(dto.audienceLabel),
@@ -204,6 +284,13 @@ export class CommunicationsService {
       category: dto.category,
       contentType: dto.contentType,
       contentUrl: dto.contentUrl === undefined ? undefined : clean(dto.contentUrl) ?? null,
+      messageType: dto.messageType as CommunicationMessageType | undefined,
+      requireReadConfirmation: dto.requireReadConfirmation,
+      linkedSurveyId: dto.linkedSurveyId === undefined ? undefined : clean(dto.linkedSurveyId) ?? null,
+      buttonLabel: dto.buttonLabel === undefined ? undefined : clean(dto.buttonLabel) ?? null,
+      buttonUrl: dto.buttonUrl === undefined ? undefined : clean(dto.buttonUrl) ?? null,
+      translations: dto.translations === undefined ? undefined : jsonValue(dto.translations),
+      reactionsEnabled: dto.reactionsEnabled,
       audienceType: dto.audienceType,
       audienceRefId: dto.audienceRefId === undefined ? undefined : clean(dto.audienceRefId) ?? null,
       audienceLabel: dto.audienceLabel === undefined ? undefined : clean(dto.audienceLabel) ?? null,
@@ -273,8 +360,16 @@ export class CommunicationsService {
         tenantId,
         title: `${source.title} (copie)`,
         body: source.body,
+        category: source.category,
         contentType: source.contentType,
         contentUrl: source.contentUrl,
+        messageType: source.messageType,
+        requireReadConfirmation: source.requireReadConfirmation,
+        linkedSurveyId: source.linkedSurveyId,
+        buttonLabel: source.buttonLabel,
+        buttonUrl: source.buttonUrl,
+        translations: source.translations === null ? undefined : (source.translations as Prisma.InputJsonValue),
+        reactionsEnabled: source.reactionsEnabled,
         audienceType: source.audienceType,
         audienceRefId: source.audienceRefId,
         audienceLabel: source.audienceLabel,
@@ -309,6 +404,29 @@ export class CommunicationsService {
       where: { announcementId_employeeId: { announcementId, employeeId: employee.id } },
       create: { tenantId, announcementId, employeeId: employee.id },
       update: { readAt: new Date() }
+    });
+  }
+
+  async setReaction(
+    tenantId: string,
+    announcementId: string,
+    dto: SetAnnouncementReactionDto,
+    viewer?: JwtPayload
+  ) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const announcement = await this.assertAnnouncementVisible(tenantId, announcementId, scope);
+    if (!announcement.reactionsEnabled) {
+      throw new BadRequestException("Reacțiile nu sunt activate pentru acest anunț.");
+    }
+    await assertEmployeeInWorksiteScope(this.prisma, tenantId, dto.employeeId, scope);
+    const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, tenantId, active: true } });
+    if (!employee) {
+      throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
+    }
+    return this.prisma.communicationAnnouncementReaction.upsert({
+      where: { announcementId_employeeId: { announcementId, employeeId: employee.id } },
+      create: { tenantId, announcementId, employeeId: employee.id, reaction: dto.reaction },
+      update: { reaction: dto.reaction, createdAt: new Date() }
     });
   }
 
@@ -705,13 +823,24 @@ export class CommunicationsService {
     rows: CommunicationAnnouncement[],
     scope: WorksiteViewerScope = { mode: "tenant" }
   ) {
+    const creatorIds = [...new Set(rows.map((r) => r.createdBy))];
+    const creators = creatorIds.length
+      ? await this.prisma.user.findMany({
+          where: { tenantId, id: { in: creatorIds } },
+          select: { id: true, fullName: true, email: true }
+        })
+      : [];
+    const creatorById = new Map(creators.map((u) => [u.id, u]));
+
     return Promise.all(
       rows.map(async (row) => {
-        const [targetCount, readCount] = await Promise.all([
+        const [targetCount, readCount, reactionCount] = await Promise.all([
           this.audienceCount(tenantId, row, scope),
-          this.prisma.communicationAnnouncementRead.count({ where: { tenantId, announcementId: row.id } })
+          this.prisma.communicationAnnouncementRead.count({ where: { tenantId, announcementId: row.id } }),
+          this.prisma.communicationAnnouncementReaction.count({ where: { tenantId, announcementId: row.id } })
         ]);
         const unreadCount = Math.max(targetCount - readCount, 0);
+        const creator = creatorById.get(row.createdBy);
         return {
           id: row.id,
           title: row.title,
@@ -719,6 +848,13 @@ export class CommunicationsService {
           category: row.category,
           contentType: row.contentType,
           contentUrl: row.contentUrl,
+          messageType: row.messageType,
+          requireReadConfirmation: row.requireReadConfirmation,
+          linkedSurveyId: row.linkedSurveyId,
+          buttonLabel: row.buttonLabel,
+          buttonUrl: row.buttonUrl,
+          translations: row.translations,
+          reactionsEnabled: row.reactionsEnabled,
           audienceType: row.audienceType,
           audienceRefId: row.audienceRefId,
           audienceLabel: row.audienceLabel,
@@ -731,13 +867,16 @@ export class CommunicationsService {
           templateId: row.templateId,
           duplicatedFromId: row.duplicatedFromId,
           retractedAt: row.retractedAt,
+          createdBy: row.createdBy,
+          createdByName: creator?.fullName ?? creator?.email ?? null,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
           stats: {
             targetCount,
             readCount,
             unreadCount,
-            readRate: targetCount ? Math.round((readCount / targetCount) * 100) : 0
+            readRate: targetCount ? Math.round((readCount / targetCount) * 100) : 0,
+            reactionCount
           }
         };
       })

@@ -278,6 +278,120 @@ export function SurveyFormFiller({
                 </div>
               </div>
             ) : null}
+
+            {q.type === "DROPDOWN" && q.options ? (
+              <select
+                className="survey-text-input"
+                value={typeof answers[q.id] === "string" ? (answers[q.id] as string) : ""}
+                onChange={(ev) => setAnswer(q.id, ev.target.value)}
+              >
+                <option value="">Selectează…</option>
+                {q.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            {q.type === "MULTI_DROPDOWN" && q.options ? (
+              <select
+                className="survey-text-input"
+                multiple
+                value={Array.isArray(answers[q.id]) ? (answers[q.id] as string[]) : []}
+                onChange={(ev) =>
+                  setAnswer(
+                    q.id,
+                    Array.from(ev.target.selectedOptions).map((o) => o.value)
+                  )
+                }
+              >
+                {q.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            {q.type === "MULTI_TEXT" ? (
+              <div className="survey-multi-text">
+                {Array.from({ length: q.multiTextCount ?? 3 }).map((_, index) => {
+                  const key = `${q.id}_${index}`;
+                  const current = Array.isArray(answers[q.id]) ? (answers[q.id] as string[]) : [];
+                  return (
+                    <input
+                      key={key}
+                      type="text"
+                      className="survey-text-input"
+                      placeholder={`Răspuns ${index + 1}`}
+                      value={current[index] ?? ""}
+                      onChange={(ev) => {
+                        const next = [...current];
+                        next[index] = ev.target.value;
+                        setAnswer(q.id, next);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {q.type === "RANKING" && q.options ? (
+              <div className="survey-options-vertical">
+                {q.options.map((opt, index) => (
+                  <label key={opt.value} className="survey-option-label">
+                    <span className="field-hint">#{index + 1}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={q.options!.length}
+                      value={
+                        Array.isArray(answers[q.id])
+                          ? String((answers[q.id] as string[]).indexOf(opt.value) + 1 || "")
+                          : ""
+                      }
+                      onChange={(ev) => {
+                        const rank = Number(ev.target.value);
+                        const order = Array.isArray(answers[q.id]) ? [...(answers[q.id] as string[])] : Array(q.options!.length).fill("");
+                        if (rank >= 1 && rank <= q.options!.length) {
+                          order[rank - 1] = opt.value;
+                        }
+                        setAnswer(q.id, order.filter(Boolean));
+                      }}
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+
+            {q.type === "FILE_UPLOAD" ? (
+              <input
+                type="file"
+                onChange={(ev) => {
+                  const file = ev.target.files?.[0];
+                  setAnswer(q.id, file ? file.name : null);
+                }}
+              />
+            ) : null}
+
+            {q.type === "IMAGE_SELECT" && q.options ? (
+              <div className="survey-image-select">
+                {q.options.map((opt) => (
+                  <label key={opt.value} className={`survey-image-option${answers[q.id] === opt.value ? " selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name={q.id}
+                      checked={answers[q.id] === opt.value}
+                      onChange={() => setAnswer(q.id, opt.value)}
+                    />
+                    {opt.imageUrl ? <img src={opt.imageUrl} alt={opt.label} /> : null}
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
           </fieldset>
         );
       })}

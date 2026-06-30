@@ -32,6 +32,22 @@ export function useCommunicationReminders() {
   });
 }
 
+export function useCommunicationCalendar(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "calendar"],
+    queryFn: chatbotApi.calendar,
+    enabled
+  });
+}
+
+export function useUsageSummary(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "usage"],
+    queryFn: () => chatbotApi.usageSummary(),
+    enabled
+  });
+}
+
 function useRefreshChatbot() {
   const queryClient = useQueryClient();
   return async () => {

@@ -22,6 +22,21 @@ export interface UserScopedRoleRow {
   employeeGroup: { id: string; name: string } | null;
 }
 
+export interface UsageSummaryResponse {
+  period: { from: string; to: string };
+  auditEventsByModule: Array<{ module: string; events: number }>;
+  distinctUsersWithAuditActions: number;
+  totals: {
+    users: number;
+    employees: number;
+    activeUsersInPeriod: number;
+    helpdeskTicketsCreatedInPeriod: number;
+    surveyResponsesInPeriod: number;
+    announcementsPublishedInPeriod: number;
+    announcementReadsInPeriod: number;
+  };
+}
+
 export interface EmployeeStaticPageRow {
   id: string;
   tenantId: string;
@@ -120,16 +135,4 @@ export interface EmployeeMyContextResponse {
   } | null;
   /** Grupuri de angajați din care faci parte. */
   groups: EmployeeMyGroupSummary[];
-}
-
-export interface UsageSummaryResponse {
-  period: { from: string; to: string };
-  auditEventsByModule: { module: string; events: number }[];
-  distinctUsersWithAuditActions: number;
-  totals: {
-    users: number;
-    employees: number;
-    helpdeskTicketsCreatedInPeriod: number;
-    surveyResponsesInPeriod: number;
-  };
 }

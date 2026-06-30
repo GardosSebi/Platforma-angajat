@@ -4,6 +4,7 @@ import { Prisma, Survey, SurveyAudienceType, SurveyStatus, SurveyType } from "@p
 import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { PaginationQueryDto, resolvePagination } from "../../../../common/dto/pagination-query.dto";
 import { paginatedResult } from "../../../../common/pagination";
 import {
@@ -83,7 +84,8 @@ function pdfBuffer(title: string, rows: Record<string, unknown>[]): Promise<Buff
 export class SurveysService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly mail: MailService
   ) {}
 
   async overview(tenantId: string) {
@@ -137,6 +139,12 @@ export class SurveysService {
         questionSchema: jsonValue(dto.questionSchema),
         conditionalLogic: dto.conditionalLogic ? jsonValue(dto.conditionalLogic) : undefined,
         privateLinkEnabled: dto.privateLinkEnabled ?? true,
+        anonymousMode: dto.anonymousMode ?? false,
+        emailNotifyOnPublish: dto.emailNotifyOnPublish ?? false,
+        autoCreateTicket: dto.autoCreateTicket ?? false,
+        autoTicketTitle: clean(dto.autoTicketTitle),
+        autoTicketCategory: clean(dto.autoTicketCategory),
+        translations: dto.translations ? jsonValue(dto.translations) : undefined,
         createdBy: actorId
       }
     });
@@ -180,7 +188,13 @@ export class SurveysService {
         targetEmployeeIds: dto.targetEmployeeIds === undefined ? undefined : dedupe(dto.targetEmployeeIds),
         questionSchema: dto.questionSchema ? jsonValue(dto.questionSchema) : undefined,
         conditionalLogic: dto.conditionalLogic === undefined ? undefined : jsonValue(dto.conditionalLogic),
-        privateLinkEnabled: dto.privateLinkEnabled
+        privateLinkEnabled: dto.privateLinkEnabled,
+        anonymousMode: dto.anonymousMode,
+        emailNotifyOnPublish: dto.emailNotifyOnPublish,
+        autoCreateTicket: dto.autoCreateTicket,
+        autoTicketTitle: dto.autoTicketTitle === undefined ? undefined : clean(dto.autoTicketTitle) ?? null,
+        autoTicketCategory: dto.autoTicketCategory === undefined ? undefined : clean(dto.autoTicketCategory) ?? null,
+        translations: dto.translations === undefined ? undefined : jsonValue(dto.translations)
       }
     });
 
@@ -197,10 +211,18 @@ export class SurveysService {
   }
 
   async activate(tenantId: string, actorId: string, id: string) {
-    await this.assertSurvey(tenantId, id);
+    const survey = await this.assertSurvey(tenantId, id);
     await this.prisma.survey.update({ where: { id }, data: { status: SurveyStatus.ACTIVE } });
     await this.auditLog.write({ tenantId, actorId, module: "SURVEYS", action: "SURVEY_ACTIVATED", entityType: "Survey", entityId: id });
+    if (survey.emailNotifyOnPublish) {
+      await this.notifySurveyAudience(tenantId, survey);
+    }
     return this.get(tenantId, id);
+  }
+
+  async preview(tenantId: string, id: string) {
+    const survey = await this.assertSurvey(tenantId, id);
+    return this.serializeSurvey(survey, { responseCount: 0, privateResponses: 0, publicResponses: 0 });
   }
 
   async close(tenantId: string, actorId: string, id: string) {
@@ -398,11 +420,12 @@ export class SurveysService {
         data: {
           tenantId,
           surveyId,
-          employeeId: resolvedEmployeeId ?? null,
-          respondentUserId: actorId,
+          employeeId: survey.anonymousMode ? null : resolvedEmployeeId ?? null,
+          respondentUserId: survey.anonymousMode ? null : actorId,
           answersJson: jsonValue(dto.answers)
         }
       });
+      await this.maybeCreateTicketFromSurvey(survey, response.id, resolvedEmployeeId ?? null, actorId);
       return { responseId: response.id };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -432,6 +455,7 @@ export class SurveysService {
       await tx.survey.update({ where: { id: survey.id }, data: { publicResponseCount: { increment: 1 } } });
       return created;
     });
+    await this.maybeCreateTicketFromSurvey(survey, response.id, null, "public");
     return { responseId: response.id };
   }
 
@@ -515,7 +539,15 @@ export class SurveysService {
     for (const question of questions) {
       if (ids.has(question.id)) throw new BadRequestException(`Duplicate question id: ${question.id}`);
       ids.add(question.id);
-      if ((question.type === "SINGLE_CHOICE" || question.type === "MULTIPLE_CHOICE") && !question.options?.length) {
+      if (
+        (question.type === "SINGLE_CHOICE" ||
+          question.type === "MULTIPLE_CHOICE" ||
+          question.type === "DROPDOWN" ||
+          question.type === "MULTI_DROPDOWN" ||
+          question.type === "RANKING" ||
+          question.type === "IMAGE_SELECT") &&
+        !question.options?.length
+      ) {
         throw new BadRequestException(`${question.type} question requires options.`);
       }
     }
@@ -582,7 +614,13 @@ export class SurveysService {
       targetEmployeeIds: survey.targetEmployeeIds,
       questionSchema,
       conditionalLogic: survey.conditionalLogic,
+      translations: survey.translations,
       privateLinkEnabled: survey.privateLinkEnabled,
+      anonymousMode: survey.anonymousMode,
+      emailNotifyOnPublish: survey.emailNotifyOnPublish,
+      autoCreateTicket: survey.autoCreateTicket,
+      autoTicketTitle: survey.autoTicketTitle,
+      autoTicketCategory: survey.autoTicketCategory,
       publicEnabled: survey.publicEnabled,
       publicExpiresAt: survey.publicExpiresAt,
       publicResponseLimit: survey.publicResponseLimit,
@@ -639,6 +677,48 @@ export class SurveysService {
         respondentUserId: response.respondentUserId,
         ...Object.fromEntries(questions.map((question) => [question.title, answers[question.id] ?? null]))
       };
+    });
+  }
+
+  private async notifySurveyAudience(tenantId: string, survey: Survey) {
+    const employeeIds = await this.resolveSurveyAudienceEmployeeIds(tenantId, survey);
+    const employees = await this.prisma.employee.findMany({
+      where: { tenantId, id: { in: employeeIds }, active: true },
+      select: { email: true, fullName: true }
+    });
+    for (const employee of employees) {
+      if (!employee.email?.trim()) continue;
+      await this.mail.sendMail({
+        to: employee.email,
+        subject: `Sondaj nou: ${survey.title}`,
+        text: `A fost publicat sondajul „${survey.title}”. Accesează platforma pentru a completa.`
+      });
+    }
+  }
+
+  private async maybeCreateTicketFromSurvey(
+    survey: Survey,
+    responseId: string,
+    employeeId: string | null,
+    actorId: string
+  ) {
+    if (!survey.autoCreateTicket) return;
+    const employee = employeeId
+      ? await this.prisma.employee.findFirst({ where: { id: employeeId, tenantId: survey.tenantId } })
+      : null;
+    await this.prisma.helpdeskTicket.create({
+      data: {
+        tenantId: survey.tenantId,
+        title: survey.autoTicketTitle?.trim() || `Răspuns sondaj: ${survey.title}`,
+        description: `Tichet generat automat la completarea sondajului „${survey.title}”.`,
+        category: survey.autoTicketCategory ?? "ALTE",
+        source: "SURVEY",
+        reporterEmployeeId: employee?.id,
+        reporterName: employee?.fullName,
+        reporterEmail: employee?.email,
+        sourceSurveyResponseId: responseId,
+        createdBy: actorId
+      }
     });
   }
 }

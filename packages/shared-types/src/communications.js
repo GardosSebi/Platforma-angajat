@@ -1,4 +1,27 @@
-export const COMMUNICATION_CONTENT_TYPES = ["TEXT", "RICH_TEXT", "LINK", "DOCUMENT", "SURVEY"];
+export const COMMUNICATION_CONTENT_TYPES = [
+    "TEXT",
+    "RICH_TEXT",
+    "LINK",
+    "DOCUMENT",
+    "SURVEY",
+    "IMAGE",
+    "VIDEO",
+    "SLIDE",
+    "BUTTON"
+];
+export const COMMUNICATION_MESSAGE_TYPES = ["ANNOUNCEMENT", "QUESTION", "READ_CONFIRMATION"];
+export const COMMUNICATION_MESSAGE_TYPE_LABELS = {
+    ANNOUNCEMENT: "Anunț",
+    QUESTION: "Întrebare",
+    READ_CONFIRMATION: "Anunț cu confirmare citire"
+};
+export const COMMUNICATION_REACTIONS = ["THUMBS_UP", "HEART", "CLAP", "CHECK"];
+export const COMMUNICATION_REACTION_LABELS = {
+    THUMBS_UP: "👍",
+    HEART: "❤️",
+    CLAP: "👏",
+    CHECK: "✅"
+};
 export const COMMUNICATION_CATEGORIES = [
     "GENERAL",
     "SAFETY_ALERT",

@@ -1,9 +1,25 @@
 {
   "name": "Employee Platform",
   "short_name": "Employee",
+  "description": "Platformă internă pentru angajați — comunicări, sondaje, tichete, SSM",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#111827",
-  "theme_color": "#111827",
-  "icons": []
+  "theme_color": "#0f766e",
+  "lang": "ro",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }

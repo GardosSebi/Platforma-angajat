@@ -1,13 +1,17 @@
 import type {
   CommunicationAnnouncementItem,
+  CommunicationCalendarEntry,
   CommunicationDashboardResponse,
+  CommunicationReaction,
   CommunicationReminderItem,
   CommunicationTemplateItem,
   CreateCommunicationAnnouncementRequest,
   CreateCommunicationTemplateRequest,
   MarkCommunicationReadRequest,
+  SetCommunicationReactionRequest,
   UpdateCommunicationAnnouncementRequest
 } from "@repo/shared-types/communications";
+import type { UsageSummaryResponse } from "@repo/shared-types/platform-admin";
 import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
 import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
@@ -53,6 +57,22 @@ export const chatbotApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  setAnnouncementReaction(id: string, payload: SetCommunicationReactionRequest) {
+    return httpClient(`/chatbot/announcements/${id}/reaction`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  calendar() {
+    return httpClient<{ items: CommunicationCalendarEntry[] }>("/chatbot/calendar");
+  },
+  usageSummary(from?: string, to?: string) {
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    const q = params.toString();
+    return httpClient<UsageSummaryResponse>(`/admin/usage/summary${q ? `?${q}` : ""}`);
   },
   reminders() {
     return httpClient<CommunicationReminderItem[]>("/chatbot/reminders");

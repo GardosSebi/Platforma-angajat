@@ -15,9 +15,13 @@ import {
 } from "../../master-data/hooks/useMasterData";
 import { paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
+import { useQuery } from "@tanstack/react-query";
+import { masterDataApi } from "../../master-data/api/master-data.api";
+import { surveysApi } from "../../surveys/api/surveys.api";
 import {
   useAnnouncements,
   useChatbotDashboard,
+  useCommunicationCalendar,
   useCommunicationReminders,
   useCommunicationTemplates,
   useCreateAnnouncement,
@@ -25,7 +29,8 @@ import {
   useDispatchCommunicationReminders,
   useDuplicateAnnouncement,
   usePublishAnnouncement,
-  useRetractAnnouncement
+  useRetractAnnouncement,
+  useUsageSummary
 } from "../hooks/useChatbot";
 import {
   AUDIENCE_TYPES,
@@ -35,6 +40,9 @@ import {
 import { CommsAnnouncementDetail } from "../components/CommsAnnouncementDetail";
 import { CommsAnnouncementForm, type AnnouncementFormState } from "../components/CommsAnnouncementForm";
 import { CommsAnnouncementList } from "../components/CommsAnnouncementList";
+import { CommsCalendarPanel } from "../components/CommsCalendarPanel";
+import { CommsLatestPanel } from "../components/CommsLatestPanel";
+import { CommsUsagePanel } from "../components/CommsUsagePanel";
 import { CommsRemindersPanel } from "../components/CommsRemindersPanel";
 import { CommsTemplatesPanel } from "../components/CommsTemplatesPanel";
 
@@ -48,13 +56,18 @@ const EMPTY_ANNOUNCEMENT: AnnouncementFormState = {
   body: "",
   category: "GENERAL",
   contentType: "TEXT",
+  messageType: "ANNOUNCEMENT",
   audienceType: "ALL",
   status: "DRAFT",
   publishAt: "",
   expiresAt: "",
   reminderAt: "",
   contentUrl: "",
-  targetEmployeeIdsCsv: ""
+  targetEmployeeIdsCsv: "",
+  translationRoTitle: "",
+  translationRoBody: "",
+  translationEnTitle: "",
+  translationEnBody: ""
 };
 
 const EMPTY_TEMPLATE: CreateCommunicationTemplateRequest = {
@@ -72,6 +85,7 @@ export function ChatbotPage() {
   const canViewDashboard = hasPermission(roles, "communications:dashboard:view");
   const canEditAnnouncements = hasPermission(roles, "communications:announcements:edit");
   const canEditTemplates = hasPermission(roles, "communications:templates:edit");
+  const canViewUsage = hasPermission(roles, "admin:usage:view");
   const worksiteRestricted = isWorksiteScopedViewer(session?.roles);
 
   const audienceTypesForForm = useMemo(
@@ -84,6 +98,16 @@ export function ChatbotPage() {
   const announcementsQuery = useAnnouncements(announcementsPage.params);
   const templatesQuery = useCommunicationTemplates();
   const remindersQuery = useCommunicationReminders();
+  const calendarQuery = useCommunicationCalendar(canViewDashboard);
+  const usageQuery = useUsageSummary(canViewUsage);
+  const groupsLookup = useQuery({
+    queryKey: ["master-data", "groups-lookup"],
+    queryFn: () => masterDataApi.listGroups({ page: 1, pageSize: 200 })
+  });
+  const surveysLookup = useQuery({
+    queryKey: ["surveys", "lookup"],
+    queryFn: () => surveysApi.listSurveys({ page: 1, pageSize: 100 })
+  });
   const worksitesLookup = useWorksitesLookup();
   const departmentsLookup = useDepartmentsLookup();
   const jobPositionsLookup = useJobPositionsLookup();
@@ -158,11 +182,15 @@ export function ChatbotPage() {
     if (announcementForm.audienceType === "EMPLOYEE") {
       return (employeesOptions.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.fullName} - ${item.email}` }));
     }
+    if (announcementForm.audienceType === "EMPLOYEE_GROUP") {
+      return (groupsLookup.data?.items ?? []).map((item) => ({ id: item.id, label: item.name }));
+    }
     return [];
   }, [
     announcementForm.audienceType,
     departmentsLookup.data?.items,
     employeesOptions.data?.items,
+    groupsLookup.data?.items,
     jobPositionsLookup.data?.items,
     worksitesLookup.data?.items
   ]);
@@ -176,11 +204,13 @@ export function ChatbotPage() {
     const items: Array<{ id: CommsTab; label: string }> = [{ id: "list", label: "Anunțuri" }];
     if (canEditAnnouncements) items.push({ id: "compose", label: "Anunț nou" });
     if (canEditTemplates) items.push({ id: "templates", label: "Șabloane" });
+    if (canViewDashboard) items.push({ id: "calendar", label: "Calendar" });
+    if (canViewUsage) items.push({ id: "usage", label: "Rapoarte" });
     if (canEditAnnouncements || reminders.length > 0) {
       items.push({ id: "reminders", label: `Mementouri${reminders.length ? ` (${reminders.length})` : ""}` });
     }
     return items;
-  }, [canEditAnnouncements, canEditTemplates, reminders.length]);
+  }, [canEditAnnouncements, canEditTemplates, canViewDashboard, canViewUsage, reminders.length]);
 
   const selectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -212,12 +242,24 @@ export function ChatbotPage() {
   const onAnnouncementSubmit = (event: FormEvent) => {
     event.preventDefault();
     setAnnouncementFeedback(null);
-    const { targetEmployeeIdsCsv, ...form } = announcementForm;
+    const { targetEmployeeIdsCsv, translationRoTitle, translationRoBody, translationEnTitle, translationEnBody, ...form } =
+      announcementForm;
+    const translations: CreateCommunicationAnnouncementRequest["translations"] = {};
+    if (translationRoTitle.trim() || translationRoBody.trim()) {
+      translations.ro = { title: translationRoTitle.trim() || announcementForm.title, body: translationRoBody.trim() || announcementForm.body };
+    }
+    if (translationEnTitle.trim() || translationEnBody.trim()) {
+      translations.en = { title: translationEnTitle.trim(), body: translationEnBody.trim() };
+    }
     const payload: CreateCommunicationAnnouncementRequest = {
       ...form,
       title: announcementForm.title.trim(),
       body: announcementForm.body.trim(),
       contentUrl: announcementForm.contentUrl || undefined,
+      linkedSurveyId: announcementForm.linkedSurveyId || undefined,
+      buttonLabel: announcementForm.buttonLabel || undefined,
+      buttonUrl: announcementForm.buttonUrl || undefined,
+      translations: Object.keys(translations).length ? translations : undefined,
       audienceRefId: announcementForm.audienceRefId || undefined,
       audienceLabel: announcementForm.audienceLabel || undefined,
       targetEmployeeIds:
@@ -301,6 +343,14 @@ export function ChatbotPage() {
       {canViewDashboard && kpi ? (
         <div className="comms-kpi" aria-label="Rezumat">
           <div>
+            <span>Digitalizare</span>
+            <strong>{kpi.digitalizationRate}%</strong>
+          </div>
+          <div>
+            <span>Utilizatori activi</span>
+            <strong>{kpi.activeUsers}</strong>
+          </div>
+          <div>
             <span>Rată citire</span>
             <strong>{kpi.readRate}%</strong>
           </div>
@@ -313,6 +363,16 @@ export function ChatbotPage() {
             <strong>{kpi.activeEmployees}</strong>
           </div>
         </div>
+      ) : null}
+
+      {canViewDashboard && latest.length ? (
+        <CommsLatestPanel
+          items={latest}
+          onOpen={(id) => {
+            setOpenedAnnouncementId(id);
+            setTab("list");
+          }}
+        />
       ) : null}
 
       <nav className="comms-tabs comms-section-nav" aria-label="Secțiuni comunicări">
@@ -368,6 +428,7 @@ export function ChatbotPage() {
           onTemplateSelect={selectTemplate}
           onChange={(patch) => setAnnouncementForm((prev) => ({ ...prev, ...patch }))}
           onAudienceRefChange={onAudienceRefChange}
+          surveyOptions={(surveysLookup.data?.items ?? []).map((s) => ({ id: s.id, title: s.title }))}
           onSubmit={onAnnouncementSubmit}
           onCancel={() => setTab("list")}
         />
@@ -382,6 +443,21 @@ export function ChatbotPage() {
           onChange={(patch) => setTemplateForm((prev) => ({ ...prev, ...patch }))}
           onSubmit={onTemplateSubmit}
         />
+      ) : null}
+
+      {tab === "calendar" && canViewDashboard ? (
+        <CommsCalendarPanel
+          items={calendarQuery.data?.items ?? dashboardQuery.data?.calendar ?? []}
+          isLoading={calendarQuery.isLoading}
+          onOpenAnnouncement={(id) => {
+            setOpenedAnnouncementId(id);
+            setTab("list");
+          }}
+        />
+      ) : null}
+
+      {tab === "usage" && canViewUsage ? (
+        <CommsUsagePanel data={usageQuery.data} isLoading={usageQuery.isLoading} />
       ) : null}
 
       {tab === "reminders" ? (

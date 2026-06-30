@@ -8,10 +8,14 @@ import type {
 import { COMMUNICATION_CATEGORIES, COMMUNICATION_CATEGORY_LABELS } from "@repo/shared-types/communications";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
-import { AUDIENCE_LABELS, CONTENT_TYPE_LABELS, CONTENT_TYPES } from "../comms-shared";
+import { AUDIENCE_LABELS, CONTENT_TYPE_LABELS, CONTENT_TYPES, MESSAGE_TYPE_LABELS, MESSAGE_TYPES } from "../comms-shared";
 
 export type AnnouncementFormState = CreateCommunicationAnnouncementRequest & {
   targetEmployeeIdsCsv: string;
+  translationRoTitle: string;
+  translationRoBody: string;
+  translationEnTitle: string;
+  translationEnBody: string;
 };
 
 type AudienceOption = { id: string; label: string };
@@ -30,6 +34,7 @@ type Props = {
   onTemplateSelect: (templateId: string) => void;
   onChange: (patch: Partial<AnnouncementFormState>) => void;
   onAudienceRefChange: (value: string) => void;
+  surveyOptions?: Array<{ id: string; title: string }>;
   onSubmit: (event: FormEvent) => void;
   onCancel: () => void;
 };
@@ -47,11 +52,20 @@ export function CommsAnnouncementForm({
   onChange,
   onAudienceRefChange,
   onSubmit,
-  onCancel
+  onCancel,
+  surveyOptions = []
 }: Props) {
   const needsSegment = audienceOptions.length > 0;
   const needsCustomList = form.audienceType === "CUSTOM";
-  const showLinkField = form.contentType === "LINK" || form.contentType === "DOCUMENT" || Boolean(form.contentUrl);
+  const showLinkField =
+    form.contentType === "LINK" ||
+    form.contentType === "DOCUMENT" ||
+    form.contentType === "IMAGE" ||
+    form.contentType === "VIDEO" ||
+    form.contentType === "SLIDE" ||
+    Boolean(form.contentUrl);
+  const showButtonFields = form.contentType === "BUTTON";
+  const showSurveyLink = form.contentType === "SURVEY";
 
   return (
     <form className="card form-stack comms-panel comms-compose" onSubmit={onSubmit}>
@@ -93,6 +107,21 @@ export function CommsAnnouncementForm({
             label: COMMUNICATION_CATEGORY_LABELS[cat]
           }))}
         />
+        <FieldSelect
+          id="message-type"
+          label="Tip mesaj"
+          value={form.messageType ?? "ANNOUNCEMENT"}
+          onChange={(messageType) =>
+            onChange({
+              messageType: messageType as AnnouncementFormState["messageType"],
+              requireReadConfirmation: messageType === "READ_CONFIRMATION"
+            })
+          }
+          options={MESSAGE_TYPES.map((type) => ({
+            value: type,
+            label: MESSAGE_TYPE_LABELS[type]
+          }))}
+        />
         <div className="field">
           <label htmlFor="announcement-title">Titlu *</label>
           <input
@@ -114,6 +143,12 @@ export function CommsAnnouncementForm({
             required
           />
         </div>
+        {form.contentType === "RICH_TEXT" ? (
+          <div className="field">
+            <label>Previzualizare text formatat</label>
+            <div className="comms-rich-preview" dangerouslySetInnerHTML={{ __html: form.body.replace(/\n/g, "<br/>") }} />
+          </div>
+        ) : null}
         <FieldSelect
           id="content-type"
           label="Tip conținut"
@@ -126,7 +161,7 @@ export function CommsAnnouncementForm({
         />
         {showLinkField ? (
           <div className="field">
-            <label htmlFor="content-url">Link sau document</label>
+            <label htmlFor="content-url">URL conținut (imagine, video, document, slide)</label>
             <input
               id="content-url"
               value={form.contentUrl ?? ""}
@@ -135,6 +170,91 @@ export function CommsAnnouncementForm({
             />
           </div>
         ) : null}
+        {showButtonFields ? (
+          <div className="comms-form-row">
+            <div className="field">
+              <label htmlFor="button-label">Etichetă buton</label>
+              <input
+                id="button-label"
+                value={form.buttonLabel ?? ""}
+                onChange={(event) => onChange({ buttonLabel: event.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="button-url">URL buton</label>
+              <input
+                id="button-url"
+                value={form.buttonUrl ?? ""}
+                onChange={(event) => onChange({ buttonUrl: event.target.value })}
+              />
+            </div>
+          </div>
+        ) : null}
+        {showSurveyLink ? (
+          <FieldSelect
+            id="linked-survey"
+            label="Sondaj integrat"
+            value={form.linkedSurveyId ?? ""}
+            onChange={(linkedSurveyId) => onChange({ linkedSurveyId: linkedSurveyId || undefined })}
+            allowEmpty
+            emptyLabel="Fără sondaj legat"
+            options={mapToOptions(
+              surveyOptions,
+              (s) => s.id,
+              (s) => s.title
+            )}
+          />
+        ) : null}
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={form.reactionsEnabled ?? false}
+            onChange={(event) => onChange({ reactionsEnabled: event.target.checked })}
+          />
+          <span>Permite reacții (👍 ❤️ 👏 ✅)</span>
+        </label>
+      </fieldset>
+
+      <fieldset className="comms-fieldset">
+        <legend>Traduceri (opțional)</legend>
+        <div className="comms-form-row">
+          <div className="field">
+            <label htmlFor="tr-ro-title">Titlu RO</label>
+            <input
+              id="tr-ro-title"
+              value={form.translationRoTitle}
+              onChange={(event) => onChange({ translationRoTitle: event.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="tr-en-title">Titlu EN</label>
+            <input
+              id="tr-en-title"
+              value={form.translationEnTitle}
+              onChange={(event) => onChange({ translationEnTitle: event.target.value })}
+            />
+          </div>
+        </div>
+        <div className="comms-form-row">
+          <div className="field">
+            <label htmlFor="tr-ro-body">Mesaj RO</label>
+            <textarea
+              id="tr-ro-body"
+              rows={2}
+              value={form.translationRoBody}
+              onChange={(event) => onChange({ translationRoBody: event.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="tr-en-body">Mesaj EN</label>
+            <textarea
+              id="tr-en-body"
+              rows={2}
+              value={form.translationEnBody}
+              onChange={(event) => onChange({ translationEnBody: event.target.value })}
+            />
+          </div>
+        </div>
       </fieldset>
 
       <fieldset className="comms-fieldset">
@@ -195,6 +315,7 @@ export function CommsAnnouncementForm({
             onChange={(status) => onChange({ status: status as "DRAFT" | "PUBLISHED" })}
             options={[
               { value: "DRAFT", label: "Salvează ca ciornă" },
+              { value: "READY_TO_SEND", label: "Marchează gata de trimis" },
               { value: "PUBLISHED", label: "Publică imediat" }
             ]}
           />

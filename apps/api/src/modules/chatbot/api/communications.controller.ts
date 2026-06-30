@@ -13,6 +13,7 @@ import {
   CreateAnnouncementDto,
   CreateTemplateDto,
   MarkAnnouncementReadDto,
+  SetAnnouncementReactionDto,
   UpdateAnnouncementDto
 } from "./dto/communications.dto";
 
@@ -90,6 +91,23 @@ export class CommunicationsController {
     @Body() dto: MarkAnnouncementReadDto
   ) {
     return this.communications.markRead(tenantId, id, dto, user);
+  }
+
+  @Post("announcements/:id/reaction")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
+  setReaction(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: SetAnnouncementReactionDto
+  ) {
+    return this.communications.setReaction(tenantId, id, dto, user);
+  }
+
+  @Get("calendar")
+  @RequirePermissions(Permission.COMMUNICATIONS_DASHBOARD_VIEW)
+  calendar(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.communications.calendar(tenantId, user);
   }
 
   @Get("reminders")

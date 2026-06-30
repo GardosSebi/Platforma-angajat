@@ -18,9 +18,11 @@ import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { AUDIENCE_LABELS, AUDIENCE_TYPES } from "../surveys-shared";
 
-export type SurveyFormState = Omit<CreateSurveyRequest, "questionSchema" | "conditionalLogic" | "targetEmployeeIds"> & {
+export type SurveyFormState = Omit<CreateSurveyRequest, "questionSchema" | "conditionalLogic" | "targetEmployeeIds" | "translations"> & {
   targetEmployeeIdsCsv: string;
   closesAtInput: string;
+  translationRoTitle: string;
+  translationEnTitle: string;
 };
 
 export type QuestionFormState = {
@@ -237,6 +239,82 @@ export function SurveyCreateForm({
         ) : (
           <p className="field-hint">Poți salva direct cu întrebarea completată sau adaugă mai multe întrebări.</p>
         )}
+      </fieldset>
+
+      <fieldset className="comms-fieldset survey-section">
+        <legend>3. Setări sondaj</legend>
+        <div className="checkbox-grid">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={surveyForm.privateLinkEnabled ?? true}
+              onChange={(event) => onSurveyChange({ privateLinkEnabled: event.target.checked })}
+            />
+            <span>Link privat (autentificare)</span>
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={surveyForm.anonymousMode ?? false}
+              onChange={(event) => onSurveyChange({ anonymousMode: event.target.checked })}
+            />
+            <span>Răspunsuri anonime</span>
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={surveyForm.emailNotifyOnPublish ?? false}
+              onChange={(event) => onSurveyChange({ emailNotifyOnPublish: event.target.checked })}
+            />
+            <span>Notificare email la publicare</span>
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={surveyForm.autoCreateTicket ?? false}
+              onChange={(event) => onSurveyChange({ autoCreateTicket: event.target.checked })}
+            />
+            <span>Creare tichet la completare</span>
+          </label>
+        </div>
+        {surveyForm.autoCreateTicket ? (
+          <div className="comms-form-row">
+            <div className="field">
+              <label htmlFor="auto-ticket-title">Titlu tichet</label>
+              <input
+                id="auto-ticket-title"
+                value={surveyForm.autoTicketTitle ?? ""}
+                onChange={(event) => onSurveyChange({ autoTicketTitle: event.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="auto-ticket-category">Categorie</label>
+              <input
+                id="auto-ticket-category"
+                value={surveyForm.autoTicketCategory ?? ""}
+                onChange={(event) => onSurveyChange({ autoTicketCategory: event.target.value })}
+              />
+            </div>
+          </div>
+        ) : null}
+        <div className="comms-form-row">
+          <div className="field">
+            <label htmlFor="tr-survey-ro">Titlu traducere RO</label>
+            <input
+              id="tr-survey-ro"
+              value={surveyForm.translationRoTitle}
+              onChange={(event) => onSurveyChange({ translationRoTitle: event.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="tr-survey-en">Titlu traducere EN</label>
+            <input
+              id="tr-survey-en"
+              value={surveyForm.translationEnTitle}
+              onChange={(event) => onSurveyChange({ translationEnTitle: event.target.value })}
+            />
+          </div>
+        </div>
       </fieldset>
 
       <div className="comms-compose-actions">

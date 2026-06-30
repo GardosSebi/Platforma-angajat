@@ -1,30 +1,49 @@
 export const SURVEY_QUESTION_TYPES = [
   "SINGLE_CHOICE",
   "MULTIPLE_CHOICE",
+  "DROPDOWN",
+  "MULTI_DROPDOWN",
   "SCALE",
   "TEXT",
   "LONG_TEXT",
+  "MULTI_TEXT",
   "DATE",
   "BOOLEAN",
   "NUMBER",
-  "RATING_NPS"
+  "RATING_NPS",
+  "RANKING",
+  "FILE_UPLOAD",
+  "IMAGE_SELECT"
 ] as const;
 export type SurveyQuestionType = (typeof SURVEY_QUESTION_TYPES)[number];
 
 export const SURVEY_QUESTION_TYPE_LABELS: Record<SurveyQuestionType, string> = {
-  SINGLE_CHOICE: "Alegere unică",
-  MULTIPLE_CHOICE: "Alegere multiplă",
+  SINGLE_CHOICE: "Alegere unică (radio)",
+  MULTIPLE_CHOICE: "Alegere multiplă (checkbox)",
+  DROPDOWN: "Dropdown",
+  MULTI_DROPDOWN: "Dropdown multi-select",
   SCALE: "Scală",
   TEXT: "Text scurt",
   LONG_TEXT: "Text lung",
+  MULTI_TEXT: "Casete text multiple",
   DATE: "Dată",
   BOOLEAN: "Da / Nu",
   NUMBER: "Număr",
-  RATING_NPS: "Scor NPS (0–10)"
+  RATING_NPS: "Scor NPS (0–10)",
+  RANKING: "Clasament",
+  FILE_UPLOAD: "Încărcare fișier",
+  IMAGE_SELECT: "Selector imagini"
 };
 
 export function surveyQuestionNeedsOptions(type: SurveyQuestionType): boolean {
-  return type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE";
+  return (
+    type === "SINGLE_CHOICE" ||
+    type === "MULTIPLE_CHOICE" ||
+    type === "DROPDOWN" ||
+    type === "MULTI_DROPDOWN" ||
+    type === "RANKING" ||
+    type === "IMAGE_SELECT"
+  );
 }
 
 export const SURVEY_TYPES = ["ENGAGEMENT", "COMPLIANCE", "FEEDBACK", "EXIT", "PULSE", "CUSTOM"] as const;
@@ -48,6 +67,7 @@ export type SurveyAnswerValue = string | number | boolean | string[] | null;
 export interface SurveyQuestionOption {
   value: string;
   label: string;
+  imageUrl?: string;
 }
 
 export interface SurveyQuestion {
@@ -58,6 +78,7 @@ export interface SurveyQuestion {
   options?: SurveyQuestionOption[];
   min?: number;
   max?: number;
+  multiTextCount?: number;
 }
 
 export interface SurveyConditionalRule {
@@ -66,6 +87,14 @@ export interface SurveyConditionalRule {
   value: SurveyAnswerValue;
   showQuestionId: string;
 }
+
+export interface SurveyTranslation {
+  title: string;
+  description?: string;
+  questions?: Record<string, string>;
+}
+
+export type SurveyTranslations = Record<string, SurveyTranslation>;
 
 export interface CreateSurveyRequest {
   title: string;
@@ -77,7 +106,13 @@ export interface CreateSurveyRequest {
   targetEmployeeIds?: string[];
   questionSchema: SurveyQuestion[];
   conditionalLogic?: SurveyConditionalRule[];
+  translations?: SurveyTranslations;
   privateLinkEnabled?: boolean;
+  anonymousMode?: boolean;
+  emailNotifyOnPublish?: boolean;
+  autoCreateTicket?: boolean;
+  autoTicketTitle?: string;
+  autoTicketCategory?: string;
   closesAt?: string;
 }
 
@@ -92,7 +127,13 @@ export interface UpdateSurveyRequest {
   targetEmployeeIds?: string[];
   questionSchema?: SurveyQuestion[];
   conditionalLogic?: SurveyConditionalRule[];
+  translations?: SurveyTranslations;
   privateLinkEnabled?: boolean;
+  anonymousMode?: boolean;
+  emailNotifyOnPublish?: boolean;
+  autoCreateTicket?: boolean;
+  autoTicketTitle?: string;
+  autoTicketCategory?: string;
   closesAt?: string;
 }
 
@@ -109,7 +150,13 @@ export interface SurveyItem {
   targetEmployeeIds: string[];
   questionSchema: SurveyQuestion[];
   conditionalLogic?: SurveyConditionalRule[] | null;
+  translations?: SurveyTranslations | null;
   privateLinkEnabled: boolean;
+  anonymousMode: boolean;
+  emailNotifyOnPublish: boolean;
+  autoCreateTicket: boolean;
+  autoTicketTitle?: string | null;
+  autoTicketCategory?: string | null;
   publicEnabled: boolean;
   publicExpiresAt?: string | null;
   publicResponseLimit?: number | null;
@@ -122,7 +169,6 @@ export interface SurveyItem {
     privateResponses: number;
     publicResponses: number;
   };
-  /** Present on GET .../for-respond when the current user already submitted. */
   alreadyResponded?: boolean;
   respondedAt?: string | null;
 }
