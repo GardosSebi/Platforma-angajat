@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { PermissionsGuard } from "../../common/guards/permissions.guard";
 import { NotificationsModule } from "../../infrastructure/notifications/notifications.module";
+import { SsmModule } from "../ssm/ssm.module";
 import { MasterDataService } from "./master-data.service";
 import { WorksitesController } from "./api/worksites.controller";
 import { DepartmentsController } from "./api/departments.controller";
@@ -9,9 +10,10 @@ import { EmployeesController } from "./api/employees.controller";
 import { GroupsController } from "./api/groups.controller";
 import { SsmResponsiblesController } from "./api/ssm-responsibles.controller";
 import { MasterDataImportController } from "./api/import.controller";
+import { LegalEntitiesController } from "./api/legal-entities.controller";
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, SsmModule],
   controllers: [
     WorksitesController,
     DepartmentsController,
@@ -19,7 +21,8 @@ import { MasterDataImportController } from "./api/import.controller";
     EmployeesController,
     GroupsController,
     SsmResponsiblesController,
-    MasterDataImportController
+    MasterDataImportController,
+    LegalEntitiesController
   ],
   providers: [MasterDataService, PermissionsGuard],
   exports: [MasterDataService]

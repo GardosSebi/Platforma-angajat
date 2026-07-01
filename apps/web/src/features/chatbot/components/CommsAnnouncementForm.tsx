@@ -205,14 +205,6 @@ export function CommsAnnouncementForm({
             )}
           />
         ) : null}
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={form.reactionsEnabled ?? false}
-            onChange={(event) => onChange({ reactionsEnabled: event.target.checked })}
-          />
-          <span>Permite reacții (👍 ❤️ 👏 ✅)</span>
-        </label>
       </fieldset>
 
       <fieldset className="comms-fieldset">

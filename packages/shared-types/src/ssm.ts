@@ -659,7 +659,7 @@ export interface SsmPsiResponsibleItem {
 
 export type SsmCalendarSource = "TRAINING" | "MEDICAL" | "EIP" | "PSI" | "PSI_TRAINING";
 export type SsmTrafficLight = "GREEN" | "YELLOW" | "RED";
-export type SsmReportType = "trainings" | "eip" | "medical" | "documents";
+export type SsmReportType = "trainings" | "eip" | "medical" | "documents" | "accidents" | "psi" | "compliance";
 
 export interface SsmUnifiedCalendarEvent {
   id: string;

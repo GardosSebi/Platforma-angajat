@@ -14,6 +14,10 @@ export class CreateWorksiteDto {
   address?: string;
 
   @IsOptional()
+  @IsString()
+  legalEntityId?: string;
+
+  @IsOptional()
   @IsBoolean()
   active?: boolean;
 }

@@ -29,13 +29,15 @@ import {
   assertEmployeeInWorksiteScope,
   resolveWorksiteViewerScope
 } from "../../common/worksite-viewer-scope";
-
-type SsmTrainingCategoryCode =
-  | "INTRODUCTORY_GENERAL"
-  | "WORKPLACE"
-  | "PERIODIC"
-  | "SUPPLEMENTARY"
-  | "EMERGENCY_PSI";
+import { EmployeeEmploymentType } from "@prisma/client";
+import PDFDocument from "pdfkit";
+import { SsmTrainingAutomationService } from "../ssm/application/services/ssm-training-automation.service";
+import { CreateLegalEntityDto } from "./dto/create-legal-entity.dto";
+import { UpdateLegalEntityDto } from "./dto/update-legal-entity.dto";
+import { ListEmployeesQueryDto } from "./dto/list-employees-query.dto";
+import { UpdateEmployeeGroupDto } from "./dto/update-group.dto";
+import { UpdateSsmResponsibleDto } from "./dto/update-ssm-responsible.dto";
+import { Prisma } from "@prisma/client";
 
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value || !value.trim()) return undefined;
@@ -86,117 +88,9 @@ export class MasterDataService {
     private readonly prisma: PrismaService,
     private readonly encryption: DataEncryptionService,
     private readonly auditLog: AuditLogService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly trainingAutomation: SsmTrainingAutomationService
   ) {}
-
-  private async ensureTrainingType(
-    tenantId: string,
-    category: SsmTrainingCategoryCode
-  ) {
-    const defaults: Record<SsmTrainingCategoryCode, { code: string; name: string; recurrenceDays?: number; legalMinDurationHours?: number }> = {
-      INTRODUCTORY_GENERAL: {
-        code: "SSM-INTRO",
-        name: "Instruire introductiv-generală",
-        legalMinDurationHours: 8
-      },
-      WORKPLACE: {
-        code: "SSM-WORKPLACE",
-        name: "Instruire la locul de muncă"
-      },
-      PERIODIC: {
-        code: "SSM-PERIODIC",
-        name: "Instruire periodică",
-        recurrenceDays: 180
-      },
-      SUPPLEMENTARY: {
-        code: "SSM-SUPL",
-        name: "Instruire suplimentară",
-        legalMinDurationHours: 8
-      },
-      EMERGENCY_PSI: {
-        code: "PSI-EMERGENCY",
-        name: "Instruire PSI / situații de urgență",
-        recurrenceDays: 180
-      }
-    };
-    const def = defaults[category];
-    return this.prisma.ssmTrainingType.upsert({
-      where: {
-        tenantId_code: {
-          tenantId,
-          code: def.code
-        }
-      },
-      create: {
-        tenantId,
-        code: def.code,
-        name: def.name,
-        category,
-        recurrenceDays: def.recurrenceDays,
-        reminderDays: [30, 15, 7],
-        legalMinDurationHours: def.legalMinDurationHours
-      },
-      update: {
-        category,
-        recurrenceDays: def.recurrenceDays,
-        legalMinDurationHours: def.legalMinDurationHours,
-        active: true
-      }
-    });
-  }
-
-  private async autoAssignTrainingPlan(
-    tenantId: string,
-    actorUserId: string,
-    employeeId: string,
-    category: SsmTrainingCategoryCode,
-    reason: string
-  ) {
-    const type = await this.ensureTrainingType(tenantId, category);
-    const existingOpen = await this.prisma.ssmTrainingPlan.findFirst({
-      where: {
-        tenantId,
-        employeeId,
-        trainingTypeId: type.id,
-        status: { in: ["PENDING", "OVERDUE"] as const }
-      }
-    });
-    if (existingOpen) {
-      return;
-    }
-    const now = new Date();
-    const dueAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const plan = await this.prisma.ssmTrainingPlan.create({
-      data: {
-        tenantId,
-        employeeId,
-        trainingTypeId: type.id,
-        scheduledAt: now,
-        dueAt,
-        materialTitle: reason,
-        createdBy: actorUserId
-      }
-    });
-    await this.auditLog.write({
-      tenantId,
-      actorId: actorUserId,
-      module: "SSM",
-      action: "TRAINING_AUTO_ASSIGNED",
-      entityType: "SsmTrainingPlan",
-      entityId: plan.id,
-      payload: { employeeId, category, reason }
-    });
-    await this.notifications.notifyEmployee({
-      tenantId,
-      employeeId,
-      category: "TRAINING_ASSIGNED",
-      title: `Instruire alocată: ${type.name}`,
-      body: reason,
-      linkPath: "/ssm",
-      entityType: "SsmTrainingPlan",
-      entityId: plan.id
-    });
-  }
 
   private maskCnp(stored: string | null, reveal: boolean): string | null {
     if (!stored) return null;
@@ -217,9 +111,134 @@ export class MasterDataService {
     return this.encryption.encrypt(plain.trim());
   }
 
+  private async closeOpenPlacementHistory(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    employeeId: string,
+    effectiveTo: Date = new Date()
+  ) {
+    await tx.employeePlacementHistory.updateMany({
+      where: { tenantId, employeeId, effectiveTo: null },
+      data: { effectiveTo }
+    });
+  }
+
+  private resolveActiveFromLeaveDate(leaveDate: Date | null | undefined, explicit?: boolean): boolean {
+    if (explicit !== undefined) return explicit;
+    if (leaveDate && leaveDate.getTime() <= Date.now()) return false;
+    return true;
+  }
+
+  private async assertWorksiteForTenant(tenantId: string, worksiteId: string) {
+    const ws = await this.prisma.worksite.findFirst({ where: { id: worksiteId, tenantId } });
+    if (!ws) throw new BadRequestException("worksiteId nevalid pentru acest tenant.");
+    return ws;
+  }
+
+  private async assertJobPositionWorksite(
+    tenantId: string,
+    worksiteId: string | undefined,
+    legalEntityId: string | undefined
+  ) {
+    if (!worksiteId?.trim()) return;
+    const ws = await this.assertWorksiteForTenant(tenantId, worksiteId.trim());
+    if (legalEntityId?.trim() && ws.legalEntityId && ws.legalEntityId !== legalEntityId.trim()) {
+      throw new BadRequestException("Punctul de lucru nu aparține entității juridice selectate.");
+    }
+  }
+
   private async worksiteScopeFor(viewer?: JwtPayload) {
     if (!viewer) return { mode: "tenant" as const };
     return resolveWorksiteViewerScope(this.prisma, viewer.tenantId, viewer);
+  }
+
+  // --- Entități juridice ---
+  async listLegalEntities(tenantId: string, query?: PaginationQueryDto) {
+    const p = resolvePagination(query);
+    const where = { tenantId };
+    const [items, total] = await Promise.all([
+      this.prisma.legalEntity.findMany({
+        where,
+        orderBy: { code: "asc" },
+        skip: p.skip,
+        take: p.take,
+        include: {
+          worksites: {
+            select: { id: true, code: true, name: true, address: true, active: true },
+            orderBy: { code: "asc" }
+          }
+        }
+      }),
+      this.prisma.legalEntity.count({ where })
+    ]);
+    return paginatedResult(items, total, p.page, p.pageSize);
+  }
+
+  async createLegalEntity(tenantId: string, dto: CreateLegalEntityDto) {
+    const worksiteIds = [...new Set(dto.worksiteIds.map((id) => id.trim()).filter(Boolean))];
+    if (!worksiteIds.length) {
+      throw new BadRequestException("Selectează cel puțin un punct de lucru.");
+    }
+
+    const worksites = await this.prisma.worksite.findMany({
+      where: { tenantId, id: { in: worksiteIds } },
+      select: { id: true }
+    });
+    if (worksites.length !== worksiteIds.length) {
+      throw new BadRequestException("Unul sau mai multe puncte de lucru selectate sunt nevalide.");
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const entity = await tx.legalEntity.create({
+          data: {
+            tenantId,
+            code: dto.code.trim(),
+            name: dto.name.trim(),
+            cui: dto.cui?.trim(),
+            headquarters: dto.headquarters?.trim(),
+            active: dto.active ?? true
+          }
+        });
+        await tx.worksite.updateMany({
+          where: { tenantId, id: { in: worksiteIds } },
+          data: { legalEntityId: entity.id }
+        });
+        const linkedWorksites = await tx.worksite.findMany({
+          where: { tenantId, legalEntityId: entity.id },
+          select: { id: true, code: true, name: true, address: true, active: true },
+          orderBy: { code: "asc" }
+        });
+        return { ...entity, worksites: linkedWorksites };
+      });
+    } catch {
+      throw new ConflictException("Codul entității juridice există deja pentru acest tenant.");
+    }
+  }
+
+  async updateLegalEntity(tenantId: string, id: string, dto: UpdateLegalEntityDto) {
+    const existing = await this.prisma.legalEntity.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Entitate juridică negăsită.");
+    const data: {
+      code?: string;
+      name?: string;
+      cui?: string | null;
+      headquarters?: string | null;
+      active?: boolean;
+    } = {};
+    if (dto.code !== undefined) data.code = dto.code.trim();
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.cui !== undefined) data.cui = dto.cui.trim() ? dto.cui.trim() : null;
+    if (dto.headquarters !== undefined) {
+      data.headquarters = dto.headquarters.trim() ? dto.headquarters.trim() : null;
+    }
+    if (dto.active !== undefined) data.active = dto.active;
+    if (!Object.keys(data).length) return existing;
+    try {
+      return await this.prisma.legalEntity.update({ where: { id }, data });
+    } catch {
+      throw new ConflictException("Codul entității juridice există deja pentru acest tenant.");
+    }
   }
 
   // --- Puncte de lucru ---
@@ -240,6 +259,12 @@ export class MasterDataService {
   }
 
   async createWorksite(tenantId: string, dto: CreateWorksiteDto) {
+    if (dto.legalEntityId) {
+      const entity = await this.prisma.legalEntity.findFirst({
+        where: { id: dto.legalEntityId, tenantId }
+      });
+      if (!entity) throw new BadRequestException("legalEntityId nevalid pentru acest tenant.");
+    }
     try {
       return await this.prisma.worksite.create({
         data: {
@@ -247,6 +272,7 @@ export class MasterDataService {
           code: dto.code.trim(),
           name: dto.name.trim(),
           address: dto.address?.trim(),
+          legalEntityId: dto.legalEntityId,
           active: dto.active ?? true
         }
       });
@@ -263,11 +289,23 @@ export class MasterDataService {
       code?: string;
       name?: string;
       address?: string | null;
+      legalEntityId?: string | null;
       active?: boolean;
     } = {};
     if (dto.code !== undefined) data.code = dto.code.trim();
     if (dto.name !== undefined) data.name = dto.name.trim();
     if (dto.address !== undefined) data.address = dto.address.trim() ? dto.address.trim() : null;
+    if (dto.legalEntityId !== undefined) {
+      if (dto.legalEntityId.trim()) {
+        const entity = await this.prisma.legalEntity.findFirst({
+          where: { id: dto.legalEntityId.trim(), tenantId }
+        });
+        if (!entity) throw new BadRequestException("legalEntityId nevalid.");
+        data.legalEntityId = dto.legalEntityId.trim();
+      } else {
+        data.legalEntityId = null;
+      }
+    }
     if (dto.active !== undefined) data.active = dto.active;
 
     if (Object.keys(data).length === 0) return existing;
@@ -360,7 +398,12 @@ export class MasterDataService {
         where,
         orderBy: { code: "asc" },
         skip: p.skip,
-        take: p.take
+        take: p.take,
+        include: {
+          legalEntity: { select: { id: true, code: true, name: true } },
+          worksite: { select: { id: true, code: true, name: true } },
+          department: { select: { id: true, code: true, name: true } }
+        }
       }),
       this.prisma.jobPosition.count({ where })
     ]);
@@ -374,6 +417,15 @@ export class MasterDataService {
       });
       if (!dep) throw new BadRequestException("departmentId nevalid pentru acest tenant.");
     }
+    if (dto.legalEntityId) {
+      const entity = await this.prisma.legalEntity.findFirst({
+        where: { id: dto.legalEntityId, tenantId }
+      });
+      if (!entity) throw new BadRequestException("legalEntityId nevalid pentru acest tenant.");
+    }
+    if (dto.worksiteId) {
+      await this.assertJobPositionWorksite(tenantId, dto.worksiteId, dto.legalEntityId);
+    }
     try {
       return await this.prisma.jobPosition.create({
         data: {
@@ -381,8 +433,11 @@ export class MasterDataService {
           code: dto.code.trim(),
           name: dto.name.trim(),
           departmentId: dto.departmentId,
+          legalEntityId: dto.legalEntityId,
+          worksiteId: dto.worksiteId?.trim() || undefined,
           corCode: dto.corCode?.trim(),
           description: dto.description?.trim(),
+          activityDescription: dto.activityDescription?.trim(),
           active: dto.active ?? true
         }
       });
@@ -406,8 +461,11 @@ export class MasterDataService {
       code?: string;
       name?: string;
       departmentId?: string | null;
+      legalEntityId?: string | null;
+      worksiteId?: string | null;
       corCode?: string | null;
       description?: string | null;
+      activityDescription?: string | null;
       active?: boolean;
     } = {};
     if (dto.code !== undefined) data.code = dto.code.trim();
@@ -415,9 +473,35 @@ export class MasterDataService {
     if (dto.departmentId !== undefined) {
       data.departmentId = dto.departmentId.trim() ? dto.departmentId.trim() : null;
     }
+    if (dto.legalEntityId !== undefined) {
+      if (dto.legalEntityId.trim()) {
+        const entity = await this.prisma.legalEntity.findFirst({
+          where: { id: dto.legalEntityId.trim(), tenantId }
+        });
+        if (!entity) throw new BadRequestException("legalEntityId nevalid.");
+        data.legalEntityId = dto.legalEntityId.trim();
+      } else {
+        data.legalEntityId = null;
+      }
+    }
+    if (dto.worksiteId !== undefined) {
+      if (dto.worksiteId.trim()) {
+        await this.assertJobPositionWorksite(
+          tenantId,
+          dto.worksiteId.trim(),
+          (data.legalEntityId ?? existing.legalEntityId) ?? undefined
+        );
+        data.worksiteId = dto.worksiteId.trim();
+      } else {
+        data.worksiteId = null;
+      }
+    }
     if (dto.corCode !== undefined) data.corCode = dto.corCode.trim() ? dto.corCode.trim() : null;
     if (dto.description !== undefined) {
       data.description = dto.description.trim() ? dto.description.trim() : null;
+    }
+    if (dto.activityDescription !== undefined) {
+      data.activityDescription = dto.activityDescription.trim() ? dto.activityDescription.trim() : null;
     }
     if (dto.active !== undefined) data.active = dto.active;
 
@@ -434,12 +518,25 @@ export class MasterDataService {
   async listEmployees(
     tenantId: string,
     revealCnp: boolean,
-    query?: PaginationQueryDto,
+    query?: ListEmployeesQueryDto,
     viewer?: JwtPayload
   ) {
     const p = resolvePagination(query);
     const scope = await this.worksiteScopeFor(viewer);
     const where = applyWorksiteToEmployeeWhere({ tenantId }, scope);
+
+    if (query?.active !== undefined) where.active = query.active;
+    if (query?.worksiteId?.trim()) where.worksiteId = query.worksiteId.trim();
+    if (query?.departmentId?.trim()) where.departmentId = query.departmentId.trim();
+    if (query?.jobPositionId?.trim()) where.jobPositionId = query.jobPositionId.trim();
+    if (query?.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { fullName: { contains: s, mode: "insensitive" } },
+        { email: { contains: s, mode: "insensitive" } }
+      ];
+    }
+
     const [rows, total] = await Promise.all([
       this.prisma.employee.findMany({
         where,
@@ -499,11 +596,23 @@ export class MasterDataService {
         worksite: true,
         department: true,
         jobPosition: true,
-        placementHistory: { orderBy: { effectiveFrom: "desc" }, take: 50 }
+        placementHistory: {
+          orderBy: { effectiveFrom: "desc" },
+          take: 50,
+          include: {
+            worksite: { select: { id: true, code: true, name: true } },
+            department: { select: { id: true, code: true, name: true } },
+            jobPosition: { select: { id: true, code: true, name: true, corCode: true } }
+          }
+        }
       }
     });
     if (!e) throw new NotFoundException("Angajat negăsit.");
-    return { ...e, cnp: this.maskCnp(e.cnp, revealCnp) };
+    const linkedUser = await this.prisma.user.findFirst({
+      where: { tenantId, email: e.email },
+      select: { id: true, roles: true, active: true }
+    });
+    return { ...e, cnp: this.maskCnp(e.cnp, revealCnp), linkedUser };
   }
 
   async createEmployee(tenantId: string, dto: CreateEmployeeDto, actorUserId: string) {
@@ -524,7 +633,9 @@ export class MasterDataService {
           jobPositionId: dto.jobPositionId,
           hireDate,
           leaveDate,
-          active: dto.active ?? true
+          active: this.resolveActiveFromLeaveDate(leaveDate, dto.active),
+          employmentType: dto.employmentType ?? EmployeeEmploymentType.OWN,
+          absenceStartedAt: dto.absenceStartedAt ? parseOptionalDate(dto.absenceStartedAt) : undefined
         }
       });
       await this.prisma.employeePlacementHistory.create({
@@ -538,26 +649,11 @@ export class MasterDataService {
           createdByUserId: actorUserId
         }
       });
-      await this.autoAssignTrainingPlan(
+      await this.trainingAutomation.assignOnHire(
         tenantId,
         actorUserId,
         created.id,
-        "INTRODUCTORY_GENERAL",
-        "Flux automat la angajare nouă"
-      );
-      await this.autoAssignTrainingPlan(
-        tenantId,
-        actorUserId,
-        created.id,
-        "WORKPLACE",
-        "Flux automat admitere la locul de muncă"
-      );
-      await this.autoAssignTrainingPlan(
-        tenantId,
-        actorUserId,
-        created.id,
-        "EMERGENCY_PSI",
-        "Flux automat instruire PSI la angajare"
+        dto.employmentType ?? EmployeeEmploymentType.OWN
       );
       return created;
     } catch {
@@ -581,46 +677,59 @@ export class MasterDataService {
       worksiteId?: string | null;
       departmentId?: string | null;
       jobPositionId?: string | null;
+      employmentType?: EmployeeEmploymentType;
+      absenceStartedAt?: Date | null;
     } = {};
     if (dto.email !== undefined) data.email = dto.email.toLowerCase();
     if (dto.fullName !== undefined) data.fullName = dto.fullName.trim();
     if (dto.cnp !== undefined) data.cnp = dto.cnp ? this.encryptCnpIfPlain(dto.cnp) : null;
     if (dto.hireDate !== undefined) data.hireDate = dto.hireDate ? parseOptionalDate(dto.hireDate) : null;
-    if (dto.leaveDate !== undefined) data.leaveDate = dto.leaveDate ? parseOptionalDate(dto.leaveDate) : null;
+    if (dto.leaveDate !== undefined) {
+      data.leaveDate = dto.leaveDate ? parseOptionalDate(dto.leaveDate) : null;
+      if (dto.active === undefined) {
+        data.active = this.resolveActiveFromLeaveDate(data.leaveDate);
+      }
+    }
     if (dto.active !== undefined) data.active = dto.active;
     if (dto.worksiteId !== undefined) data.worksiteId = dto.worksiteId;
     if (dto.departmentId !== undefined) data.departmentId = dto.departmentId;
     if (dto.jobPositionId !== undefined) data.jobPositionId = dto.jobPositionId;
+    if (dto.employmentType !== undefined) data.employmentType = dto.employmentType;
+    if (dto.absenceStartedAt !== undefined) {
+      data.absenceStartedAt = dto.absenceStartedAt ? parseOptionalDate(dto.absenceStartedAt) : null;
+    }
 
     const placementChanged =
-      dto.worksiteId !== undefined ||
-      dto.departmentId !== undefined ||
-      dto.jobPositionId !== undefined;
+      (dto.worksiteId !== undefined && dto.worksiteId !== existing.worksiteId) ||
+      (dto.departmentId !== undefined && dto.departmentId !== existing.departmentId) ||
+      (dto.jobPositionId !== undefined && dto.jobPositionId !== existing.jobPositionId);
 
-    const updated = await this.prisma.employee.update({
-      where: { id },
-      data: { ...data }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (placementChanged) {
+        await this.closeOpenPlacementHistory(tx, tenantId, id);
+      }
+      const row = await tx.employee.update({
+        where: { id },
+        data: { ...data }
+      });
+      if (placementChanged) {
+        await tx.employeePlacementHistory.create({
+          data: {
+            tenantId,
+            employeeId: id,
+            worksiteId: row.worksiteId,
+            departmentId: row.departmentId,
+            jobPositionId: row.jobPositionId,
+            changeReason: "Actualizare profil",
+            createdByUserId: actorUserId
+          }
+        });
+      }
+      return row;
     });
 
     if (placementChanged) {
-      await this.prisma.employeePlacementHistory.create({
-        data: {
-          tenantId,
-          employeeId: id,
-          worksiteId: updated.worksiteId,
-          departmentId: updated.departmentId,
-          jobPositionId: updated.jobPositionId,
-          changeReason: "Actualizare profil",
-          createdByUserId: actorUserId
-        }
-      });
-      await this.autoAssignTrainingPlan(
-        tenantId,
-        actorUserId,
-        updated.id,
-        "SUPPLEMENTARY",
-        "Flux automat la schimbare loc de muncă/funcție"
-      );
+      await this.trainingAutomation.assignOnPlacementChange(tenantId, actorUserId, updated.id);
     }
 
     return updated;
@@ -649,33 +758,30 @@ export class MasterDataService {
       jobPositionId ?? undefined
     );
 
-    const updated = await this.prisma.employee.update({
-      where: { id: employeeId },
-      data: {
-        worksiteId: worksiteId === undefined ? existing.worksiteId : worksiteId,
-        departmentId: departmentId === undefined ? existing.departmentId : departmentId,
-        jobPositionId: jobPositionId === undefined ? existing.jobPositionId : jobPositionId
-      }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.closeOpenPlacementHistory(tx, tenantId, employeeId);
+      const row = await tx.employee.update({
+        where: { id: employeeId },
+        data: {
+          worksiteId: worksiteId === undefined ? existing.worksiteId : worksiteId,
+          departmentId: departmentId === undefined ? existing.departmentId : departmentId,
+          jobPositionId: jobPositionId === undefined ? existing.jobPositionId : jobPositionId
+        }
+      });
+      await tx.employeePlacementHistory.create({
+        data: {
+          tenantId,
+          employeeId,
+          worksiteId: row.worksiteId,
+          departmentId: row.departmentId,
+          jobPositionId: row.jobPositionId,
+          changeReason: dto.changeReason,
+          createdByUserId: actorUserId
+        }
+      });
+      return row;
     });
-
-    await this.prisma.employeePlacementHistory.create({
-      data: {
-        tenantId,
-        employeeId,
-        worksiteId: updated.worksiteId,
-        departmentId: updated.departmentId,
-        jobPositionId: updated.jobPositionId,
-        changeReason: dto.changeReason,
-        createdByUserId: actorUserId
-      }
-    });
-    await this.autoAssignTrainingPlan(
-      tenantId,
-      actorUserId,
-      employeeId,
-      "SUPPLEMENTARY",
-      "Flux automat la schimbare loc de muncă/funcție"
-    );
+    await this.trainingAutomation.assignOnPlacementChange(tenantId, actorUserId, employeeId);
 
     return updated;
   }
@@ -732,6 +838,44 @@ export class MasterDataService {
     }
   }
 
+  async getGroup(tenantId: string, id: string) {
+    const group = await this.prisma.employeeGroup.findFirst({
+      where: { id, tenantId },
+      include: {
+        members: {
+          include: {
+            employee: { select: { id: true, fullName: true, email: true, active: true } }
+          }
+        },
+        _count: { select: { members: true } }
+      }
+    });
+    if (!group) throw new NotFoundException("Grup negăsit.");
+    return {
+      ...group,
+      members: group.members
+        .map((m) => m.employee)
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, "ro"))
+    };
+  }
+
+  async updateGroup(tenantId: string, id: string, dto: UpdateEmployeeGroupDto) {
+    const existing = await this.prisma.employeeGroup.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Grup negăsit.");
+
+    const data: { name?: string; description?: string | null; active?: boolean } = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.active !== undefined) data.active = dto.active;
+    if (Object.keys(data).length === 0) return existing;
+
+    try {
+      return await this.prisma.employeeGroup.update({ where: { id }, data });
+    } catch {
+      throw new ConflictException("Numele grupului există deja pentru acest tenant.");
+    }
+  }
+
   async addGroupMember(tenantId: string, groupId: string, employeeId: string) {
     const g = await this.prisma.employeeGroup.findFirst({ where: { id: groupId, tenantId } });
     if (!g) throw new NotFoundException("Grup negăsit.");
@@ -761,7 +905,11 @@ export class MasterDataService {
         where,
         orderBy: { personName: "asc" },
         skip: p.skip,
-        take: p.take
+        take: p.take,
+        include: {
+          legalEntity: { select: { id: true, code: true, name: true } },
+          worksite: { select: { id: true, code: true, name: true } }
+        }
       }),
       this.prisma.ssmResponsible.count({ where })
     ]);
@@ -773,18 +921,62 @@ export class MasterDataService {
       const w = await this.prisma.worksite.findFirst({ where: { id: dto.worksiteId, tenantId } });
       if (!w) throw new BadRequestException("worksiteId nevalid.");
     }
+    if (dto.legalEntityId) {
+      const entity = await this.prisma.legalEntity.findFirst({
+        where: { id: dto.legalEntityId, tenantId }
+      });
+      if (!entity) throw new BadRequestException("legalEntityId nevalid.");
+    }
     return this.prisma.ssmResponsible.create({
       data: {
         tenantId,
         type: dto.type,
         personName: dto.personName.trim(),
         worksiteId: dto.worksiteId,
+        legalEntityId: dto.legalEntityId,
         email: dto.email?.toLowerCase(),
         phone: dto.phone?.trim(),
         notes: dto.notes?.trim(),
         active: dto.active ?? true
       }
     });
+  }
+
+  async updateSsmResponsible(tenantId: string, id: string, dto: UpdateSsmResponsibleDto) {
+    const existing = await this.prisma.ssmResponsible.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Responsabil SSM negăsit.");
+
+    if (dto.worksiteId !== undefined && dto.worksiteId?.trim()) {
+      await this.assertWorksiteForTenant(tenantId, dto.worksiteId.trim());
+    }
+    if (dto.legalEntityId !== undefined && dto.legalEntityId?.trim()) {
+      const entity = await this.prisma.legalEntity.findFirst({
+        where: { id: dto.legalEntityId.trim(), tenantId }
+      });
+      if (!entity) throw new BadRequestException("legalEntityId nevalid.");
+    }
+
+    const data: {
+      type?: typeof dto.type;
+      personName?: string;
+      worksiteId?: string | null;
+      legalEntityId?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      notes?: string | null;
+      active?: boolean;
+    } = {};
+    if (dto.type !== undefined) data.type = dto.type;
+    if (dto.personName !== undefined) data.personName = dto.personName.trim();
+    if (dto.worksiteId !== undefined) data.worksiteId = dto.worksiteId?.trim() || null;
+    if (dto.legalEntityId !== undefined) data.legalEntityId = dto.legalEntityId?.trim() || null;
+    if (dto.email !== undefined) data.email = dto.email?.toLowerCase() || null;
+    if (dto.phone !== undefined) data.phone = dto.phone?.trim() || null;
+    if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
+    if (dto.active !== undefined) data.active = dto.active;
+    if (Object.keys(data).length === 0) return existing;
+
+    return this.prisma.ssmResponsible.update({ where: { id }, data });
   }
 
   // --- Import CSV angajați ---
@@ -813,6 +1005,8 @@ export class MasterDataService {
     const colHire = idx("hiredate");
     const colLeave = idx("leavedate");
     const colActive = idx("active");
+    const colEmploymentType = idx("employmenttype");
+    const colAbsence = idx("absencestartedat");
 
     let created = 0;
     let updated = 0;
@@ -874,6 +1068,15 @@ export class MasterDataService {
         const leaveDate =
           colLeave >= 0 && cells[colLeave] ? parseOptionalDate(cells[colLeave]) : undefined;
         const active = colActive >= 0 ? parseBool(cells[colActive], true) : true;
+        const employmentTypeRaw =
+          colEmploymentType >= 0 ? cells[colEmploymentType]?.toUpperCase() : "OWN";
+        const employmentType = (
+          ["OWN", "DETACHED", "TEMPORARY", "EXTERNAL"].includes(employmentTypeRaw)
+            ? employmentTypeRaw
+            : "OWN"
+        ) as EmployeeEmploymentType;
+        const absenceStartedAt =
+          colAbsence >= 0 && cells[colAbsence] ? parseOptionalDate(cells[colAbsence]) : undefined;
 
         const existing = await this.prisma.employee.findUnique({
           where: { tenantId_email: { tenantId, email } }
@@ -890,7 +1093,9 @@ export class MasterDataService {
               jobPositionId: jobPositionId ?? existing.jobPositionId,
               hireDate: hireDate ?? existing.hireDate,
               leaveDate: leaveDate ?? existing.leaveDate,
-              active
+              active,
+              employmentType,
+              absenceStartedAt: absenceStartedAt ?? existing.absenceStartedAt
             }
           });
           updated += 1;
@@ -906,7 +1111,9 @@ export class MasterDataService {
               jobPositionId,
               hireDate,
               leaveDate,
-              active
+              active,
+              employmentType,
+              absenceStartedAt
             }
           });
           await this.prisma.employeePlacementHistory.create({
@@ -920,6 +1127,7 @@ export class MasterDataService {
               createdByUserId: actorUserId
             }
           });
+          await this.trainingAutomation.assignOnHire(tenantId, actorUserId, emp.id, employmentType);
           created += 1;
         }
       } catch (e) {
@@ -941,5 +1149,39 @@ export class MasterDataService {
     });
 
     return { created, updated, errors };
+  }
+
+  async generateJobPositionSheetPdf(tenantId: string, jobPositionId: string) {
+    const job = await this.prisma.jobPosition.findFirst({
+      where: { id: jobPositionId, tenantId },
+      include: {
+        department: true,
+        legalEntity: true
+      }
+    });
+    if (!job) throw new NotFoundException("Post negăsit.");
+
+    return new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      const doc = new PDFDocument({ margin: 40, size: "A4" });
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+      doc.fontSize(16).text("FIȘĂ POST", { align: "center" });
+      doc.moveDown();
+      doc.fontSize(11);
+      doc.text(`Cod post: ${job.code}`);
+      doc.text(`Denumire: ${job.name}`);
+      doc.text(`COR: ${job.corCode ?? "-"}`);
+      doc.text(`Departament: ${job.department?.name ?? "-"}`);
+      doc.text(`Entitate juridică: ${job.legalEntity?.name ?? "-"}`);
+      doc.moveDown();
+      doc.text("Descriere:");
+      doc.text(job.description ?? "-");
+      doc.moveDown();
+      doc.text("Descriere activitate:");
+      doc.text(job.activityDescription ?? "-");
+      doc.end();
+    });
   }
 }

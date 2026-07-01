@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFile, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -22,6 +22,16 @@ export class SsmRiskController {
   @RequirePermissions(Permission.SSM_RISK_VIEW)
   list(@TenantId() tenantId: string, @Query() query: ListSsmRiskAssessmentsDto) {
     return this.riskService.listAssessments(tenantId, query);
+  }
+
+  @Get("employees/:employeeId/exposure-sheet.pdf")
+  @RequirePermissions(Permission.SSM_RISK_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async exposureSheet(@TenantId() tenantId: string, @Param("employeeId") employeeId: string) {
+    const buffer = await this.riskService.generateExposureSheetPdf(tenantId, employeeId);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename="fisa-expunere-${employeeId}.pdf"`
+    });
   }
 
   @Get(":id/history")

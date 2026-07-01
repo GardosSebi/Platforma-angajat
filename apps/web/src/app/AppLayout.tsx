@@ -20,7 +20,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/chatbot": "Comunicări",
   "/surveys": "Sondaje",
   "/ticketing": "Ticketing",
-  "/admin": "Administrare",
   "/itm": "Control ITM/ISU",
   "/informatii": "Informații",
   "/notificari": "Notificări"
@@ -92,13 +91,6 @@ function buildNavGroups(session: NonNullable<ReturnType<typeof useAuthSession>>)
     title: "Resurse",
     items: [{ to: "/informatii", label: "Informații", icon: NavIcons.info(), end: true }]
   });
-
-  if (isAdmin) {
-    groups.push({
-      title: "Sistem",
-      items: [{ to: "/admin", label: "Administrare", icon: NavIcons.admin() }]
-    });
-  }
 
   return groups;
 }

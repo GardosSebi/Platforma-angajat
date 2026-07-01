@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, SsmRiskAssessmentStatus, SsmRiskTargetType } from "@prisma/client";
+import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import {
@@ -202,5 +203,67 @@ export class SsmRiskService {
       activeVersionId: assessment.activeVersionId,
       versions: assessment.versions
     };
+  }
+
+  async generateExposureSheetPdf(tenantId: string, employeeId: string) {
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      include: {
+        jobPosition: true,
+        department: true,
+        worksite: { include: { legalEntity: true } }
+      }
+    });
+    if (!employee) throw new NotFoundException("Employee not found.");
+
+    const assessment = employee.jobPositionId
+      ? await this.prisma.ssmRiskAssessment.findFirst({
+          where: {
+            tenantId,
+            status: SsmRiskAssessmentStatus.ACTIVE,
+            targetType: SsmRiskTargetType.JOB_POSITION,
+            jobPositionId: employee.jobPositionId
+          },
+          include: { activeVersion: true }
+        })
+      : null;
+
+    const version = assessment?.activeVersion;
+    const factors = Array.isArray(version?.factors) ? (version?.factors as unknown[]) : [];
+    const measures = Array.isArray(version?.measures) ? (version?.measures as unknown[]) : [];
+
+    return new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      const doc = new PDFDocument({ margin: 40, size: "A4" });
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      doc.fontSize(16).text("FIȘĂ DE EXPUNERE LA RISCURI PROFESIONALE", { align: "center" });
+      doc.moveDown();
+      doc.fontSize(11);
+      doc.text(`Angajat: ${employee.fullName}`);
+      doc.text(`Funcție: ${employee.jobPosition?.name ?? "-"}`);
+      doc.text(`Departament: ${employee.department?.name ?? "-"}`);
+      doc.text(`Punct de lucru: ${employee.worksite?.name ?? "-"}`);
+      doc.text(`Entitate: ${employee.worksite?.legalEntity?.name ?? "-"}`);
+      doc.text(`Data: ${new Date().toLocaleDateString("ro-RO")}`);
+      doc.moveDown();
+      doc.text(`Evaluare risc: ${assessment?.title ?? "Nedefinită pentru post"}`);
+      doc.text(`Nivel risc: ${version?.riskLevel ?? "-"}`);
+      doc.moveDown();
+      doc.text("Factori de risc identificați:");
+      factors.forEach((factor, index) => {
+        doc.text(`${index + 1}. ${typeof factor === "string" ? factor : JSON.stringify(factor)}`);
+      });
+      doc.moveDown();
+      doc.text("Măsuri de prevenire:");
+      measures.forEach((measure, index) => {
+        doc.text(`${index + 1}. ${typeof measure === "string" ? measure : JSON.stringify(measure)}`);
+      });
+      doc.moveDown();
+      doc.fontSize(9).text("Semnătură angajat: _________________________    Data: __________");
+      doc.end();
+    });
   }
 }

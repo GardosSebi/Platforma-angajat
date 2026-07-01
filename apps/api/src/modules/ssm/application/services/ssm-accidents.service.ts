@@ -8,6 +8,7 @@ import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { CloseAccidentCaseDto, CreateAccidentCaseDto, CreateAccidentTaskDto } from "../../api/dto/ssm-accidents.dto";
+import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
 
 function parseDate(value: string): Date {
   const d = new Date(value);
@@ -19,7 +20,8 @@ function parseDate(value: string): Date {
 export class SsmAccidentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly trainingAutomation: SsmTrainingAutomationService
   ) {}
 
   async listCases(tenantId: string, query?: import("../../../../common/dto/pagination-query.dto").PaginationQueryDto) {
@@ -189,6 +191,9 @@ export class SsmAccidentsService {
       entityType: "SsmAccidentCase",
       entityId: caseId
     });
+    if (accidentCase.employeeId && accidentCase.type === "ACCIDENT") {
+      await this.trainingAutomation.assignOnAccidentClosed(tenantId, actorId, accidentCase.employeeId);
+    }
     return updated;
   }
 

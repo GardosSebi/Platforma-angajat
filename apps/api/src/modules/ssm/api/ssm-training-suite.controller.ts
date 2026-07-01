@@ -26,6 +26,7 @@ import {
   CreateTrainingPlanDto,
   CreateTrainingTypeDto,
   GenerateCollectiveSheetDto,
+  MaterialCompleteDto,
   SignPlanDto,
   SignPlansBatchDto
 } from "./dto/training-suite.dto";
@@ -79,9 +80,10 @@ export class SsmTrainingSuiteController {
   completeMaterial(
     @TenantId() tenantId: string,
     @CurrentUser() user: JwtPayload,
-    @Param("id") id: string
+    @Param("id") id: string,
+    @Body() dto: MaterialCompleteDto
   ) {
-    return this.trainingSuite.markMaterialCompleted(tenantId, user.sub, id, user);
+    return this.trainingSuite.markMaterialCompleted(tenantId, user.sub, id, user, dto.durationSeconds);
   }
 
   @Post("tests/start/:trainingPlanId")

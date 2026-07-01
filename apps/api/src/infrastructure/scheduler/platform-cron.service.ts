@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { RetentionService } from "../retention/retention.service";
 import { SsmTrainingSuiteService } from "../../modules/ssm/application/services/ssm-training-suite.service";
 import { SsmMedicalService } from "../../modules/ssm/application/services/ssm-medical.service";
+import { SsmTrainingAutomationService } from "../../modules/ssm/application/services/ssm-training-automation.service";
 import { CommunicationsService } from "../../modules/chatbot/application/services/communications.service";
 import { SurveysService } from "../../modules/surveys/application/services/surveys.service";
 import { isCronEnabled, SYSTEM_CRON_ACTOR } from "./scheduler.constants";
@@ -17,6 +18,7 @@ export class PlatformCronService {
     private readonly prisma: PrismaService,
     private readonly trainingSuite: SsmTrainingSuiteService,
     private readonly medicalService: SsmMedicalService,
+    private readonly trainingAutomation: SsmTrainingAutomationService,
     private readonly communications: CommunicationsService,
     private readonly surveys: SurveysService,
     private readonly retention: RetentionService
@@ -56,9 +58,10 @@ export class PlatformCronService {
     const commReminders = await this.communications.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
     const closedSurveys = await this.surveys.closeExpiredSurveys(tenantId, SYSTEM_CRON_ACTOR);
     const retention = await this.retention.archiveExpiredDocumentVersions(tenantId);
+    const absence = await this.trainingAutomation.processAbsenceTriggers(tenantId, SYSTEM_CRON_ACTOR);
     this.logger.log(
-      `Tenant ${tenantId}: trainingOverdue=${overdue.marked}, trainingReminders=${training.sent}, medicalReminders=${medical.sent}, announcementsPublished=${published.published}, announcementsArchived=${archivedAnnouncements.archived}, commReminders=${commReminders.sent}, surveysClosed=${closedSurveys.closed}, retentionArchived=${retention.archived}`
+      `Tenant ${tenantId}: trainingOverdue=${overdue.marked}, trainingReminders=${training.sent}, medicalReminders=${medical.sent}, absenceTriggers=${absence.assigned}, announcementsPublished=${published.published}, announcementsArchived=${archivedAnnouncements.archived}, commReminders=${commReminders.sent}, surveysClosed=${closedSurveys.closed}, retentionArchived=${retention.archived}`
     );
-    return { overdue, training, medical, published, archivedAnnouncements, commReminders, closedSurveys, retention };
+    return { overdue, training, medical, absence, published, archivedAnnouncements, commReminders, closedSurveys, retention };
   }
 }

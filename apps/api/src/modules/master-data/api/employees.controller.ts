@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
+import { ListEmployeesQueryDto } from "../dto/list-employees-query.dto";
 import { ListEmployeeOptionsDto } from "../dto/list-employee-options.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -38,7 +39,7 @@ export class EmployeesController {
   list(
     @TenantId() tenantId: string,
     @CurrentUser() user: JwtPayload,
-    @Query() query: PaginationQueryDto
+    @Query() query: ListEmployeesQueryDto
   ) {
     return this.masterData.listEmployees(tenantId, this.revealCnp(user), query, user);
   }

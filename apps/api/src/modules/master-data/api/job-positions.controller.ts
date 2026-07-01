@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFile, UseGuards } from "@nestjs/common";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -31,5 +31,15 @@ export class JobPositionsController {
   @RequirePermissions(Permission.MASTER_DATA_WRITE)
   update(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: UpdateJobPositionDto) {
     return this.masterData.updateJobPosition(tenantId, id, dto);
+  }
+
+  @Get(":id/sheet.pdf")
+  @RequirePermissions(Permission.MASTER_DATA_READ)
+  @Header("Content-Type", "application/pdf")
+  async sheetPdf(@TenantId() tenantId: string, @Param("id") id: string) {
+    const buffer = await this.masterData.generateJobPositionSheetPdf(tenantId, id);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename="fisa-post-${id}.pdf"`
+    });
   }
 }

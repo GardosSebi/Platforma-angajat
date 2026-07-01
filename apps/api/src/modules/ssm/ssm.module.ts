@@ -10,6 +10,8 @@ import { SsmMedicalService } from "./application/services/ssm-medical.service";
 import { SsmRiskService } from "./application/services/ssm-risk.service";
 import { SsmPsiService } from "./application/services/ssm-psi.service";
 import { SsmOverviewService } from "./application/services/ssm-overview.service";
+import { SsmTrainingAutomationService } from "./application/services/ssm-training-automation.service";
+import { ItmAccessService } from "./application/services/itm-access.service";
 import { SsmController } from "./api/ssm.controller";
 import { SsmDocumentsController } from "./api/ssm-documents.controller";
 import { SsmTrainingSuiteController } from "./api/ssm-training-suite.controller";
@@ -19,9 +21,9 @@ import { SsmMedicalController } from "./api/ssm-medical.controller";
 import { SsmRiskController } from "./api/ssm-risk.controller";
 import { SsmPsiController } from "./api/ssm-psi.controller";
 import { SsmOverviewController } from "./api/ssm-overview.controller";
+import { SsmItmController } from "./api/ssm-itm.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
 import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-training.repository";
-import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.client";
 
 @Module({
   imports: [NotificationsModule],
@@ -34,7 +36,8 @@ import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.cl
     SsmMedicalController,
     SsmRiskController,
     SsmPsiController,
-    SsmOverviewController
+    SsmOverviewController,
+    SsmItmController
   ],
   providers: [
     PermissionsGuard,
@@ -47,12 +50,13 @@ import { SapServiceLayerClient } from "./infrastructure/sap/sap-service-layer.cl
     SsmRiskService,
     SsmPsiService,
     SsmOverviewService,
-    SapServiceLayerClient,
+    SsmTrainingAutomationService,
+    ItmAccessService,
     {
       provide: SSM_TRAINING_REPOSITORY,
       useClass: PrismaSsmTrainingRepository
     }
   ],
-  exports: [SsmTrainingSuiteService, SsmMedicalService]
+  exports: [SsmTrainingSuiteService, SsmMedicalService, SsmTrainingAutomationService, ItmAccessService]
 })
 export class SsmModule {}

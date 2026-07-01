@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { downloadWithAuth } from "../../../shared/api/http-download";
 import { useSsmComplianceDashboard, useUnifiedSsmCalendar } from "../hooks/useSsmOverview";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -143,7 +144,18 @@ export function SsmComplianceDashboardManager() {
               <p className="field-hint">Nu există evenimente în calendar.</p>
             ) : null}
           </div>
-          <p className="field-hint">Export PDF/iCal poate fi adăugat după MVP pe baza acestui calendar agregat.</p>
+          <div className="ssm-inline-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                void downloadWithAuth("/ssm/overview/calendar.ics", "ssm-calendar.ics").catch(() => undefined);
+              }}
+            >
+              Export iCal
+            </button>
+          </div>
+          <p className="field-hint">Calendar agregat: instruiri, medical, EIP, PSI. Export iCal pentru Outlook/Google.</p>
         </div>
 
         <div className="card ssm-doc-card">

@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Param, StreamableFile, UseGuards } from "@nestjs/common";
+import { Controller, Get, Header, Param, Query, StreamableFile, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
@@ -14,14 +14,22 @@ export class SsmOverviewController {
 
   @Get("overview/calendar")
   @RequirePermissions(Permission.SSM_DASHBOARD_VIEW)
-  calendar(@TenantId() tenantId: string) {
-    return this.overview.unifiedCalendar(tenantId);
+  calendar(@TenantId() tenantId: string, @Query("legalEntityId") legalEntityId?: string) {
+    return this.overview.unifiedCalendar(tenantId, legalEntityId);
+  }
+
+  @Get("overview/calendar.ics")
+  @RequirePermissions(Permission.SSM_DASHBOARD_VIEW)
+  @Header("Content-Type", "text/calendar; charset=utf-8")
+  async calendarIcal(@TenantId() tenantId: string, @Query("legalEntityId") legalEntityId?: string) {
+    const body = await this.overview.calendarIcal(tenantId, legalEntityId);
+    return body;
   }
 
   @Get("overview/compliance-dashboard")
   @RequirePermissions(Permission.SSM_DASHBOARD_VIEW)
-  complianceDashboard(@TenantId() tenantId: string) {
-    return this.overview.complianceDashboard(tenantId);
+  complianceDashboard(@TenantId() tenantId: string, @Query("legalEntityId") legalEntityId?: string) {
+    return this.overview.complianceDashboard(tenantId, legalEntityId);
   }
 
   @Get("reports/:type.pdf")

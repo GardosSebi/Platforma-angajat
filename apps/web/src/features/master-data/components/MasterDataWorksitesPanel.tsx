@@ -3,7 +3,7 @@ import type { CreateWorksitePayload, WorksiteItem } from "../api/master-data.api
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { useCreateWorksite, useWorksites } from "../hooks/useMasterData";
-import { activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
 
 const EMPTY_FORM: CreateWorksitePayload = {
   code: "",
@@ -63,7 +63,7 @@ export function MasterDataWorksitesPanel() {
               setShowForm((prev) => !prev);
             }}
           >
-            {showForm ? "Închide formularul" : "+ Punct de lucru"}
+            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.worksites}
           </button>
         </div>
 

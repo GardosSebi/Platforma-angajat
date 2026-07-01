@@ -15,11 +15,23 @@ export class CreateJobPositionDto {
 
   @IsOptional()
   @IsString()
+  legalEntityId?: string;
+
+  @IsOptional()
+  @IsString()
+  worksiteId?: string;
+
+  @IsOptional()
+  @IsString()
   corCode?: string;
 
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  activityDescription?: string;
 
   @IsOptional()
   @IsBoolean()

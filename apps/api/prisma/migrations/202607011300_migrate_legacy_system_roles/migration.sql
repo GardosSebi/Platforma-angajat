@@ -1,0 +1,50 @@
+-- Map legacy SystemRole values still present in data to current SSM-only roles.
+
+UPDATE "User"
+SET roles = (
+  SELECT COALESCE(array_agg(DISTINCT mapped ORDER BY mapped), ARRAY[]::"SystemRole"[])
+  FROM (
+    SELECT CASE r::text
+      WHEN 'PLATFORM_ADMIN' THEN 'SSM_ADMIN'::"SystemRole"
+      WHEN 'TENANT_ADMIN' THEN 'SSM_ADMIN'::"SystemRole"
+      WHEN 'COMMUNICATIONS_ADMIN' THEN 'SSM_ENTITY_RESPONSIBLE'::"SystemRole"
+      WHEN 'SURVEYS_ADMIN' THEN 'SSM_ENTITY_RESPONSIBLE'::"SystemRole"
+      WHEN 'TICKETING_ADMIN' THEN 'SSM_ENTITY_RESPONSIBLE'::"SystemRole"
+      WHEN 'SSM_ADMIN' THEN 'SSM_ADMIN'::"SystemRole"
+      WHEN 'SSM_ENTITY_RESPONSIBLE' THEN 'SSM_ENTITY_RESPONSIBLE'::"SystemRole"
+      WHEN 'DEPARTMENT_MANAGER' THEN 'DEPARTMENT_MANAGER'::"SystemRole"
+      WHEN 'ITM_INSPECTOR' THEN 'ITM_INSPECTOR'::"SystemRole"
+      WHEN 'EMPLOYEE' THEN 'EMPLOYEE'::"SystemRole"
+      ELSE 'EMPLOYEE'::"SystemRole"
+    END AS mapped
+    FROM unnest(roles) AS r
+  ) sub
+)
+WHERE EXISTS (
+  SELECT 1
+  FROM unnest(roles) AS r
+  WHERE r::text NOT IN (
+    'SSM_ADMIN',
+    'SSM_ENTITY_RESPONSIBLE',
+    'DEPARTMENT_MANAGER',
+    'ITM_INSPECTOR',
+    'EMPLOYEE'
+  )
+);
+
+UPDATE "UserScopedRole"
+SET role = CASE role::text
+  WHEN 'PLATFORM_ADMIN' THEN 'SSM_ADMIN'::"SystemRole"
+  WHEN 'TENANT_ADMIN' THEN 'SSM_ADMIN'::"SystemRole"
+  WHEN 'COMMUNICATIONS_ADMIN' THEN 'SSM_ENTITY_RESPONSIBLE'::"SystemRole"
+  WHEN 'SURVEYS_ADMIN' THEN 'SSM_ENTITY_RESPONSIBLE'::"SystemRole"
+  WHEN 'TICKETING_ADMIN' THEN 'SSM_ENTITY_RESPONSIBLE'::"SystemRole"
+  ELSE role
+END
+WHERE role::text IN (
+  'PLATFORM_ADMIN',
+  'TENANT_ADMIN',
+  'COMMUNICATIONS_ADMIN',
+  'SURVEYS_ADMIN',
+  'TICKETING_ADMIN'
+);

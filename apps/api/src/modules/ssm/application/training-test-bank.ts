@@ -198,6 +198,30 @@ export function resolveTrainingTestQuestions(category: SsmTrainingCategoryCode):
   return [...COMMON_QUESTIONS, ...specific];
 }
 
+export function resolveTrainingTestQuestionsFromType(
+  category: SsmTrainingCategoryCode,
+  testQuestionsJson: unknown
+): SsmTrainingTestQuestion[] {
+  if (Array.isArray(testQuestionsJson) && testQuestionsJson.length > 0) {
+    const parsed: SsmTrainingTestQuestion[] = [];
+    for (const item of testQuestionsJson) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as Record<string, unknown>;
+      const id = String(row.id ?? "");
+      const text = String(row.text ?? "");
+      const options = Array.isArray(row.options) ? row.options.map(String) : [];
+      const correctIndex = Number(row.correctIndex);
+      if (id && text && options.length >= 2 && Number.isInteger(correctIndex)) {
+        parsed.push({ id, text, options, correctIndex });
+      }
+    }
+    if (parsed.length > 0) {
+      return parsed;
+    }
+  }
+  return resolveTrainingTestQuestions(category);
+}
+
 function shuffleArray<T>(items: T[]): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {

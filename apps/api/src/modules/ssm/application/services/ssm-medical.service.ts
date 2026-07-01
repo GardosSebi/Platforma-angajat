@@ -6,6 +6,7 @@ import { PrismaService } from "../../../../infrastructure/prisma/prisma.service"
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import { CreateMedicalControlDto, CreateMedicalControlTypeDto } from "../../api/dto/ssm-medical.dto";
+import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
 
 const MEDICAL_ALLOWED_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg"]);
 const MEDICAL_ALLOWED_MIME_PREFIXES = ["application/pdf", "image/"];
@@ -33,7 +34,8 @@ export class SsmMedicalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly trainingAutomation: SsmTrainingAutomationService
   ) {}
 
   private assertAptitudeSheet(file?: Express.Multer.File) {
@@ -168,6 +170,11 @@ export class SsmMedicalService {
         ? new Date(baseDate.getTime() + controlType.recurrenceDays * 24 * 60 * 60 * 1000)
         : undefined;
 
+    const previousControl = await this.prisma.ssmMedicalControl.findFirst({
+      where: { tenantId, employeeId: employee.id },
+      orderBy: { scheduledAt: "desc" }
+    });
+
     const created = await this.prisma.ssmMedicalControl.create({
       data: {
         tenantId,
@@ -208,6 +215,13 @@ export class SsmMedicalService {
         result: dto.result ?? null
       }
     });
+
+    if (
+      dto.result === SsmMedicalControlResult.FIT &&
+      previousControl?.result === SsmMedicalControlResult.TEMPORARY_UNFIT
+    ) {
+      await this.trainingAutomation.assignOnMedicalResume(tenantId, actorId, employee.id);
+    }
 
     return created;
   }

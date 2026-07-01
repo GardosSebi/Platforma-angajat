@@ -16,6 +16,8 @@ import {
 import { resolvePagination } from "../../../../common/dto/pagination-query.dto";
 import { paginatedResult } from "../../../../common/pagination";
 import { ListSsmDocumentsDto } from "../../api/dto/list-ssm-documents.dto";
+import { ItmAccessService } from "./itm-access.service";
+import { SystemRole } from "../../../../common/prisma-enums";
 
 const MAX_FILE_BYTES = 120 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".mp4", ".mov", ".avi", ".mkv"]);
@@ -72,7 +74,8 @@ function ssmDocumentVisibleToEmployee(
 export class SsmDocumentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly itmAccess: ItmAccessService
   ) {}
 
   private assertUpload(file?: Express.Multer.File) {
@@ -484,8 +487,15 @@ export class SsmDocumentsService {
   }
 
   async streamActiveVersion(tenantId: string, documentId: string, viewer: JwtPayload) {
+    await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
     const document = await this.assertDocumentReadable(tenantId, documentId, viewer);
     const version = document.activeVersion!;
+    if (viewer.roles?.includes(SystemRole.ITM_INSPECTOR)) {
+      await this.itmAccess.logAccess(tenantId, viewer.sub, "DOWNLOAD", "SsmDocument", documentId, {
+        title: document.title,
+        fileName: version.fileName
+      });
+    }
     return {
       stream: createReadStream(version.storagePath),
       mimeType: version.mimeType,

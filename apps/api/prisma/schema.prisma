@@ -239,6 +239,13 @@ enum EmployeeStaticAudienceType {
   EMPLOYEE_GROUP
 }
 
+enum EmployeeEmploymentType {
+  OWN
+  DETACHED
+  TEMPORARY
+  EXTERNAL
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -289,6 +296,8 @@ model Tenant {
   userScopedRoles            UserScopedRole[]
   employeeStaticPages        EmployeeStaticPage[]
   inAppNotifications         InAppNotification[]
+  legalEntities              LegalEntity[]
+  itmAccessLogs              ItmAccessLog[]
 }
 
 model User {
@@ -300,29 +309,54 @@ model User {
   active       Boolean      @default(true)
   roles        SystemRole[] @default([])
   lastLoginAt  DateTime?
+  itmAccessExpiresAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
   tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   scopedRoles      UserScopedRole[]
   inAppNotifications InAppNotification[]
+  itmAccessLogs    ItmAccessLog[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
   @@index([tenantId, lastLoginAt])
 }
 
+model LegalEntity {
+  id           String   @id @default(cuid())
+  tenantId     String
+  code         String
+  name         String
+  cui          String?
+  headquarters String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksites       Worksite[]
+  jobPositions    JobPosition[]
+  ssmResponsibles SsmResponsible[]
+  ssmDocuments    SsmDocument[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
 model Worksite {
-  id        String   @id @default(cuid())
-  tenantId  String
-  code      String
-  name      String
-  address   String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  tenantId      String
+  legalEntityId String?
+  code          String
+  name          String
+  address       String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   tenant                     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity                LegalEntity?               @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   departments                Department[]
   employees                  Employee[]
   employeePlacementHistories EmployeePlacementHistory[]
@@ -332,9 +366,11 @@ model Worksite {
   ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
   ssmPsiResponsibles         SsmPsiResponsible[]
   userScopedRoles            UserScopedRole[]
+  jobPositions               JobPosition[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
+  @@index([tenantId, legalEntityId])
 }
 
 model Department {
@@ -359,18 +395,23 @@ model Department {
 }
 
 model JobPosition {
-  id           String   @id @default(cuid())
-  tenantId     String
-  departmentId String?
-  code         String
-  name         String
-  corCode      String?
-  description  String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  tenantId            String
+  legalEntityId       String?
+  worksiteId          String?
+  departmentId        String?
+  code                String
+  name                String
+  corCode             String?
+  description         String?
+  activityDescription String?
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   tenant                     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity                LegalEntity?               @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+  worksite                   Worksite?                  @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
   department                 Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   employees                  Employee[]
   employeePlacementHistories EmployeePlacementHistory[]
@@ -380,22 +421,26 @@ model JobPosition {
 
   @@unique([tenantId, code])
   @@index([tenantId, departmentId])
+  @@index([tenantId, legalEntityId])
+  @@index([tenantId, worksiteId])
 }
 
 model Employee {
-  id            String    @id @default(cuid())
-  tenantId      String
-  fullName      String
-  email         String
-  cnp           String?
-  active        Boolean   @default(true)
-  hireDate      DateTime?
-  leaveDate     DateTime?
-  worksiteId    String?
-  departmentId  String?
-  jobPositionId String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String                 @id @default(cuid())
+  tenantId         String
+  fullName         String
+  email            String
+  cnp              String?
+  employmentType   EmployeeEmploymentType @default(OWN)
+  active           Boolean                @default(true)
+  hireDate         DateTime?
+  leaveDate        DateTime?
+  absenceStartedAt DateTime?
+  worksiteId       String?
+  departmentId     String?
+  jobPositionId    String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   tenant                 Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   worksite               Worksite?                  @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
@@ -419,6 +464,7 @@ model Employee {
   @@index([tenantId, active])
   @@index([tenantId, worksiteId])
   @@index([tenantId, departmentId])
+  @@index([tenantId, absenceStartedAt])
 }
 
 model EmployeePlacementHistory {
@@ -473,22 +519,25 @@ model EmployeeGroupMember {
 }
 
 model SsmResponsible {
-  id         String             @id @default(cuid())
-  tenantId   String
-  worksiteId String?
-  type       SsmResponsibleType
-  personName String
-  email      String?
-  phone      String?
-  notes      String?
-  active     Boolean            @default(true)
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  id            String             @id @default(cuid())
+  tenantId      String
+  legalEntityId String?
+  worksiteId    String?
+  type          SsmResponsibleType
+  personName    String
+  email         String?
+  phone         String?
+  notes         String?
+  active        Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  worksite Worksite? @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity? @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+  worksite    Worksite?    @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, worksiteId])
+  @@index([tenantId, legalEntityId])
   @@index([tenantId, active])
 }
 
@@ -512,6 +561,7 @@ model SsmTrainingAssignment {
 model SsmDocument {
   id              String                @id @default(cuid())
   tenantId        String
+  legalEntityId   String?
   title           String
   type            SsmDocumentType
   entityName      String?
@@ -530,12 +580,14 @@ model SsmDocument {
   updatedAt       DateTime              @updatedAt
 
   tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity   LegalEntity?         @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   versions      SsmDocumentVersion[] @relation("DocumentVersions")
   activeVersion SsmDocumentVersion?  @relation("ActiveDocumentVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, type, status])
   @@index([tenantId, targetType, status])
   @@index([tenantId, isControlFolder, status])
+  @@index([tenantId, legalEntityId, status])
 }
 
 model SsmDocumentVersion {
@@ -562,18 +614,19 @@ model SsmDocumentVersion {
 }
 
 model SsmTrainingType {
-  id             String   @id @default(cuid())
-  tenantId       String
-  code           String
-  name           String
-  category       SsmTrainingCategory @default(PERIODIC)
+  id                    String              @id @default(cuid())
+  tenantId              String
+  code                  String
+  name                  String
+  category              SsmTrainingCategory @default(PERIODIC)
   legalMinDurationHours Int?
-  description    String?
-  recurrenceDays Int?
-  reminderDays   Int[]    @default([30, 15, 7])
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  description           String?
+  recurrenceDays        Int?
+  reminderDays          Int[]               @default([30, 15, 7])
+  testQuestionsJson     Json?
+  active                Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plans  SsmTrainingPlan[]
@@ -604,6 +657,7 @@ model SsmTrainingPlan {
   trainingTypeId      String
   materialTitle       String?
   materialUrl         String?
+  materialStartedAt   DateTime?
   materialCompletedAt DateTime?
   scheduledAt         DateTime
   dueAt               DateTime
@@ -1246,6 +1300,23 @@ model AuditLog {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, module, createdAt])
+}
+
+model ItmAccessLog {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String
+  action       String
+  resourceType String
+  resourceId   String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, resourceType, createdAt])
 }
 
 model UserScopedRole {

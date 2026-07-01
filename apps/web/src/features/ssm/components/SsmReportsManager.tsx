@@ -13,14 +13,20 @@ const REPORT_TYPES: Array<{ type: SsmReportType; label: string; shortLabel: stri
     label: "Documente & versiuni",
     shortLabel: "Documente",
     description: "Documente, versiuni, fișiere și motiv actualizare."
-  }
+  },
+  { type: "accidents", label: "Accidente", shortLabel: "Accidente", description: "Registru accidente, incidente, boli profesionale." },
+  { type: "psi", label: "PSI", shortLabel: "PSI", description: "Echipamente PSI și instruiri PSI." },
+  { type: "compliance", label: "Conformitate", shortLabel: "Conformitate", description: "KPI global și breakdown pe module." }
 ];
 
 const REPORT_PREVIEW_FIELDS: Record<SsmReportType, string[]> = {
   trainings: ["employee", "trainingCode", "trainingName", "status", "dueAt", "score"],
   eip: ["employee", "eipCode", "eipName", "movementType", "movementDate", "replacementDueAt"],
   medical: ["employee", "controlCode", "controlName", "result", "nextDueAt", "validityUntil"],
-  documents: ["title", "type", "status", "versionNumber", "activeVersionNumber", "fileName", "changeNote", "versionCreatedAt"]
+  documents: ["title", "type", "status", "versionNumber", "activeVersionNumber", "fileName", "changeNote", "versionCreatedAt"],
+  accidents: ["title", "type", "severity", "status", "employee", "occurredAt"],
+  psi: ["category", "name", "worksite", "nextDueAt", "validUntil", "employee"],
+  compliance: ["globalScore", "trafficLight", "module", "total", "noncompliant", "score"]
 };
 
 function mutationErrorMessage(error: unknown): string {

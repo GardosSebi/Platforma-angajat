@@ -4,15 +4,18 @@ import { PaginationBar, paginationFromResult } from "../../../shared/components/
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
-import { useCreateJobPosition, useDepartmentsLookup, useJobPositions } from "../hooks/useMasterData";
-import { activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { useCreateJobPosition, useDepartmentsLookup, useJobPositions, useLegalEntitiesLookup, useWorksitesLookup } from "../hooks/useMasterData";
+import { MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
 
 const EMPTY_FORM: CreateJobPositionPayload = {
   code: "",
   name: "",
+  legalEntityId: "",
+  worksiteId: "",
   departmentId: "",
   corCode: "",
   description: "",
+  activityDescription: "",
   active: true
 };
 
@@ -20,6 +23,8 @@ export function MasterDataPositionsPanel() {
   const pagination = usePagination();
   const query = useJobPositions(pagination.params);
   const departmentsLookup = useDepartmentsLookup();
+  const legalEntitiesLookup = useLegalEntitiesLookup();
+  const worksitesLookup = useWorksitesLookup();
   const createJobPosition = useCreateJobPosition();
   const paged = paginationFromResult(query.data, pagination.page, pagination.pageSize);
 
@@ -55,9 +60,12 @@ export function MasterDataPositionsPanel() {
         ...form,
         code: form.code.trim(),
         name: form.name.trim(),
+        legalEntityId: form.legalEntityId || undefined,
+        worksiteId: form.worksiteId || undefined,
         departmentId: form.departmentId || undefined,
         corCode: form.corCode?.trim() || undefined,
-        description: form.description?.trim() || undefined
+        description: form.description?.trim() || undefined,
+        activityDescription: form.activityDescription?.trim() || undefined
       },
       {
         onSuccess: () => {
@@ -86,7 +94,7 @@ export function MasterDataPositionsPanel() {
               setShowForm((prev) => !prev);
             }}
           >
-            {showForm ? "Închide formularul" : "+ Post"}
+            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.positions}
           </button>
         </div>
 
@@ -115,6 +123,8 @@ export function MasterDataPositionsPanel() {
               <tr>
                 <th>Cod</th>
                 <th>Denumire</th>
+                <th>Entitate</th>
+                <th>Punct de lucru</th>
                 <th>Departament</th>
                 <th>COR</th>
                 <th>Stare</th>
@@ -123,14 +133,14 @@ export function MasterDataPositionsPanel() {
             <tbody>
               {query.isLoading ? (
                 <tr>
-                  <td colSpan={5} className="text-muted">
+                  <td colSpan={7} className="text-muted">
                     Se încarcă...
                   </td>
                 </tr>
               ) : null}
               {!query.isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="comms-empty-cell">
+                  <td colSpan={7} className="comms-empty-cell">
                     <p>Nu am găsit posturi{search ? " pentru căutare" : ""}.</p>
                     {!search ? (
                       <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
@@ -144,6 +154,8 @@ export function MasterDataPositionsPanel() {
                 <tr key={item.id}>
                   <td className="comms-title-cell">{item.code}</td>
                   <td>{item.name}</td>
+                  <td>{item.legalEntity ? `${item.legalEntity.code} — ${item.legalEntity.name}` : "—"}</td>
+                  <td>{item.worksite ? `${item.worksite.code} — ${item.worksite.name}` : "—"}</td>
                   <td>{item.departmentId ? departmentById.get(item.departmentId) ?? item.departmentId : "—"}</td>
                   <td>{item.corCode || "—"}</td>
                   <td>
@@ -191,6 +203,32 @@ export function MasterDataPositionsPanel() {
               />
             </div>
           </div>
+          <FieldSelect
+            id="md-job-entity"
+            label="Entitate juridică"
+            value={form.legalEntityId ?? ""}
+            onChange={(legalEntityId) => setForm((prev) => ({ ...prev, legalEntityId }))}
+            allowEmpty
+            emptyLabel="Neselectată"
+            options={mapToOptions(
+              legalEntitiesLookup.data?.items ?? [],
+              (entity) => entity.id,
+              (entity) => `${entity.code} - ${entity.name}`
+            )}
+          />
+          <FieldSelect
+            id="md-job-worksite"
+            label="Punct de lucru"
+            value={form.worksiteId ?? ""}
+            onChange={(worksiteId) => setForm((prev) => ({ ...prev, worksiteId }))}
+            allowEmpty
+            emptyLabel="Neselectat"
+            options={mapToOptions(
+              worksitesLookup.data?.items ?? [],
+              (worksite) => worksite.id,
+              (worksite) => `${worksite.code} - ${worksite.name}`
+            )}
+          />
           <FieldSelect
             id="md-job-department"
             label="Departament (opțional)"

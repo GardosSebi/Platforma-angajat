@@ -5,7 +5,7 @@ import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { useCreateDepartment, useDepartments, useWorksitesLookup } from "../hooks/useMasterData";
-import { activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
 
 const EMPTY_FORM: CreateDepartmentPayload = {
   code: "",
@@ -79,7 +79,7 @@ export function MasterDataDepartmentsPanel() {
               setShowForm((prev) => !prev);
             }}
           >
-            {showForm ? "Închide formularul" : "+ Departament"}
+            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.departments}
           </button>
         </div>
 

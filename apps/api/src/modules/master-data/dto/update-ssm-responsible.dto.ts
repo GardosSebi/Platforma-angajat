@@ -1,33 +1,35 @@
 import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MinLength } from "class-validator";
 import { SsmResponsibleType } from "../../../common/prisma-enums";
 
-export class CreateSsmResponsibleDto {
+export class UpdateSsmResponsibleDto {
+  @IsOptional()
   @IsEnum(SsmResponsibleType)
-  type!: SsmResponsibleType;
+  type?: SsmResponsibleType;
 
+  @IsOptional()
   @IsString()
   @MinLength(2)
-  personName!: string;
+  personName?: string;
 
   @IsOptional()
   @IsString()
-  worksiteId?: string;
+  worksiteId?: string | null;
 
   @IsOptional()
   @IsString()
-  legalEntityId?: string;
+  legalEntityId?: string | null;
 
   @IsOptional()
   @IsEmail()
-  email?: string;
+  email?: string | null;
 
   @IsOptional()
   @IsString()
-  phone?: string;
+  phone?: string | null;
 
   @IsOptional()
   @IsString()
-  notes?: string;
+  notes?: string | null;
 
   @IsOptional()
   @IsBoolean()

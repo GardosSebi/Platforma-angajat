@@ -1,23 +1,14 @@
 import { IsBoolean, IsOptional, IsString, MinLength } from "class-validator";
 
-export class UpdateWorksiteDto {
+export class UpdateEmployeeGroupDto {
   @IsOptional()
   @IsString()
-  @MinLength(1)
-  code?: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
+  @MinLength(2)
   name?: string;
 
   @IsOptional()
   @IsString()
-  address?: string;
-
-  @IsOptional()
-  @IsString()
-  legalEntityId?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsBoolean()

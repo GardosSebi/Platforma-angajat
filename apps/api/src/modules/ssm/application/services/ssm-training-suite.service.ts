@@ -32,6 +32,7 @@ import {
   gradeTrainingTestAnswers,
   rebuildPublicQuestions,
   resolveTrainingTestQuestions,
+  resolveTrainingTestQuestionsFromType,
   SSM_TRAINING_PASS_THRESHOLD_PERCENT,
   type SsmTrainingTestAttemptMeta
 } from "../training-test-bank";
@@ -205,7 +206,10 @@ export class SsmTrainingSuiteService {
         legalMinDurationHours: dto.legalMinDurationHours ?? legalMinimum,
         description: dto.description?.trim(),
         recurrenceDays: dto.recurrenceDays,
-        reminderDays: dto.reminderDays ?? [30, 15, 7]
+        reminderDays: dto.reminderDays ?? [30, 15, 7],
+        testQuestionsJson: dto.testQuestions?.length
+          ? (dto.testQuestions as unknown as Prisma.InputJsonValue)
+          : undefined
       }
     });
     await this.auditLog.write({
@@ -328,10 +332,24 @@ export class SsmTrainingSuiteService {
     return metaRecord;
   }
 
-  async markMaterialCompleted(tenantId: string, actorId: string, trainingPlanId: string, viewer: JwtPayload) {
+  async markMaterialCompleted(
+    tenantId: string,
+    actorId: string,
+    trainingPlanId: string,
+    viewer: JwtPayload,
+    durationSeconds?: number
+  ) {
     await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
-    const plan = await this.prisma.ssmTrainingPlan.findFirst({
-      where: { id: trainingPlanId, tenantId }
+    const plan = await (this.prisma as PrismaWithTrainingPlanLegal).ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId },
+      include: {
+        trainingType: {
+          select: {
+            legalMinDurationHours: true,
+            name: true
+          }
+        }
+      }
     });
     if (!plan) {
       throw new NotFoundException("Training plan not found.");
@@ -343,9 +361,24 @@ export class SsmTrainingSuiteService {
     if (plan.materialCompletedAt) {
       return { trainingPlanId, materialCompleted: true };
     }
+
+    if (plan.trainingType.legalMinDurationHours && durationSeconds != null) {
+      const minimumSeconds = plan.trainingType.legalMinDurationHours * 60 * 60;
+      if (durationSeconds < minimumSeconds) {
+        throw new BadRequestException(
+          `Durata minimă legală de parcurgere a materialului este ${plan.trainingType.legalMinDurationHours} ore.`
+        );
+      }
+    }
+
+    const now = new Date();
     await this.prisma.ssmTrainingPlan.update({
       where: { id: trainingPlanId },
-      data: { materialCompletedAt: new Date() }
+      data: {
+        materialStartedAt: plan.materialStartedAt ?? now,
+        materialCompletedAt: now,
+        durationMinutes: durationSeconds ? Math.ceil(durationSeconds / 60) : plan.durationMinutes
+      }
     });
     await this.auditLog.write({
       tenantId,
@@ -367,7 +400,8 @@ export class SsmTrainingSuiteService {
           select: {
             legalMinDurationHours: true,
             name: true,
-            category: true
+            category: true,
+            testQuestionsJson: true
           }
         },
         attempts: {
@@ -382,12 +416,14 @@ export class SsmTrainingSuiteService {
     this.assertTrainingPlanActiveForWorkflow(plan);
     this.assertMaterialReady(plan);
 
-    const bank = resolveTrainingTestQuestions(plan.trainingType.category as SsmTrainingCategoryCode);
+    const bank = resolveTrainingTestQuestionsFromType(
+      plan.trainingType.category as SsmTrainingCategoryCode,
+      (plan.trainingType as { testQuestionsJson?: unknown }).testQuestionsJson
+    );
     const latestAttempt = plan.attempts[0];
     if (latestAttempt && !latestAttempt.finishedAt) {
       const existingMeta = this.parseAttemptMeta(latestAttempt.answersJson);
       if (existingMeta) {
-        const bank = resolveTrainingTestQuestions(plan.trainingType.category as SsmTrainingCategoryCode);
         const questions = rebuildPublicQuestions(existingMeta, bank);
         return {
           attemptId: latestAttempt.id,
@@ -429,7 +465,8 @@ export class SsmTrainingSuiteService {
           select: {
             legalMinDurationHours: true,
             name: true,
-            category: true
+            category: true,
+            testQuestionsJson: true
           }
         },
         attempts: {
@@ -455,7 +492,10 @@ export class SsmTrainingSuiteService {
       throw new BadRequestException("Datele testului nu sunt valide. Reporniți testul.");
     }
 
-    const bank = resolveTrainingTestQuestions(plan.trainingType.category as SsmTrainingCategoryCode);
+    const bank = resolveTrainingTestQuestionsFromType(
+      plan.trainingType.category as SsmTrainingCategoryCode,
+      plan.trainingType.testQuestionsJson
+    );
     const grade = gradeTrainingTestAnswers(meta, dto.answers, bank);
     const now = new Date();
 
@@ -1050,6 +1090,11 @@ export class SsmTrainingSuiteService {
       },
       orderBy: { scheduledAt: "desc" }
     });
+    const eipMovements = await this.prisma.ssmEipMovement.findMany({
+      where: { tenantId, employeeId },
+      include: { eipType: { select: { name: true, code: true } } },
+      orderBy: { movementDate: "desc" }
+    });
     const riskExposureSheets = documents.filter((doc) => doc.type === "RISK_ASSESSMENT");
     const eipDecisionCopies = documents.filter((doc) => doc.type === "DECISION");
 
@@ -1096,6 +1141,15 @@ export class SsmTrainingSuiteService {
         nextDueAt: control.nextDueAt,
         result: control.result,
         aptitudeSheetName: control.aptitudeSheetName
+      })),
+      eipRecords: eipMovements.map((movement) => ({
+        id: movement.id,
+        eipName: movement.eipType.name,
+        eipCode: movement.eipType.code,
+        movementType: movement.movementType,
+        movementDate: movement.movementDate,
+        replacementDueAt: movement.replacementDueAt,
+        signedAt: movement.signedAt
       }))
     };
   }
@@ -1149,26 +1203,35 @@ export class SsmTrainingSuiteService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      doc.fontSize(18).text("Fisa individuala de instruire SSM", { align: "center" });
+      doc.fontSize(18).text("FIȘA INDIVIDUALĂ DE INSTRUIRE SSM/PSI", { align: "center" });
       doc.moveDown();
-      doc.fontSize(12).text(`Angajat: ${plan.employee.fullName}`);
-      doc.text(`Tip instruire: ${plan.trainingType.name} (${plan.trainingType.code})`);
-      doc.text(`Programare: ${plan.scheduledAt.toISOString()}`);
-      doc.text(`Scadenta: ${plan.dueAt.toISOString()}`);
-      doc.text(`Status: ${plan.status}`);
-      doc.text(`Scor test: ${plan.score ?? "-"}`);
-      doc.text(`Durata test (minute): ${plan.durationMinutes ?? "-"}`);
+      doc.fontSize(11);
+      doc.text("Unitatea: conform evidenței angajatului");
+      doc.text(`Nume și prenume: ${plan.employee.fullName}`);
+      doc.text(`Funcție: ${plan.employee.jobPositionId ? "conform fișă post" : "-"}`);
+      doc.text(`Tip instruire: ${plan.trainingType.name}`);
+      doc.text(`Cod tematică: ${plan.trainingType.code}`);
+      doc.text(`Data programării: ${plan.scheduledAt.toLocaleDateString("ro-RO")}`);
+      doc.text(`Data limită: ${plan.dueAt.toLocaleDateString("ro-RO")}`);
+      doc.text(`Durată parcurgere (min): ${plan.durationMinutes ?? "-"}`);
+      doc.text(`Rezultat test verificare: ${plan.score != null ? `${plan.score}%` : "—"}`);
       doc.moveDown();
-      doc.text("Semnatura angajat:", { continued: true }).text(
-        plan.signature?.employeeSignedAt ? ` semnat la ${plan.signature.employeeSignedAt.toISOString()}` : " nesemnata"
+      doc.text(
+        `Semnătură angajat: ${
+          plan.signature?.employeeSignedAt
+            ? `da (${plan.signature.employeeSignedAt.toLocaleDateString("ro-RO")})`
+            : "nu"
+        }`
       );
-      doc.text("Semnatura responsabil SSM:", { continued: true }).text(
-        plan.signature?.responsibleSignedAt
-          ? ` semnat la ${plan.signature.responsibleSignedAt.toISOString()}`
-          : " nesemnata"
+      doc.text(
+        `Semnătură responsabil SSM: ${
+          plan.signature?.responsibleSignedAt
+            ? `da (${plan.signature.responsibleSignedAt.toLocaleDateString("ro-RO")})`
+            : "nu"
+        }`
       );
       doc.moveDown();
-      doc.fontSize(10).text("Template MVP pentru consult intern/legal.");
+      doc.fontSize(9).text("Document generat electronic — păstrare conform legislației muncii.");
       doc.end();
     });
 

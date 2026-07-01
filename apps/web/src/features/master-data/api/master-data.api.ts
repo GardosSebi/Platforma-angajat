@@ -9,6 +9,7 @@ export interface WorksiteItem {
   code: string;
   name: string;
   address?: string | null;
+  legalEntityId?: string | null;
   active: boolean;
 }
 
@@ -25,9 +26,15 @@ export interface JobPositionItem {
   code: string;
   name: string;
   departmentId?: string | null;
+  legalEntityId?: string | null;
+  worksiteId?: string | null;
   corCode?: string | null;
   description?: string | null;
+  activityDescription?: string | null;
   active: boolean;
+  legalEntity?: { id: string; code: string; name: string } | null;
+  worksite?: { id: string; code: string; name: string } | null;
+  department?: { id: string; code: string; name: string } | null;
 }
 
 export interface EmployeeItem {
@@ -43,7 +50,28 @@ export interface EmployeeItem {
   active: boolean;
   worksite?: { id: string; code: string; name: string } | null;
   department?: { id: string; code: string; name: string } | null;
-  jobPosition?: { id: string; code: string; name: string } | null;
+  jobPosition?: { id: string; code: string; name: string; corCode?: string | null } | null;
+}
+
+export interface PlacementHistoryItem {
+  id: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  changeReason?: string | null;
+  worksite?: { id: string; code: string; name: string } | null;
+  department?: { id: string; code: string; name: string } | null;
+  jobPosition?: { id: string; code: string; name: string; corCode?: string | null } | null;
+}
+
+export interface EmployeeLinkedUser {
+  id: string;
+  roles: string[];
+  active: boolean;
+}
+
+export interface EmployeeDetailItem extends EmployeeItem {
+  linkedUser?: EmployeeLinkedUser | null;
+  placementHistory?: PlacementHistoryItem[];
 }
 
 export interface EmployeeGroupItem {
@@ -52,6 +80,19 @@ export interface EmployeeGroupItem {
   description?: string | null;
   active: boolean;
   _count?: { members: number };
+}
+
+export interface EmployeeGroupDetailItem extends EmployeeGroupItem {
+  members: Array<{ id: string; fullName: string; email: string; active: boolean }>;
+}
+
+export interface CreateLegalEntityPayload {
+  code: string;
+  name: string;
+  cui?: string;
+  headquarters?: string;
+  active?: boolean;
+  worksiteIds: string[];
 }
 
 export interface CreateWorksitePayload {
@@ -72,8 +113,11 @@ export interface CreateJobPositionPayload {
   code: string;
   name: string;
   departmentId?: string;
+  legalEntityId?: string;
+  worksiteId?: string;
   corCode?: string;
   description?: string;
+  activityDescription?: string;
   active?: boolean;
 }
 
@@ -89,9 +133,27 @@ export interface CreateEmployeePayload {
   active?: boolean;
 }
 
+export interface CreateEmployeeGroupPayload {
+  name: string;
+  description?: string;
+  active?: boolean;
+}
+
+export interface UpdatePlacementPayload {
+  worksiteId?: string | null;
+  departmentId?: string | null;
+  jobPositionId?: string | null;
+  changeReason: string;
+}
+
 export type UpdateWorksitePayload = Partial<CreateWorksitePayload>;
 export type UpdateDepartmentPayload = Partial<CreateDepartmentPayload>;
 export type UpdateJobPositionPayload = Partial<CreateJobPositionPayload>;
+export interface UpdateEmployeeGroupPayload {
+  name?: string;
+  description?: string | null;
+  active?: boolean;
+}
 
 export interface UpdateEmployeePayload {
   email?: string;
@@ -105,11 +167,32 @@ export interface UpdateEmployeePayload {
   active?: boolean;
 }
 
+export interface ListEmployeesParams extends PaginationParams {
+  search?: string;
+  active?: boolean;
+  worksiteId?: string;
+  departmentId?: string;
+  jobPositionId?: string;
+}
+
 export interface EmployeeOptionItem {
   id: string;
   fullName: string;
   email: string;
   active: boolean;
+}
+
+function buildEmployeeListQuery(params?: ListEmployeesParams): string {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+  if (params?.search?.trim()) qs.set("search", params.search.trim());
+  if (params?.active !== undefined) qs.set("active", String(params.active));
+  if (params?.worksiteId) qs.set("worksiteId", params.worksiteId);
+  if (params?.departmentId) qs.set("departmentId", params.departmentId);
+  if (params?.jobPositionId) qs.set("jobPositionId", params.jobPositionId);
+  const built = qs.toString();
+  return built ? `?${built}` : "";
 }
 
 export const masterDataApi = {
@@ -158,11 +241,11 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
-  listEmployees(params?: PaginationParams) {
-    return httpClient<PaginatedResult<EmployeeItem>>(`/master-data/employees${buildPaginationQuery(params)}`);
+  listEmployees(params?: ListEmployeesParams) {
+    return httpClient<PaginatedResult<EmployeeItem>>(`/master-data/employees${buildEmployeeListQuery(params)}`);
   },
   getEmployee(id: string) {
-    return httpClient<EmployeeItem>(`/master-data/employees/${encodeURIComponent(id)}`);
+    return httpClient<EmployeeDetailItem>(`/master-data/employees/${encodeURIComponent(id)}`);
   },
   listEmployeeOptions(search?: string, limit = 100) {
     const qs = new URLSearchParams();
@@ -182,7 +265,51 @@ export const masterDataApi = {
       body: JSON.stringify(payload)
     });
   },
+  updateEmployeePlacement(id: string, payload: UpdatePlacementPayload) {
+    return httpClient<EmployeeItem>(`/master-data/employees/${encodeURIComponent(id)}/placement`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
   listGroups(params?: PaginationParams) {
     return httpClient<PaginatedResult<EmployeeGroupItem>>(`/master-data/groups${buildPaginationQuery(params)}`);
+  },
+  getGroup(id: string) {
+    return httpClient<EmployeeGroupDetailItem>(`/master-data/groups/${encodeURIComponent(id)}`);
+  },
+  createGroup(payload: CreateEmployeeGroupPayload) {
+    return httpClient<EmployeeGroupItem>("/master-data/groups", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateGroup(id: string, payload: UpdateEmployeeGroupPayload) {
+    return httpClient<EmployeeGroupItem>(`/master-data/groups/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  addGroupMember(groupId: string, employeeId: string) {
+    return httpClient<{ groupId: string; employeeId: string }>(
+      `/master-data/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(employeeId)}`,
+      { method: "POST" }
+    );
+  },
+  removeGroupMember(groupId: string, employeeId: string) {
+    return httpClient<{ removed: boolean }>(
+      `/master-data/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(employeeId)}`,
+      { method: "DELETE" }
+    );
+  },
+  listLegalEntities(params?: PaginationParams) {
+    return httpClient<PaginatedResult<import("../master-data-shared").LegalEntityItem>>(
+      `/master-data/legal-entities${buildPaginationQuery(params)}`
+    );
+  },
+  createLegalEntity(payload: CreateLegalEntityPayload) {
+    return httpClient<import("../master-data-shared").LegalEntityItem>("/master-data/legal-entities", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
   }
 };

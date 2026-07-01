@@ -58,6 +58,22 @@ export class CreateTrainingTypeDto {
   @Min(1, { each: true })
   @Max(365, { each: true })
   reminderDays?: number[];
+
+  @IsOptional()
+  @IsArray()
+  testQuestions?: Array<{
+    id: string;
+    text: string;
+    options: string[];
+    correctIndex: number;
+  }>;
+}
+
+export class MaterialCompleteDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  durationSeconds?: number;
 }
 
 export class CreateTrainingPlanDto {

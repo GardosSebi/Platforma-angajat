@@ -4,13 +4,12 @@ import { LoginPage } from "../features/auth/pages/LoginPage";
 import { AppLayout } from "./AppLayout";
 import { MasterDataPage } from "../features/master-data/pages/MasterDataPage";
 import { useAuthSession } from "../shared/auth/use-auth-session";
-import { canAccessTenantAdmin, canAccessEmployeePortal, getAppHomePath, hasSsmBackofficeAccess, isEmployeePortalUser } from "../shared/auth/roles";
+import { canAccessTenantAdmin, getAppHomePath, isEmployeePortalUser } from "../shared/auth/roles";
 import { ChatbotPage } from "../features/chatbot/pages/ChatbotPage";
 import { SurveysPage } from "../features/surveys/pages/SurveysPage";
 import { PublicSurveyPage } from "../features/surveys/pages/PublicSurveyPage";
 import { SurveyRespondPage } from "../features/surveys/pages/SurveyRespondPage";
 import { TicketingPage } from "../features/ticketing/pages/TicketingPage";
-import { AdminPage } from "../features/platform-admin/pages/AdminPage";
 import { EmployeeStaticListPage } from "../features/employee-static/pages/EmployeeStaticListPage";
 import { EmployeeStaticPageView } from "../features/employee-static/pages/EmployeeStaticPageView";
 import { HomeRedirect } from "./HomeRedirect";
@@ -36,14 +35,6 @@ function BackofficeOnlyRoute({ children, employeeRedirect }: { children: ReactNo
     return <Navigate to={employeeRedirect} replace />;
   }
   return <>{children}</>;
-}
-
-function AdminRoute() {
-  const session = useAuthSession();
-  if (!canAccessTenantAdmin(session)) {
-    return <Navigate to={getAppHomePath(session)} replace />;
-  }
-  return <AdminPage />;
 }
 
 export function AppRouter() {
@@ -83,7 +74,6 @@ export function AppRouter() {
               </BackofficeOnlyRoute>
             }
           />
-          <Route path="/admin" element={<AdminRoute />} />
           <Route path="/informatii" element={<EmployeeStaticListPage />} />
           <Route path="/informatii/:slug" element={<EmployeeStaticPageView />} />
           <Route path="/notificari" element={<NotificationsPage />} />

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import {
+  Prisma,
   SsmDocumentStatus,
   SsmEipMovementType,
   SsmMedicalControlResult,
@@ -8,9 +9,8 @@ import {
 } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
-
 const DAY_MS = 24 * 60 * 60 * 1000;
-const REPORT_TYPES = ["trainings", "eip", "medical", "documents"] as const;
+const REPORT_TYPES = ["trainings", "eip", "medical", "documents", "accidents", "psi", "compliance"] as const;
 
 type ReportType = (typeof REPORT_TYPES)[number];
 type TrafficLight = "GREEN" | "YELLOW" | "RED";
@@ -71,10 +71,64 @@ function pdfBuffer(title: string, rows: ReportRow[]): Promise<Buffer> {
 export class SsmOverviewService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async unifiedCalendar(tenantId: string) {
+  private async worksiteIdsForLegalEntity(tenantId: string, legalEntityId?: string): Promise<string[] | null> {
+    if (!legalEntityId) return null;
+    const rows = await this.prisma.worksite.findMany({
+      where: { tenantId, legalEntityId },
+      select: { id: true }
+    });
+    return rows.map((row) => row.id);
+  }
+
+  private employeeScopeWhere(worksiteIds: string[] | null): Prisma.EmployeeWhereInput | undefined {
+    if (!worksiteIds) return undefined;
+    if (!worksiteIds.length) {
+      return { id: "__no_employee_in_legal_entity__" };
+    }
+    return { worksiteId: { in: worksiteIds } };
+  }
+
+  private worksiteScopeWhere(worksiteIds: string[] | null): Prisma.WorksiteWhereInput | undefined {
+    if (!worksiteIds) return undefined;
+    if (!worksiteIds.length) {
+      return { id: "__no_worksite_in_legal_entity__" };
+    }
+    return { id: { in: worksiteIds } };
+  }
+
+  async unifiedCalendar(tenantId: string, legalEntityId?: string) {
+    const worksiteIds = await this.worksiteIdsForLegalEntity(tenantId, legalEntityId);
+    const employeeWhere = this.employeeScopeWhere(worksiteIds);
+    const worksiteWhere = this.worksiteScopeWhere(worksiteIds);
+
+    const trainingWhere: Prisma.SsmTrainingPlanWhereInput = {
+      tenantId,
+      ...(employeeWhere ? { employee: employeeWhere } : {})
+    };
+    const medicalWhere: Prisma.SsmMedicalControlWhereInput = {
+      tenantId,
+      ...(employeeWhere ? { employee: employeeWhere } : {})
+    };
+    const eipWhere: Prisma.SsmEipMovementWhereInput = {
+      tenantId,
+      movementType: SsmEipMovementType.DISTRIBUTION,
+      replacementDueAt: { not: null },
+      ...(employeeWhere ? { employee: employeeWhere } : {})
+    };
+    const psiEquipmentWhere: Prisma.SsmPsiEquipmentWhereInput = {
+      tenantId,
+      status: SsmPsiEquipmentStatus.ACTIVE,
+      nextDueAt: { not: null },
+      ...(worksiteWhere ? { worksite: worksiteWhere } : {})
+    };
+    const psiTrainingWhere: Prisma.SsmPsiTrainingRecordWhereInput = {
+      tenantId,
+      ...(worksiteWhere ? { worksite: worksiteWhere } : {})
+    };
+
     const [trainingPlans, medicalControls, eipMovements, psiEquipment, psiTrainings] = await Promise.all([
       this.prisma.ssmTrainingPlan.findMany({
-        where: { tenantId },
+        where: trainingWhere,
         include: {
           employee: { select: { fullName: true } },
           trainingType: { select: { name: true } }
@@ -83,7 +137,7 @@ export class SsmOverviewService {
         take: 200
       }),
       this.prisma.ssmMedicalControl.findMany({
-        where: { tenantId },
+        where: medicalWhere,
         include: {
           employee: { select: { fullName: true } },
           controlType: { select: { name: true } }
@@ -92,11 +146,7 @@ export class SsmOverviewService {
         take: 200
       }),
       this.prisma.ssmEipMovement.findMany({
-        where: {
-          tenantId,
-          movementType: SsmEipMovementType.DISTRIBUTION,
-          replacementDueAt: { not: null }
-        },
+        where: eipWhere,
         include: {
           employee: { select: { fullName: true } },
           eipType: { select: { name: true } }
@@ -105,13 +155,13 @@ export class SsmOverviewService {
         take: 200
       }),
       this.prisma.ssmPsiEquipment.findMany({
-        where: { tenantId, status: SsmPsiEquipmentStatus.ACTIVE, nextDueAt: { not: null } },
+        where: psiEquipmentWhere,
         include: { worksite: { select: { name: true } } },
         orderBy: { nextDueAt: "asc" },
         take: 200
       }),
       this.prisma.ssmPsiTrainingRecord.findMany({
-        where: { tenantId },
+        where: psiTrainingWhere,
         include: {
           worksite: { select: { name: true } },
           employee: { select: { fullName: true } }
@@ -172,36 +222,88 @@ export class SsmOverviewService {
     return { events };
   }
 
-  async complianceDashboard(tenantId: string) {
+  async calendarIcal(tenantId: string, legalEntityId?: string): Promise<string> {
+    const { events } = await this.unifiedCalendar(tenantId, legalEntityId);
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Platforma Employee//SSM Calendar//RO",
+      "CALSCALE:GREGORIAN"
+    ];
+    for (const event of events) {
+      const uid = `${event.id}@ssm-platform`;
+      const dtStart = new Date(event.startAt).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      const dtEnd = new Date(event.dueAt ?? event.startAt).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      lines.push("BEGIN:VEVENT");
+      lines.push(`UID:${uid}`);
+      lines.push(`DTSTART:${dtStart}`);
+      lines.push(`DTEND:${dtEnd}`);
+      lines.push(`SUMMARY:${event.title.replace(/[,;\\]/g, " ")}`);
+      lines.push(`DESCRIPTION:${event.source} / ${event.status}`);
+      lines.push("END:VEVENT");
+    }
+    lines.push("END:VCALENDAR");
+    return lines.join("\r\n");
+  }
+
+  async complianceDashboard(tenantId: string, legalEntityId?: string) {
     const now = new Date();
+    const worksiteIds = await this.worksiteIdsForLegalEntity(tenantId, legalEntityId);
+    const employeeWhere = this.employeeScopeWhere(worksiteIds);
+    const worksiteWhere = this.worksiteScopeWhere(worksiteIds);
+
+    const trainingWhere: Prisma.SsmTrainingPlanWhereInput = {
+      tenantId,
+      ...(employeeWhere ? { employee: employeeWhere } : {})
+    };
+    const medicalWhere: Prisma.SsmMedicalControlWhereInput = {
+      tenantId,
+      ...(employeeWhere ? { employee: employeeWhere } : {})
+    };
+    const eipWhere: Prisma.SsmEipMovementWhereInput = {
+      tenantId,
+      movementType: SsmEipMovementType.DISTRIBUTION,
+      replacementDueAt: { not: null },
+      ...(employeeWhere ? { employee: employeeWhere } : {})
+    };
+    const psiEquipmentWhere: Prisma.SsmPsiEquipmentWhereInput = {
+      tenantId,
+      status: SsmPsiEquipmentStatus.ACTIVE,
+      ...(worksiteWhere ? { worksite: worksiteWhere } : {})
+    };
+    const documentWhere: Prisma.SsmDocumentWhereInput = {
+      tenantId,
+      ...(legalEntityId ? { legalEntityId } : {})
+    };
+
     const [trainingPlans, medicalControls, eipMovements, psiEquipment, documents] = await Promise.all([
       this.prisma.ssmTrainingPlan.findMany({
-        where: { tenantId },
+        where: trainingWhere,
         include: {
           employee: { select: { fullName: true } },
           trainingType: { select: { name: true } }
         }
       }),
       this.prisma.ssmMedicalControl.findMany({
-        where: { tenantId },
+        where: medicalWhere,
         include: {
           employee: { select: { fullName: true } },
           controlType: { select: { name: true } }
         }
       }),
       this.prisma.ssmEipMovement.findMany({
-        where: { tenantId, movementType: SsmEipMovementType.DISTRIBUTION, replacementDueAt: { not: null } },
+        where: eipWhere,
         include: {
           employee: { select: { fullName: true } },
           eipType: { select: { name: true } }
         }
       }),
       this.prisma.ssmPsiEquipment.findMany({
-        where: { tenantId, status: SsmPsiEquipmentStatus.ACTIVE },
+        where: psiEquipmentWhere,
         include: { worksite: { select: { name: true } } }
       }),
       this.prisma.ssmDocument.findMany({
-        where: { tenantId },
+        where: documentWhere,
         include: { activeVersion: true }
       })
     ]);
@@ -387,28 +489,116 @@ export class SsmOverviewService {
         nextDueAt: row.nextDueAt?.toISOString() ?? null
       }));
     }
-    const rows = await this.prisma.ssmDocument.findMany({
-      where: { tenantId },
-      include: {
-        activeVersion: true,
-        versions: { orderBy: { versionNumber: "desc" } }
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 1000
-    });
-    return rows.flatMap((row) =>
-      row.versions.map((version) => ({
+    if (type === "accidents") {
+      const rows = await this.prisma.ssmAccidentCase.findMany({
+        where: { tenantId },
+        include: { employee: { select: { fullName: true } } },
+        orderBy: { occurredAt: "desc" },
+        take: 1000
+      });
+      return rows.map((row) => ({
         title: row.title,
         type: row.type,
+        severity: row.severity,
         status: row.status,
-        targetType: row.targetType,
-        targetLabel: row.targetLabel ?? null,
-        activeVersionNumber: row.activeVersion?.versionNumber ?? null,
-        versionNumber: version.versionNumber,
-        fileName: version.fileName,
-        changeNote: version.changeNote ?? null,
-        versionCreatedAt: version.createdAt.toISOString()
-      }))
-    );
+        employee: row.employee?.fullName ?? null,
+        occurredAt: row.occurredAt.toISOString(),
+        location: row.location,
+        itmDaysOff: row.itmDaysOff,
+        isFatality: row.isFatality
+      }));
+    }
+    if (type === "psi") {
+      const equipment = await this.prisma.ssmPsiEquipment.findMany({
+        where: { tenantId },
+        include: { worksite: { select: { name: true } } },
+        orderBy: { nextDueAt: "asc" },
+        take: 500
+      });
+      const trainings = await this.prisma.ssmPsiTrainingRecord.findMany({
+        where: { tenantId },
+        include: {
+          worksite: { select: { name: true } },
+          employee: { select: { fullName: true } }
+        },
+        orderBy: { validUntil: "asc" },
+        take: 500
+      });
+      return [
+        ...equipment.map((row) => ({
+          category: "EQUIPMENT",
+          name: row.name,
+          worksite: row.worksite.name,
+          nextDueAt: row.nextDueAt?.toISOString() ?? null,
+          status: row.status
+        })),
+        ...trainings.map((row) => ({
+          category: "TRAINING",
+          name: row.topic,
+          worksite: row.worksite.name,
+          employee: row.employee?.fullName ?? null,
+          validUntil: row.validUntil?.toISOString() ?? null
+        }))
+      ];
+    }
+    if (type === "compliance") {
+      const dashboard = await this.complianceDashboard(tenantId);
+      return [
+        {
+          globalScore: dashboard.kpi.globalScore,
+          trafficLight: dashboard.kpi.trafficLight,
+          totalChecks: dashboard.kpi.totalChecks,
+          noncompliant: dashboard.kpi.noncompliant
+        },
+        ...dashboard.breakdown.map((item) => ({
+          module: item.module,
+          total: item.total,
+          compliant: item.compliant,
+          noncompliant: item.noncompliant,
+          score: item.score
+        }))
+      ];
+    }
+    if (type === "documents") {
+      const rows = await this.prisma.ssmDocument.findMany({
+        where: { tenantId },
+        select: {
+          title: true,
+          type: true,
+          status: true,
+          targetType: true,
+          targetLabel: true,
+          legalEntityId: true,
+          activeVersion: { select: { versionNumber: true } },
+          versions: {
+            orderBy: { versionNumber: "desc" },
+            select: {
+              versionNumber: true,
+              fileName: true,
+              changeNote: true,
+              createdAt: true
+            }
+          }
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 1000
+      });
+      return rows.flatMap((row) =>
+        row.versions.map((version) => ({
+          title: row.title,
+          type: row.type,
+          status: row.status,
+          targetType: row.targetType,
+          targetLabel: row.targetLabel ?? null,
+          legalEntityId: row.legalEntityId ?? null,
+          activeVersionNumber: row.activeVersion?.versionNumber ?? null,
+          versionNumber: version.versionNumber,
+          fileName: version.fileName,
+          changeNote: version.changeNote ?? null,
+          versionCreatedAt: version.createdAt.toISOString()
+        }))
+      );
+    }
+    return [{ message: "No data" }];
   }
 }
