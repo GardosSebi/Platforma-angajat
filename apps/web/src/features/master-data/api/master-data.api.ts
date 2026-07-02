@@ -182,6 +182,41 @@ export interface EmployeeOptionItem {
   active: boolean;
 }
 
+export interface SsmResponsibleItem {
+  id: string;
+  type: "DESIGNATED_WORKER" | "EXTERNAL_SERVICE";
+  personName: string;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  active: boolean;
+  legalEntityId?: string | null;
+  worksiteId?: string | null;
+  legalEntity?: { id: string; code: string; name: string } | null;
+  worksite?: { id: string; code: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSsmResponsiblePayload {
+  type: "DESIGNATED_WORKER" | "EXTERNAL_SERVICE";
+  personName: string;
+  legalEntityId?: string;
+  worksiteId?: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  active?: boolean;
+}
+
+export type UpdateSsmResponsiblePayload = Partial<CreateSsmResponsiblePayload>;
+
+export interface ImportEmployeesResult {
+  created: number;
+  updated: number;
+  errors: Array<{ row: number; message: string }>;
+}
+
 function buildEmployeeListQuery(params?: ListEmployeesParams): string {
   const qs = new URLSearchParams();
   if (params?.page) qs.set("page", String(params.page));
@@ -310,6 +345,29 @@ export const masterDataApi = {
     return httpClient<import("../master-data-shared").LegalEntityItem>("/master-data/legal-entities", {
       method: "POST",
       body: JSON.stringify(payload)
+    });
+  },
+  listSsmResponsibles(params?: PaginationParams) {
+    return httpClient<PaginatedResult<SsmResponsibleItem>>(
+      `/master-data/ssm-responsibles${buildPaginationQuery(params)}`
+    );
+  },
+  createSsmResponsible(payload: CreateSsmResponsiblePayload) {
+    return httpClient<SsmResponsibleItem>("/master-data/ssm-responsibles", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateSsmResponsible(id: string, payload: UpdateSsmResponsiblePayload) {
+    return httpClient<SsmResponsibleItem>(`/master-data/ssm-responsibles/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  importEmployeesCsv(csv: string) {
+    return httpClient<ImportEmployeesResult>("/master-data/import/employees", {
+      method: "POST",
+      body: JSON.stringify({ csv })
     });
   }
 };

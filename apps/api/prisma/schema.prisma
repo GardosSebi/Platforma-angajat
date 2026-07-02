@@ -28,6 +28,10 @@ enum SsmDocumentType {
   DECISION
   PSI
   REGISTER
+  EXPOSURE_SHEET
+  SSM_CONVENTION
+  DANGEROUS_SUBSTANCES
+  EMERGENCY_PROCEDURE
   OTHER
 }
 
@@ -101,6 +105,17 @@ enum SsmRiskTargetType {
   JOB_POSITION
   WORKSITE
   DEPARTMENT
+}
+
+enum SsmPreventionPlanStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum SsmPreventionMeasureStatus {
+  OPEN
+  COMPLETED
+  OVERDUE
 }
 
 enum SsmPsiEquipmentStatus {
@@ -283,6 +298,9 @@ model Tenant {
   ssmPsiEquipmentVerifications SsmPsiEquipmentVerification[]
   ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
   ssmPsiResponsibles         SsmPsiResponsible[]
+  ssmEvacuationDrills        SsmEvacuationDrill[]
+  ssmPreventionPlans         SsmPreventionPlan[]
+  ssmPreventionMeasures      SsmPreventionMeasure[]
   ssmDocumentTemplates       SsmDocumentTemplate[]
   communicationAnnouncements CommunicationAnnouncement[]
   communicationTemplates      CommunicationTemplate[]
@@ -365,6 +383,8 @@ model Worksite {
   ssmPsiEquipments           SsmPsiEquipment[]
   ssmPsiTrainingRecords      SsmPsiTrainingRecord[]
   ssmPsiResponsibles         SsmPsiResponsible[]
+  ssmEvacuationDrills        SsmEvacuationDrill[]
+  ssmPreventionPlans         SsmPreventionPlan[]
   userScopedRoles            UserScopedRole[]
   jobPositions               JobPosition[]
 
@@ -389,6 +409,7 @@ model Department {
   employees                  Employee[]
   employeePlacementHistories EmployeePlacementHistory[]
   ssmRiskAssessments         SsmRiskAssessment[]
+  ssmPreventionPlans         SsmPreventionPlan[]
 
   @@unique([tenantId, code])
   @@index([tenantId, worksiteId])
@@ -418,6 +439,7 @@ model JobPosition {
   ssmEipNorms                SsmEipNorm[]
   ssmMedicalControlTypes     SsmMedicalControlType[]
   ssmRiskAssessments         SsmRiskAssessment[]
+  ssmPreventionPlans         SsmPreventionPlan[]
 
   @@unique([tenantId, code])
   @@index([tenantId, departmentId])
@@ -659,6 +681,7 @@ model SsmTrainingPlan {
   materialUrl         String?
   materialStartedAt   DateTime?
   materialCompletedAt DateTime?
+  materialTimeSpentSeconds Int?
   scheduledAt         DateTime
   dueAt               DateTime
   completedAt         DateTime?
@@ -705,9 +728,12 @@ model SsmTrainingSignature {
   tenantId               String
   trainingPlanId         String   @unique
   employeeSignature      String?
+  managerSignature       String?
   responsibleSignature   String?
   employeeSignedAt       DateTime?
+  managerSignedAt        DateTime?
   responsibleSignedAt    DateTime?
+  managerUserId          String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -1040,6 +1066,74 @@ model SsmPsiResponsible {
 
   @@index([tenantId, worksiteId, active])
   @@index([tenantId, role])
+}
+
+model SsmPreventionPlan {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  title         String
+  targetType    SsmRiskTargetType
+  jobPositionId String?
+  worksiteId    String?
+  departmentId  String?
+  status        SsmPreventionPlanStatus @default(ACTIVE)
+  reviewDate    DateTime?
+  notes         String?
+  createdBy     String
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobPosition JobPosition?          @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+  worksite    Worksite?             @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department  Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  measures    SsmPreventionMeasure[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, targetType])
+}
+
+model SsmPreventionMeasure {
+  id                String                     @id @default(cuid())
+  tenantId          String
+  planId            String
+  description       String
+  responsiblePerson String?
+  dueDate           DateTime?
+  status            SsmPreventionMeasureStatus @default(OPEN)
+  completedAt       DateTime?
+  notes             String?
+  createdBy         String
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   SsmPreventionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, planId])
+  @@index([tenantId, status, dueDate])
+}
+
+model SsmEvacuationDrill {
+  id                String   @id @default(cuid())
+  tenantId          String
+  worksiteId        String
+  conductedAt       DateTime
+  nextDueAt         DateTime?
+  durationMinutes   Int?
+  participantsCount Int?
+  result            String
+  coordinatorName   String?
+  notes             String?
+  createdBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite Worksite @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, worksiteId, conductedAt])
+  @@index([tenantId, nextDueAt])
 }
 
 model CommunicationAnnouncement {

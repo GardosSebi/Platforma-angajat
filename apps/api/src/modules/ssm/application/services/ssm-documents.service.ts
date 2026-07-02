@@ -700,6 +700,35 @@ export class SsmDocumentsService {
         targetType: SsmDocumentTargetType.WORKSITE,
         isControlFolder: true,
         checklistItems: ["Plan evacuare", "Verificare stingătoare", "Instruire SU"]
+      },
+      {
+        name: "fisa-expunere-riscuri",
+        title: "Fișă expunere la riscuri profesionale",
+        type: SsmDocumentType.EXPOSURE_SHEET,
+        targetType: SsmDocumentTargetType.JOB_POSITION,
+        isControlFolder: true,
+        checklistItems: ["La angajare", "Semnată de angajat", "Arhivată în dosar"]
+      },
+      {
+        name: "conventie-ssm",
+        title: "Convenție SSM — activități cu mai mulți angajatori",
+        type: SsmDocumentType.SSM_CONVENTION,
+        targetType: SsmDocumentTargetType.WORKSITE,
+        checklistItems: ["Părți semnatare", "Responsabilități", "Durată convenție"]
+      },
+      {
+        name: "lista-substante-periculoase",
+        title: "Listă substanțe periculoase",
+        type: SsmDocumentType.DANGEROUS_SUBSTANCES,
+        targetType: SsmDocumentTargetType.WORKSITE,
+        checklistItems: ["Denumire substanță", "Clasificare", "Măsuri manipulare"]
+      },
+      {
+        name: "procedura-urgenta",
+        title: "Procedură situații de urgență",
+        type: SsmDocumentType.EMERGENCY_PROCEDURE,
+        targetType: SsmDocumentTargetType.WORKSITE,
+        checklistItems: ["Tip urgență", "Pași intervenție", "Contacte"]
       }
     ];
     let created = 0;

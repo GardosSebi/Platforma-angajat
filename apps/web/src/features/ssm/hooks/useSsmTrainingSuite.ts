@@ -58,7 +58,18 @@ export function useCreateTrainingPlan() {
 export function useMaterialComplete() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (planId: string) => ssmApi.markMaterialCompleted(planId),
+    mutationFn: ({ planId, durationSeconds }: { planId: string; durationSeconds?: number }) =>
+      ssmApi.markMaterialCompleted(planId, durationSeconds),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
+    }
+  });
+}
+
+export function useStartMaterial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) => ssmApi.startMaterial(planId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
     }
@@ -87,7 +98,7 @@ export function useSignPlan() {
       signatureData
     }: {
       planId: string;
-      role: "EMPLOYEE" | "RESPONSIBLE";
+      role: "EMPLOYEE" | "MANAGER" | "RESPONSIBLE";
       signatureData: string;
     }) => ssmApi.signPlan(planId, role, signatureData),
     onSuccess: async () => {

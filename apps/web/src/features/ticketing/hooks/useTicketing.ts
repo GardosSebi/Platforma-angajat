@@ -1,6 +1,13 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateHelpdeskTicketRequest, HelpdeskTicketStatus } from "@repo/shared-types/ticketing";
+import type {
+  CreateHelpdeskTicketCommentRequest,
+  CreateHelpdeskTicketRequest,
+  HelpdeskTicketStatus
+} from "@repo/shared-types/ticketing";
+import { platformAdminApi } from "../../platform-admin/api/platform-admin.api";
 import { ticketingApi, TicketFilters } from "../api/ticketing.api";
+import type { TicketOperatorOption } from "../ticketing-shared";
 
 export function useTicketingKanban(filters: TicketFilters) {
   const queryFilters: TicketFilters = {
@@ -18,6 +25,56 @@ export function useTicketingStats() {
   return useQuery({
     queryKey: ["ticketing", "stats"],
     queryFn: ticketingApi.stats
+  });
+}
+
+export function useTicketOperatorOptions() {
+  const usersQuery = useQuery({
+    queryKey: ["admin", "users", "ticket-operators"],
+    queryFn: () => platformAdminApi.listUsers({ page: 1, pageSize: 200 }),
+    retry: false,
+    staleTime: 60_000
+  });
+  const statsQuery = useTicketingStats();
+
+  return useMemo(() => {
+    const byId = new Map<string, TicketOperatorOption>();
+
+    for (const user of usersQuery.data?.items ?? []) {
+      byId.set(user.id, { id: user.id, name: user.fullName?.trim() || user.email });
+    }
+    for (const operator of statsQuery.data?.operators ?? []) {
+      if (!operator.assignedToUserId || byId.has(operator.assignedToUserId)) continue;
+      byId.set(operator.assignedToUserId, {
+        id: operator.assignedToUserId,
+        name: operator.assignedToName?.trim() || operator.assignedToUserId
+      });
+    }
+
+    return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name, "ro"));
+  }, [usersQuery.data, statsQuery.data]);
+}
+
+export function useTicketComments(ticketId: string) {
+  return useQuery({
+    queryKey: ["ticketing", "comments", ticketId],
+    queryFn: () => ticketingApi.comments(ticketId),
+    enabled: Boolean(ticketId)
+  });
+}
+
+export function useAddTicketComment() {
+  const queryClient = useQueryClient();
+  const refresh = useRefreshTicketing();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: CreateHelpdeskTicketCommentRequest }) =>
+      ticketingApi.addComment(id, payload),
+    onSuccess: async (_comment, variables) => {
+      await Promise.all([
+        refresh(),
+        queryClient.invalidateQueries({ queryKey: ["ticketing", "comments", variables.id] })
+      ]);
+    }
   });
 }
 

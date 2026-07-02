@@ -1,19 +1,26 @@
 import { FormEvent } from "react";
-import type { CreateHelpdeskTicketRequest, HelpdeskTicketPriority, HelpdeskTicketSource } from "@repo/shared-types/ticketing";
-import { HELPDESK_TICKET_PRIORITIES, HELPDESK_TICKET_SOURCES } from "@repo/shared-types/ticketing";
+import type { CreateHelpdeskTicketRequest, HelpdeskTicketPriority } from "@repo/shared-types/ticketing";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
-import { PRIORITY_LABELS, SOURCE_LABELS, TICKET_CATEGORIES } from "../ticketing-shared";
+import {
+  CREATE_FORM_PRIORITIES,
+  PRIORITY_LABELS,
+  TICKET_CATEGORIES,
+  TICKET_CATEGORY_LABELS,
+  type TicketOperatorOption
+} from "../ticketing-shared";
 
 type EmployeeOption = { id: string; fullName: string };
 
 type Props = {
   form: CreateHelpdeskTicketRequest;
   employees: EmployeeOption[];
+  operators: TicketOperatorOption[];
   isPending: boolean;
   feedback: { type: "success" | "error"; message: string } | null;
   onChange: (patch: Partial<CreateHelpdeskTicketRequest>) => void;
   onReporterChange: (employeeId: string) => void;
+  onOperatorChange: (operatorId: string) => void;
   onSubmit: (event: FormEvent) => void;
   onCancel: () => void;
 };
@@ -21,10 +28,12 @@ type Props = {
 export function TicketCreateForm({
   form,
   employees,
+  operators,
   isPending,
   feedback,
   onChange,
   onReporterChange,
+  onOperatorChange,
   onSubmit,
   onCancel
 }: Props) {
@@ -32,8 +41,8 @@ export function TicketCreateForm({
     <form className="card form-stack comms-panel ticket-create-form" onSubmit={onSubmit}>
       <div className="comms-compose-head">
         <div>
-          <h2 className="card-title">Tichet nou</h2>
-          <p className="comms-toolbar-hint">Descrie solicitarea, alege prioritatea și salvează.</p>
+          <h2 className="card-title">Înregistrare manuală</h2>
+          <p className="comms-toolbar-hint">Înregistrează o solicitare primită telefonic, pe email sau la birou.</p>
         </div>
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Înapoi la board
@@ -41,9 +50,9 @@ export function TicketCreateForm({
       </div>
 
       <fieldset className="comms-fieldset">
-        <legend>1. Solicitare</legend>
+        <legend>Solicitare</legend>
         <div className="field">
-          <label htmlFor="ticket-title">Titlu *</label>
+          <label htmlFor="ticket-title">Subiect *</label>
           <input
             id="ticket-title"
             value={form.title}
@@ -58,33 +67,28 @@ export function TicketCreateForm({
             id="ticket-description"
             value={form.description}
             onChange={(event) => onChange({ description: event.target.value })}
-            placeholder="Detalii: perioada, motiv, date de contact..."
+            placeholder="Detalii: perioada, motiv, context..."
             rows={4}
             required
           />
         </div>
         <div className="comms-form-row">
-          <div className="field">
-            <label htmlFor="ticket-category">Categorie</label>
-            <input
-              id="ticket-category"
-              list="ticket-category-options"
-              value={form.category ?? ""}
-              onChange={(event) => onChange({ category: event.target.value })}
-              placeholder="HR, IT, CONCEDIU..."
-            />
-            <datalist id="ticket-category-options">
-              {TICKET_CATEGORIES.map((category) => (
-                <option key={category} value={category} />
-              ))}
-            </datalist>
-          </div>
+          <FieldSelect
+            id="ticket-category"
+            label="Destinatar *"
+            value={form.category ?? "HR"}
+            onChange={(category) => onChange({ category })}
+            options={TICKET_CATEGORIES.map((category) => ({
+              value: category,
+              label: TICKET_CATEGORY_LABELS[category]
+            }))}
+          />
           <FieldSelect
             id="ticket-priority"
             label="Prioritate"
             value={form.priority ?? "MEDIUM"}
             onChange={(priority) => onChange({ priority: priority as HelpdeskTicketPriority })}
-            options={HELPDESK_TICKET_PRIORITIES.map((priority) => ({
+            options={CREATE_FORM_PRIORITIES.map((priority) => ({
               value: priority,
               label: PRIORITY_LABELS[priority]
             }))}
@@ -92,18 +96,34 @@ export function TicketCreateForm({
         </div>
       </fieldset>
 
-      <fieldset className="comms-fieldset">
-        <legend>2. Detalii opționale</legend>
+      <details className="comms-advanced ticket-create-optional">
+        <summary>Detalii opționale</summary>
         <div className="comms-form-row">
           <FieldSelect
-            id="ticket-source"
-            label="Sursă"
-            value={form.source ?? "PORTAL"}
-            onChange={(source) => onChange({ source: source as HelpdeskTicketSource })}
-            options={HELPDESK_TICKET_SOURCES.map((source) => ({
-              value: source,
-              label: SOURCE_LABELS[source]
-            }))}
+            id="ticket-reporter"
+            label="Solicitant (angajat)"
+            value={form.reporterEmployeeId ?? ""}
+            onChange={onReporterChange}
+            allowEmpty
+            emptyLabel="Nespecificat"
+            options={mapToOptions(
+              employees,
+              (employee) => employee.id,
+              (employee) => employee.fullName
+            )}
+          />
+          <FieldSelect
+            id="ticket-assignee"
+            label="Operator"
+            value={form.assignedToUserId ?? ""}
+            onChange={onOperatorChange}
+            allowEmpty
+            emptyLabel="Neasignat — preia de pe board"
+            options={mapToOptions(
+              operators,
+              (operator) => operator.id,
+              (operator) => operator.name
+            )}
           />
           <div className="field">
             <label htmlFor="ticket-due">Scadență</label>
@@ -115,52 +135,11 @@ export function TicketCreateForm({
             />
           </div>
         </div>
-        <div className="comms-form-row">
-          <FieldSelect
-            id="ticket-reporter"
-            label="Solicitant angajat"
-            value={form.reporterEmployeeId ?? ""}
-            onChange={onReporterChange}
-            allowEmpty
-            emptyLabel="Fără angajat"
-            options={mapToOptions(
-              employees,
-              (employee) => employee.id,
-              (employee) => employee.fullName
-            )}
-          />
-          <div className="field">
-            <label htmlFor="ticket-assignee">Operator ID</label>
-            <input
-              id="ticket-assignee"
-              value={form.assignedToUserId ?? ""}
-              onChange={(event) => onChange({ assignedToUserId: event.target.value })}
-              placeholder="userId opțional"
-            />
-          </div>
-        </div>
-        <details className="comms-advanced">
-          <summary>Câmpuri avansate</summary>
-          <div className="field">
-            <label htmlFor="ticket-survey-response">Răspuns sondaj sursă</label>
-            <input
-              id="ticket-survey-response"
-              value={form.sourceSurveyResponseId ?? ""}
-              onChange={(event) =>
-                onChange({
-                  sourceSurveyResponseId: event.target.value,
-                  source: event.target.value ? "SURVEY" : form.source
-                })
-              }
-              placeholder="surveyResponseId opțional"
-            />
-          </div>
-        </details>
-      </fieldset>
+      </details>
 
       <div className="comms-compose-actions">
         <button className="btn-primary" type="submit" disabled={isPending}>
-          {isPending ? "Se salvează..." : "Creează tichet"}
+          {isPending ? "Se înregistrează..." : "Înregistrează tichet"}
         </button>
       </div>
 

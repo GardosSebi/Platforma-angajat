@@ -125,8 +125,14 @@ export class SsmOverviewService {
       tenantId,
       ...(worksiteWhere ? { worksite: worksiteWhere } : {})
     };
+    const evacuationWhere: Prisma.SsmEvacuationDrillWhereInput = {
+      tenantId,
+      nextDueAt: { not: null },
+      ...(worksiteWhere ? { worksite: worksiteWhere } : {})
+    };
 
-    const [trainingPlans, medicalControls, eipMovements, psiEquipment, psiTrainings] = await Promise.all([
+    const [trainingPlans, medicalControls, eipMovements, psiEquipment, psiTrainings, evacuationDrills] =
+      await Promise.all([
       this.prisma.ssmTrainingPlan.findMany({
         where: trainingWhere,
         include: {
@@ -167,6 +173,12 @@ export class SsmOverviewService {
           employee: { select: { fullName: true } }
         },
         orderBy: [{ validUntil: "asc" }, { conductedAt: "desc" }],
+        take: 200
+      }),
+      this.prisma.ssmEvacuationDrill.findMany({
+        where: evacuationWhere,
+        include: { worksite: { select: { name: true } } },
+        orderBy: { nextDueAt: "asc" },
         take: 200
       })
     ]);
@@ -216,6 +228,15 @@ export class SsmOverviewService {
         dueAt: training.validUntil ?? training.conductedAt,
         status: training.validUntil ? "VALID_UNTIL" : "RECORDED",
         ownerLabel: training.employee?.fullName ?? training.worksite.name
+      })),
+      ...evacuationDrills.map((drill) => ({
+        id: drill.id,
+        source: "EVACUATION_DRILL",
+        title: `Simulare evacuare - ${drill.worksite.name}`,
+        startAt: drill.conductedAt,
+        dueAt: drill.nextDueAt ?? drill.conductedAt,
+        status: "DRILL_DUE",
+        ownerLabel: drill.worksite.name
       }))
     ].sort((a, b) => new Date(a.dueAt ?? a.startAt).getTime() - new Date(b.dueAt ?? b.startAt).getTime());
 
@@ -244,6 +265,29 @@ export class SsmOverviewService {
     }
     lines.push("END:VCALENDAR");
     return lines.join("\r\n");
+  }
+
+  async calendarPdf(tenantId: string, legalEntityId?: string): Promise<Buffer> {
+    const { events } = await this.unifiedCalendar(tenantId, legalEntityId);
+    const sourceLabels: Record<string, string> = {
+      TRAINING: "Instruire",
+      MEDICAL: "Medical",
+      EIP: "EIP",
+      PSI: "PSI",
+      PSI_TRAINING: "Instruire PSI",
+      EVACUATION_DRILL: "Simulare evacuare"
+    };
+    return pdfBuffer(
+      "Calendar SSM unificat",
+      events.map((event) => ({
+        sursa: sourceLabels[event.source] ?? event.source,
+        titlu: event.title,
+        start: new Date(event.startAt).toLocaleDateString("ro-RO"),
+        scadenta: new Date(event.dueAt ?? event.startAt).toLocaleDateString("ro-RO"),
+        status: event.status,
+        responsabil: event.ownerLabel
+      }))
+    );
   }
 
   async complianceDashboard(tenantId: string, legalEntityId?: string) {

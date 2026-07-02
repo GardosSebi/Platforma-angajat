@@ -1,13 +1,15 @@
 import { useMemo } from "react";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { useSsmComplianceDashboard, useUnifiedSsmCalendar } from "../hooks/useSsmOverview";
+import { ssmApi } from "../api/ssm.api";
 
 const SOURCE_LABELS: Record<string, string> = {
   TRAINING: "Instruire",
   MEDICAL: "Medical",
   EIP: "EIP",
   PSI: "PSI",
-  PSI_TRAINING: "Instruire PSI"
+  PSI_TRAINING: "Instruire PSI",
+  EVACUATION_DRILL: "Simulare evacuare"
 };
 
 const TRAFFIC_LABELS: Record<string, string> = {
@@ -154,8 +156,17 @@ export function SsmComplianceDashboardManager() {
             >
               Export iCal
             </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                void downloadWithAuth(ssmApi.getCalendarPdfUrl(), "ssm-calendar.pdf").catch(() => undefined);
+              }}
+            >
+              Export PDF
+            </button>
           </div>
-          <p className="field-hint">Calendar agregat: instruiri, medical, EIP, PSI. Export iCal pentru Outlook/Google.</p>
+          <p className="field-hint">Calendar agregat: instruiri, medical, EIP, PSI, simulări evacuare. Export iCal sau PDF.</p>
         </div>
 
         <div className="card ssm-doc-card">

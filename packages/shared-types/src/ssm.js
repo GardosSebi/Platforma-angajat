@@ -6,6 +6,10 @@ export const SSM_DOCUMENT_TYPES = [
     "DECISION",
     "PSI",
     "REGISTER",
+    "EXPOSURE_SHEET",
+    "SSM_CONVENTION",
+    "DANGEROUS_SUBSTANCES",
+    "EMERGENCY_PROCEDURE",
     "OTHER"
 ];
 export const SSM_DOCUMENT_TARGET_TYPES = [

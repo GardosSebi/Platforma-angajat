@@ -6,6 +6,7 @@ import type {
   CreateEmployeePayload,
   CreateJobPositionPayload,
   CreateLegalEntityPayload,
+  CreateSsmResponsiblePayload,
   CreateWorksitePayload,
   ListEmployeesParams,
   UpdateDepartmentPayload,
@@ -13,6 +14,7 @@ import type {
   UpdateEmployeePayload,
   UpdateJobPositionPayload,
   UpdatePlacementPayload,
+  UpdateSsmResponsiblePayload,
   UpdateWorksitePayload
 } from "../api/master-data.api";
 import { masterDataApi } from "../api/master-data.api";
@@ -302,6 +304,45 @@ export function useRemoveGroupMember() {
       masterDataApi.removeGroupMember(groupId, employeeId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["master-data", "groups"] });
+    }
+  });
+}
+
+export function useSsmResponsibles(params?: PaginationParams, options?: QueryEnabled) {
+  return useQuery({
+    queryKey: ["master-data", "ssm-responsibles", params?.page ?? 1, params?.pageSize ?? 25],
+    queryFn: () => masterDataApi.listSsmResponsibles(params),
+    enabled: options?.enabled ?? true
+  });
+}
+
+export function useCreateSsmResponsible() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateSsmResponsiblePayload) => masterDataApi.createSsmResponsible(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data", "ssm-responsibles"] });
+    }
+  });
+}
+
+export function useUpdateSsmResponsible() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateSsmResponsiblePayload }) =>
+      masterDataApi.updateSsmResponsible(id, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data", "ssm-responsibles"] });
+    }
+  });
+}
+
+export function useImportEmployeesCsv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (csv: string) => masterDataApi.importEmployeesCsv(csv),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data", "employees"] });
     }
   });
 }

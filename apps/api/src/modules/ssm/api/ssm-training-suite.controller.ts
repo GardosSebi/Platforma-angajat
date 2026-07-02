@@ -75,6 +75,16 @@ export class SsmTrainingSuiteController {
     return this.trainingSuite.createTrainingPlan(tenantId, user.sub, dto);
   }
 
+  @Patch("plans/:id/material-start")
+  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  startMaterial(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string
+  ) {
+    return this.trainingSuite.startMaterial(tenantId, user.sub, id, user);
+  }
+
   @Patch("plans/:id/material-complete")
   @RequirePermissions(Permission.SSM_TRAINING_EDIT)
   completeMaterial(

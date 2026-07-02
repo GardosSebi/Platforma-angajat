@@ -7,6 +7,7 @@ import {
   useCompleteTest,
   useMaterialComplete,
   useSignPlan,
+  useStartMaterial,
   useStartTest,
   useTrainingPlans
 } from "../../ssm/hooks/useSsmTrainingSuite";
@@ -38,8 +39,10 @@ export function EmployeeTrainingsPanel() {
   } | null>(null);
   const [signature, setSignature] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [materialElapsed, setMaterialElapsed] = useState(0);
 
   const completeMaterial = useMaterialComplete();
+  const startMaterial = useStartMaterial();
   const startTest = useStartTest();
   const completeTest = useCompleteTest();
   const signPlan = useSignPlan();
@@ -76,7 +79,24 @@ export function EmployeeTrainingsPanel() {
     setTestResult(null);
     setTestStartedAt(null);
     setSignature("");
+    setMaterialElapsed(0);
   }, [activePlan?.id]);
+
+  useEffect(() => {
+    if (!activePlan || !planHasMaterial(activePlan) || activePlan.materialCompletedAt) return;
+    if (!activePlan.materialStartedAt) {
+      startMaterial.mutate(activePlan.id);
+    }
+  }, [activePlan?.id, activePlan?.materialCompletedAt, activePlan?.materialStartedAt]);
+
+  useEffect(() => {
+    if (!activePlan?.materialStartedAt || activePlan.materialCompletedAt) return;
+    const started = new Date(activePlan.materialStartedAt).getTime();
+    const tick = () => setMaterialElapsed(Math.max(0, Math.floor((Date.now() - started) / 1000)));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [activePlan?.materialStartedAt, activePlan?.materialCompletedAt]);
 
   useEffect(() => {
     if (activePlan?.score != null && activePlan.status !== "BLOCKED") {
@@ -191,7 +211,10 @@ export function EmployeeTrainingsPanel() {
                 <li className={step >= 2 ? "done" : ""}>Confirmă parcurgerea</li>
                 <li className={step >= 3 ? "done" : ""}>Completează testul</li>
                 <li className={step >= 4 ? "done" : ""}>Semnează fișa</li>
-                <li className={step >= 5 ? "done" : ""}>Așteaptă validarea responsabilului SSM</li>
+                <li className={step >= 5 ? "done" : ""}>
+                  {activePlan.trainingTypeCategory === "WORKPLACE" ? "Aprobare manager" : "Așteaptă validarea SSM"}
+                </li>
+                <li className={step >= 6 ? "done" : ""}>Validare responsabil SSM</li>
               </ol>
 
               {planHasMaterial(activePlan) ? (
@@ -210,12 +233,26 @@ export function EmployeeTrainingsPanel() {
                   ) : (
                     <p className="field-hint">{activePlan.materialTitle ?? "Material instruire"} — fără link extern.</p>
                   )}
+                  {!activePlan.materialCompletedAt ? (
+                    <p className="field-hint">
+                      Timp parcurgere înregistrat automat: {Math.floor(materialElapsed / 60)} min {materialElapsed % 60} sec
+                    </p>
+                  ) : activePlan.materialTimeSpentSeconds ? (
+                    <p className="field-hint">
+                      Material parcurs în {Math.ceil(activePlan.materialTimeSpentSeconds / 60)} minute.
+                    </p>
+                  ) : null}
                   <div className="ssm-inline-actions">
                     <button
                       type="button"
                       className="btn-secondary"
                       disabled={Boolean(activePlan.materialCompletedAt) || completeMaterial.isPending}
-                      onClick={() => completeMaterial.mutate(activePlan.id)}
+                      onClick={() =>
+                        completeMaterial.mutate({
+                          planId: activePlan.id,
+                          durationSeconds: materialElapsed || activePlan.materialTimeSpentSeconds || undefined
+                        })
+                      }
                     >
                       {activePlan.materialCompletedAt ? "Material parcurs" : "Confirm parcurgerea materialului"}
                     </button>
@@ -282,9 +319,11 @@ export function EmployeeTrainingsPanel() {
               {activePlan.employeeSignedAt ? (
                 <p className="feedback success" role="status">
                   Ai semnat la {formatRoDateTime(activePlan.employeeSignedAt)}.
-                  {activePlan.responsibleSignedAt
-                    ? " Instruirea este validată de responsabilul SSM."
-                    : " În așteptarea semnăturii responsabilului SSM."}
+                  {activePlan.trainingTypeCategory === "WORKPLACE" && !activePlan.managerSignedAt
+                    ? " În așteptarea aprobării managerului departamentului."
+                    : activePlan.responsibleSignedAt
+                      ? " Instruirea este validată de responsabilul SSM."
+                      : " În așteptarea semnăturii responsabilului SSM."}
                 </p>
               ) : null}
 

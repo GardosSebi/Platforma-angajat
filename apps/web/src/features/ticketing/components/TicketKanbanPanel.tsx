@@ -2,7 +2,6 @@ import type { DragEvent } from "react";
 import type { HelpdeskTicketItem, HelpdeskTicketPriority, HelpdeskTicketStatus } from "@repo/shared-types/ticketing";
 import { HELPDESK_TICKET_PRIORITIES } from "@repo/shared-types/ticketing";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
-import { mapToOptions } from "../../../shared/components/field-select-options";
 import type { TicketFilters } from "../api/ticketing.api";
 import {
   formatTicketDate,
@@ -11,10 +10,10 @@ import {
   STATUSES,
   STATUS_LABELS,
   statusTone,
+  TICKET_CATEGORIES,
+  TICKET_CATEGORY_LABELS,
   type TicketViewMode
 } from "../ticketing-shared";
-
-type EmployeeOption = { id: string; fullName: string };
 
 type Column = { status: HelpdeskTicketStatus; tickets: HelpdeskTicketItem[] };
 
@@ -26,7 +25,6 @@ type Props = {
   draggedTicketId: string | null;
   dragOverStatus: HelpdeskTicketStatus | null;
   openedTicketId: string;
-  employees: EmployeeOption[];
   onViewModeChange: (mode: TicketViewMode) => void;
   onFiltersChange: (patch: Partial<TicketFilters>) => void;
   onClearFilters: () => void;
@@ -39,12 +37,6 @@ type Props = {
   onColumnDrop: (event: DragEvent<HTMLDivElement>, status: HelpdeskTicketStatus) => void;
 };
 
-const STATUS_FILTERS = [{ value: "", label: "Toate" }, ...STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] }))];
-const PRIORITY_FILTERS = [
-  { value: "", label: "Toate" },
-  ...HELPDESK_TICKET_PRIORITIES.map((priority) => ({ value: priority, label: PRIORITY_LABELS[priority] }))
-];
-
 export function TicketKanbanPanel({
   columns,
   filters,
@@ -53,7 +45,6 @@ export function TicketKanbanPanel({
   draggedTicketId,
   dragOverStatus,
   openedTicketId,
-  employees,
   onViewModeChange,
   onFiltersChange,
   onClearFilters,
@@ -67,14 +58,7 @@ export function TicketKanbanPanel({
 }: Props) {
   const allTickets = columns.flatMap((column) => column.tickets);
   const hasActiveFilters = Boolean(
-    filters.subject ||
-      filters.search ||
-      filters.status ||
-      filters.priority ||
-      filters.assignedToUserId ||
-      filters.assignedToName ||
-      filters.reporterEmployeeId ||
-      filters.category
+    filters.subject || filters.status || filters.priority || filters.category
   );
 
   return (
@@ -85,102 +69,63 @@ export function TicketKanbanPanel({
           <p className="comms-toolbar-hint">Trage cardurile între coloane sau deschide un tichet pentru detalii.</p>
         </div>
         <button type="button" className="btn-primary comms-toolbar-cta" onClick={onCreateClick}>
-          + Tichet nou
+          Adaugă înregistrare manuală
         </button>
       </div>
 
-      <div className="comms-filters">
+      <div className="comms-filters ticket-primary-filters">
         <div className="field comms-search-field">
-          <label htmlFor="ticket-search">Caută</label>
+          <label htmlFor="ticket-subject">Subiect</label>
           <input
-            id="ticket-search"
+            id="ticket-subject"
             type="search"
-            placeholder="Titlu sau descriere..."
-            value={filters.search ?? filters.subject ?? ""}
-            onChange={(event) =>
-              onFiltersChange({
-                search: event.target.value || undefined,
-                subject: event.target.value || undefined
-              })
-            }
+            placeholder="Titlul tichetului..."
+            value={filters.subject ?? ""}
+            onChange={(event) => onFiltersChange({ subject: event.target.value || undefined })}
           />
         </div>
-        <div className="comms-status-filters" role="group" aria-label="Filtrează după stare">
-          {STATUS_FILTERS.map((filter) => (
-            <button
-              key={filter.value || "all-status"}
-              type="button"
-              className={`comms-filter-chip${(filters.status ?? "") === filter.value ? " active" : ""}`}
-              onClick={() => onFiltersChange({ status: (filter.value as HelpdeskTicketStatus) || undefined })}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-        <div className="comms-status-filters" role="group" aria-label="Filtrează după prioritate">
-          {PRIORITY_FILTERS.map((filter) => (
-            <button
-              key={filter.value || "all-priority"}
-              type="button"
-              className={`comms-filter-chip${(filters.priority ?? "") === filter.value ? " active" : ""}`}
-              onClick={() => onFiltersChange({ priority: (filter.value as HelpdeskTicketPriority) || undefined })}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <details className="comms-advanced ticket-advanced-filters">
-        <summary>Filtre avansate</summary>
-        <div className="comms-form-row">
-          <div className="field">
-            <label htmlFor="filter-recipient-name">Destinatar (nume operator)</label>
-            <input
-              id="filter-recipient-name"
-              value={filters.assignedToName ?? ""}
-              onChange={(event) => onFiltersChange({ assignedToName: event.target.value || undefined })}
-              placeholder="Nume operator"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="filter-operator">Operator (ID user)</label>
-            <input
-              id="filter-operator"
-              value={filters.assignedToUserId ?? ""}
-              onChange={(event) => onFiltersChange({ assignedToUserId: event.target.value || undefined })}
-              placeholder="userId"
-            />
-          </div>
-          <FieldSelect
-            id="filter-reporter"
-            label="Solicitant"
-            value={filters.reporterEmployeeId ?? ""}
-            onChange={(reporterEmployeeId) => onFiltersChange({ reporterEmployeeId: reporterEmployeeId || undefined })}
-            allowEmpty
-            emptyLabel="Toți"
-            options={mapToOptions(
-              employees,
-              (employee) => employee.id,
-              (employee) => employee.fullName
-            )}
-          />
-          <div className="field">
-            <label htmlFor="filter-category">Categorie</label>
-            <input
-              id="filter-category"
-              value={filters.category ?? ""}
-              onChange={(event) => onFiltersChange({ category: event.target.value || undefined })}
-              placeholder="HR, IT..."
-            />
-          </div>
-        </div>
+        <FieldSelect
+          id="filter-destinatar"
+          label="Destinatar"
+          value={filters.category ?? ""}
+          onChange={(category) => onFiltersChange({ category: category || undefined })}
+          allowEmpty
+          emptyLabel="Toate"
+          options={TICKET_CATEGORIES.map((category) => ({
+            value: category,
+            label: TICKET_CATEGORY_LABELS[category]
+          }))}
+        />
+        <FieldSelect
+          id="filter-status"
+          label="Stare"
+          value={filters.status ?? ""}
+          onChange={(status) => onFiltersChange({ status: (status as HelpdeskTicketStatus) || undefined })}
+          allowEmpty
+          emptyLabel="Toate"
+          options={STATUSES.map((status) => ({
+            value: status,
+            label: STATUS_LABELS[status]
+          }))}
+        />
+        <FieldSelect
+          id="filter-priority"
+          label="Prioritate"
+          value={filters.priority ?? ""}
+          onChange={(priority) => onFiltersChange({ priority: (priority as HelpdeskTicketPriority) || undefined })}
+          allowEmpty
+          emptyLabel="Toate"
+          options={HELPDESK_TICKET_PRIORITIES.map((priority) => ({
+            value: priority,
+            label: PRIORITY_LABELS[priority]
+          }))}
+        />
         {hasActiveFilters ? (
-          <button type="button" className="btn-secondary btn-sm" onClick={onClearFilters}>
-            Resetează filtrele
+          <button type="button" className="btn-secondary btn-sm ticket-filter-reset" onClick={onClearFilters}>
+            Resetează
           </button>
         ) : null}
-      </details>
+      </div>
 
       <div className="ticket-view-toggle" role="group" aria-label="Mod afișare">
         <button

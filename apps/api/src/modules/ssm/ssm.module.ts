@@ -12,6 +12,7 @@ import { SsmPsiService } from "./application/services/ssm-psi.service";
 import { SsmOverviewService } from "./application/services/ssm-overview.service";
 import { SsmTrainingAutomationService } from "./application/services/ssm-training-automation.service";
 import { ItmAccessService } from "./application/services/itm-access.service";
+import { SsmPppService } from "./application/services/ssm-ppp.service";
 import { SsmController } from "./api/ssm.controller";
 import { SsmDocumentsController } from "./api/ssm-documents.controller";
 import { SsmTrainingSuiteController } from "./api/ssm-training-suite.controller";
@@ -20,6 +21,7 @@ import { SsmAccidentsController } from "./api/ssm-accidents.controller";
 import { SsmMedicalController } from "./api/ssm-medical.controller";
 import { SsmRiskController } from "./api/ssm-risk.controller";
 import { SsmPsiController } from "./api/ssm-psi.controller";
+import { SsmPppController } from "./api/ssm-ppp.controller";
 import { SsmOverviewController } from "./api/ssm-overview.controller";
 import { SsmItmController } from "./api/ssm-itm.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
@@ -36,6 +38,7 @@ import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-
     SsmMedicalController,
     SsmRiskController,
     SsmPsiController,
+    SsmPppController,
     SsmOverviewController,
     SsmItmController
   ],
@@ -49,6 +52,7 @@ import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-
     SsmMedicalService,
     SsmRiskService,
     SsmPsiService,
+    SsmPppService,
     SsmOverviewService,
     SsmTrainingAutomationService,
     ItmAccessService,

@@ -1,12 +1,25 @@
+import { FormEvent, useState } from "react";
 import type { HelpdeskTicketItem, HelpdeskTicketStatus } from "@repo/shared-types/ticketing";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
-import { formatTicketDate, PRIORITY_LABELS, SOURCE_LABELS, STATUSES, STATUS_LABELS } from "../ticketing-shared";
+import { mapToOptions } from "../../../shared/components/field-select-options";
+import { useAddTicketComment, useTicketComments } from "../hooks/useTicketing";
+import {
+  formatTicketDate,
+  mutationErrorMessage,
+  PRIORITY_LABELS,
+  SOURCE_LABELS,
+  STATUSES,
+  STATUS_LABELS,
+  TICKET_CATEGORY_LABELS,
+  type TicketOperatorOption
+} from "../ticketing-shared";
 
 type AssignState = { assignedToUserId: string; assignedToName: string };
 
 type Props = {
   ticket: HelpdeskTicketItem;
   assignState: AssignState;
+  operators: TicketOperatorOption[];
   movePending: boolean;
   assignPending: boolean;
   onClose: () => void;
@@ -15,9 +28,15 @@ type Props = {
   onAssign: () => void;
 };
 
+function categoryLabel(category?: string | null): string {
+  if (!category) return "General";
+  return TICKET_CATEGORY_LABELS[category as keyof typeof TICKET_CATEGORY_LABELS] ?? category;
+}
+
 export function TicketDetailModal({
   ticket,
   assignState,
+  operators,
   movePending,
   assignPending,
   onClose,
@@ -25,6 +44,37 @@ export function TicketDetailModal({
   onAssignChange,
   onAssign
 }: Props) {
+  const [commentBody, setCommentBody] = useState("");
+  const [commentInternal, setCommentInternal] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const commentsQuery = useTicketComments(ticket.id);
+  const addComment = useAddTicketComment();
+
+  const onOperatorChange = (operatorId: string) => {
+    const operator = operators.find((item) => item.id === operatorId);
+    onAssignChange({
+      assignedToUserId: operatorId,
+      assignedToName: operator?.name ?? ""
+    });
+  };
+
+  const onCommentSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    const body = commentBody.trim();
+    if (!body) return;
+    setCommentError(null);
+    addComment.mutate(
+      { id: ticket.id, payload: { body, internal: commentInternal } },
+      {
+        onSuccess: () => {
+          setCommentBody("");
+          setCommentInternal(false);
+        },
+        onError: (error) => setCommentError(mutationErrorMessage(error))
+      }
+    );
+  };
+
   return (
     <div className="ticket-detail-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -40,7 +90,7 @@ export function TicketDetailModal({
               {ticket.title}
             </h2>
             <p className="comms-toolbar-hint">
-              {STATUS_LABELS[ticket.status]} · {ticket.category ?? "General"} · {SOURCE_LABELS[ticket.source]}
+              {STATUS_LABELS[ticket.status]} · {categoryLabel(ticket.category)} · {SOURCE_LABELS[ticket.source]}
             </p>
           </div>
           <button type="button" className="btn-secondary" onClick={onClose}>
@@ -64,8 +114,8 @@ export function TicketDetailModal({
             <strong>{ticket.reporterName || ticket.reporterEmail || ticket.reporterEmployeeId || "Nespecificat"}</strong>
           </div>
           <div>
-            <span>Comentarii</span>
-            <strong>{ticket.commentsCount}</strong>
+            <span>Operator</span>
+            <strong>{ticket.assignedToName || ticket.assignedToUserId || "Neasignat"}</strong>
           </div>
         </div>
 
@@ -84,24 +134,19 @@ export function TicketDetailModal({
                 label: STATUS_LABELS[status]
               }))}
             />
-            <div className="field">
-              <label htmlFor={`assign-${ticket.id}`}>Operator ID</label>
-              <input
-                id={`assign-${ticket.id}`}
-                value={assignState.assignedToUserId}
-                onChange={(event) => onAssignChange({ assignedToUserId: event.target.value })}
-                placeholder="userId"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor={`assign-name-${ticket.id}`}>Nume operator</label>
-              <input
-                id={`assign-name-${ticket.id}`}
-                value={assignState.assignedToName}
-                onChange={(event) => onAssignChange({ assignedToName: event.target.value })}
-                placeholder="Operator"
-              />
-            </div>
+            <FieldSelect
+              id={`assign-${ticket.id}`}
+              label="Operator"
+              value={assignState.assignedToUserId}
+              onChange={onOperatorChange}
+              allowEmpty
+              emptyLabel="Neasignat"
+              options={mapToOptions(
+                operators,
+                (operator) => operator.id,
+                (operator) => operator.name
+              )}
+            />
           </div>
           <div className="comms-inline-actions">
             <button type="button" className="btn-primary" onClick={onAssign} disabled={assignPending || !assignState.assignedToUserId}>
@@ -109,6 +154,58 @@ export function TicketDetailModal({
             </button>
           </div>
         </fieldset>
+
+        <section className="ticket-comments-section">
+          <h3 className="card-title">Comentarii ({ticket.commentsCount})</h3>
+          {commentsQuery.isLoading ? <p className="field-hint">Se încarcă comentariile...</p> : null}
+          {commentsQuery.data?.items.length ? (
+            <ul className="ticket-comments-list">
+              {commentsQuery.data.items.map((comment) => (
+                <li key={comment.id} className={`ticket-comment${comment.internal ? " internal" : ""}`}>
+                  <p>{comment.body}</p>
+                  <span className="ticket-comment-meta">
+                    {formatTicketDate(comment.createdAt)}
+                    {comment.internal ? " · intern" : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : !commentsQuery.isLoading ? (
+            <p className="field-hint">Nu există comentarii încă.</p>
+          ) : null}
+
+          <form className="ticket-comment-form" onSubmit={onCommentSubmit}>
+            <div className="field">
+              <label htmlFor={`comment-${ticket.id}`}>Adaugă comentariu</label>
+              <textarea
+                id={`comment-${ticket.id}`}
+                value={commentBody}
+                onChange={(event) => setCommentBody(event.target.value)}
+                rows={3}
+                placeholder="Răspuns sau notă pentru solicitant..."
+                required
+              />
+            </div>
+            <label className="ticket-comment-internal">
+              <input
+                type="checkbox"
+                checked={commentInternal}
+                onChange={(event) => setCommentInternal(event.target.checked)}
+              />
+              Comentariu intern (vizibil doar operatorilor)
+            </label>
+            <div className="comms-inline-actions">
+              <button type="submit" className="btn-primary btn-sm" disabled={addComment.isPending || !commentBody.trim()}>
+                {addComment.isPending ? "Se trimite..." : "Trimite comentariu"}
+              </button>
+            </div>
+            {commentError ? (
+              <div className="feedback error" role="alert">
+                {commentError}
+              </div>
+            ) : null}
+          </form>
+        </section>
       </div>
     </div>
   );

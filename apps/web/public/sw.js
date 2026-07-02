@@ -1,4 +1,4 @@
-const CACHE = "employee-platform-v1";
+const CACHE = "employee-platform-v3";
 const PRECACHE = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -15,6 +15,7 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname.startsWith("/src/") || url.pathname.startsWith("/@")) return;
   event.respondWith(
     caches.match(event.request).then((cached) => cached ?? fetch(event.request).catch(() => caches.match("/")))
   );

@@ -4,7 +4,9 @@ export type MasterDataTab =
   | "departments"
   | "positions"
   | "employees"
-  | "groups";
+  | "groups"
+  | "ssm-responsibles"
+  | "import";
 
 export interface LegalEntityWorksiteItem {
   id: string;
@@ -33,7 +35,9 @@ export const MASTER_DATA_ADD_LABELS = {
   worksites: "Adaugă punct de lucru",
   departments: "Adaugă departament",
   positions: "Adaugă post",
-  groups: "Adaugă grup de instruire"
+  groups: "Adaugă grup de instruire",
+  "ssm-responsibles": "Adaugă responsabil SSM",
+  import: "Import CSV"
 } as const satisfies Record<MasterDataTab, string>;
 
 export const ACTIVE_STATUS_OPTIONS = [

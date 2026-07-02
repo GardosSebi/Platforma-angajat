@@ -11,16 +11,7 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
 import { useCreateTicket, useTicketingKanban } from "../../ticketing/hooks/useTicketing";
 import { formatRoDate, mutationErrorMessage } from "../utils";
-
-const TICKET_CATEGORIES = ["HR", "CONCEDIU", "IT", "FACILITĂȚI", "ALTE"] as const;
-
-const TICKET_CATEGORY_LABELS: Record<(typeof TICKET_CATEGORIES)[number], string> = {
-  HR: "HR",
-  CONCEDIU: "Concediu",
-  IT: "IT",
-  FACILITĂȚI: "Facilități",
-  ALTE: "Altele"
-};
+import { STATUS_LABELS, TICKET_CATEGORY_LABELS } from "../../ticketing/ticketing-shared";
 
 const EMPLOYEE_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const satisfies readonly HelpdeskTicketPriority[];
 
@@ -30,13 +21,7 @@ const PRIORITY_LABELS: Record<(typeof EMPLOYEE_PRIORITIES)[number], string> = {
   HIGH: "Ridicată"
 };
 
-const STATUS_LABELS: Record<HelpdeskTicketStatus, string> = {
-  OPEN: "Deschis",
-  WAITING_OPERATOR: "La operator",
-  WAITING_USER: "Aștept răspunsul tău",
-  WAITING_INFO: "Informații suplimentare",
-  CLOSED: "Închis"
-};
+const TICKET_CATEGORIES = ["HR", "CONCEDIU", "IT", "FACILITĂȚI", "ALTE"] as const;
 
 const EMPTY_TICKET: CreateHelpdeskTicketRequest = {
   title: "",

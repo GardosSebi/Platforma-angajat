@@ -117,7 +117,7 @@ export class CompleteTestDto {
 
 export class SignPlanDto {
   @IsString()
-  role!: "EMPLOYEE" | "RESPONSIBLE";
+  role!: "EMPLOYEE" | "MANAGER" | "RESPONSIBLE";
 
   @IsString()
   @MinLength(5)
@@ -131,7 +131,7 @@ export class SignPlansBatchDto {
   planIds!: string[];
 
   @IsString()
-  role!: "EMPLOYEE" | "RESPONSIBLE";
+  role!: "EMPLOYEE" | "MANAGER" | "RESPONSIBLE";
 
   @IsString()
   @MinLength(5)

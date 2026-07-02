@@ -201,6 +201,7 @@ export const SsmSectionPermission = {
   accidents: Permission.SSM_ACCIDENT_VIEW,
   medical: Permission.SSM_MEDICAL_VIEW,
   risk: Permission.SSM_RISK_VIEW,
+  ppp: Permission.SSM_RISK_VIEW,
   psi: Permission.SSM_PSI_VIEW,
   compliance: Permission.SSM_DASHBOARD_VIEW,
   reports: Permission.SSM_REPORT_VIEW

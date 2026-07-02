@@ -5,9 +5,9 @@ export const STATUSES = [...HELPDESK_TICKET_STATUSES] as HelpdeskTicketStatus[];
 
 export const STATUS_LABELS: Record<HelpdeskTicketStatus, string> = {
   OPEN: "Deschis",
-  WAITING_OPERATOR: "Așteptare operator",
-  WAITING_USER: "Așteptare utilizator",
-  WAITING_INFO: "Așteptare informații",
+  WAITING_OPERATOR: "În așteptare operator",
+  WAITING_USER: "În așteptare utilizator",
+  WAITING_INFO: "În așteptare informații",
   CLOSED: "Închis"
 };
 
@@ -27,6 +27,20 @@ export const SOURCE_LABELS: Record<HelpdeskTicketSource, string> = {
 };
 
 export const TICKET_CATEGORIES = ["HR", "CONCEDIU", "IT", "LEGAL", "FACILITĂȚI", "ALTE"] as const;
+
+export const TICKET_CATEGORY_LABELS: Record<(typeof TICKET_CATEGORIES)[number], string> = {
+  HR: "HR",
+  CONCEDIU: "Concediu",
+  IT: "IT",
+  LEGAL: "Legal",
+  FACILITĂȚI: "Facilități",
+  ALTE: "Altele"
+};
+
+/** Priorități afișate la înregistrarea manuală (fără Urgentă — operatorul o poate seta ulterior). */
+export const CREATE_FORM_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const satisfies readonly HelpdeskTicketPriority[];
+
+export type TicketOperatorOption = { id: string; name: string };
 
 export type TicketingTab = "board" | "create" | "stats";
 

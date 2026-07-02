@@ -29,6 +29,10 @@ const SSM_DOCUMENT_TYPES: ReadonlyArray<CreateSsmDocumentRequest["type"]> = [
   "DECISION",
   "PSI",
   "REGISTER",
+  "EXPOSURE_SHEET",
+  "SSM_CONVENTION",
+  "DANGEROUS_SUBSTANCES",
+  "EMERGENCY_PROCEDURE",
   "OTHER"
 ];
 

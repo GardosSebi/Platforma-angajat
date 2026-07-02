@@ -16,6 +16,10 @@ export const SSM_DOCUMENT_TYPES = [
   "DECISION",
   "PSI",
   "REGISTER",
+  "EXPOSURE_SHEET",
+  "SSM_CONVENTION",
+  "DANGEROUS_SUBSTANCES",
+  "EMERGENCY_PROCEDURE",
   "OTHER"
 ] as const;
 
@@ -181,13 +185,13 @@ export interface CompleteSsmTestRequest {
 }
 
 export interface SignSsmTrainingPlanRequest {
-  role: "EMPLOYEE" | "RESPONSIBLE";
+  role: "EMPLOYEE" | "MANAGER" | "RESPONSIBLE";
   signatureData: string;
 }
 
 export interface SignSsmTrainingBatchRequest {
   planIds: string[];
-  role: "EMPLOYEE" | "RESPONSIBLE";
+  role: "EMPLOYEE" | "MANAGER" | "RESPONSIBLE";
   signatureData: string;
 }
 
@@ -204,12 +208,15 @@ export interface SsmTrainingPlanItem {
   completedAt?: string | null;
   materialTitle?: string | null;
   materialUrl?: string | null;
+  materialStartedAt?: string | null;
   materialCompletedAt?: string | null;
+  materialTimeSpentSeconds?: number | null;
   score?: number | null;
   durationMinutes?: number | null;
   status: SsmTrainingPlanStatus;
   blockedAdmission: boolean;
   employeeSignedAt?: string | null;
+  managerSignedAt?: string | null;
   responsibleSignedAt?: string | null;
 }
 
@@ -717,4 +724,91 @@ export interface SsmReportResponse {
   type: SsmReportType;
   generatedAt: string;
   rows: SsmReportRow[];
+}
+
+export type SsmPreventionPlanStatus = "ACTIVE" | "ARCHIVED";
+export type SsmPreventionMeasureStatus = "OPEN" | "COMPLETED" | "OVERDUE";
+
+export interface SsmPreventionMeasureItem {
+  id: string;
+  planId: string;
+  description: string;
+  responsiblePerson?: string | null;
+  dueDate?: string | null;
+  status: SsmPreventionMeasureStatus;
+  completedAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SsmPreventionPlanItem {
+  id: string;
+  title: string;
+  targetType: SsmRiskTargetType;
+  jobPositionId?: string | null;
+  worksiteId?: string | null;
+  departmentId?: string | null;
+  jobPositionName?: string | null;
+  worksiteName?: string | null;
+  departmentName?: string | null;
+  status: SsmPreventionPlanStatus;
+  reviewDate?: string | null;
+  notes?: string | null;
+  measureCount: number;
+  openMeasures: number;
+  measures: SsmPreventionMeasureItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSsmPreventionPlanRequest {
+  title: string;
+  targetType: SsmRiskTargetType;
+  jobPositionId?: string;
+  worksiteId?: string;
+  departmentId?: string;
+  reviewDate?: string;
+  notes?: string;
+}
+
+export interface CreateSsmPreventionMeasureRequest {
+  planId: string;
+  description: string;
+  responsiblePerson?: string;
+  dueDate?: string;
+  notes?: string;
+}
+
+export interface UpdateSsmPreventionMeasureRequest {
+  description?: string;
+  responsiblePerson?: string;
+  dueDate?: string;
+  status?: SsmPreventionMeasureStatus;
+  notes?: string;
+}
+
+export interface SsmEvacuationDrillItem {
+  id: string;
+  worksiteId: string;
+  worksiteName: string;
+  conductedAt: string;
+  nextDueAt?: string | null;
+  durationMinutes?: number | null;
+  participantsCount?: number | null;
+  result: string;
+  coordinatorName?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface CreateSsmEvacuationDrillRequest {
+  worksiteId: string;
+  conductedAt: string;
+  nextDueAt?: string;
+  durationMinutes?: number;
+  participantsCount?: number;
+  result: string;
+  coordinatorName?: string;
+  notes?: string;
 }

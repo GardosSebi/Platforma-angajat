@@ -9,6 +9,7 @@ import { SsmEipManager } from "../components/SsmEipManager";
 import { SsmAccidentsManager } from "../components/SsmAccidentsManager";
 import { SsmMedicalManager } from "../components/SsmMedicalManager";
 import { SsmRiskManager } from "../components/SsmRiskManager";
+import { SsmPppManager } from "../components/SsmPppManager";
 import { SsmPsiManager } from "../components/SsmPsiManager";
 import { SsmComplianceDashboardManager } from "../components/SsmComplianceDashboardManager";
 import { SsmReportsManager } from "../components/SsmReportsManager";
@@ -59,9 +60,15 @@ const SSM_SECTIONS: Array<{
   },
   {
     id: "risk",
-    title: "Evaluări risc + PPP",
-    caption: "Factori, nivel risc, măsuri",
+    title: "Evaluări risc",
+    caption: "Factori, nivel risc",
     description: "Versionează evaluări pe post, loc de muncă sau departament și păstrează motivul actualizării."
+  },
+  {
+    id: "ppp",
+    title: "Plan PPP",
+    caption: "Măsuri, responsabili, termene",
+    description: "Modul dedicat pentru planuri de prevenire și protecție cu măsuri urmărite individual."
   },
   {
     id: "psi",
@@ -118,6 +125,8 @@ export function SsmDashboardPage() {
         return <SsmMedicalManager />;
       case "risk":
         return <SsmRiskManager />;
+      case "ppp":
+        return <SsmPppManager />;
       case "psi":
         return <SsmPsiManager />;
       case "compliance":

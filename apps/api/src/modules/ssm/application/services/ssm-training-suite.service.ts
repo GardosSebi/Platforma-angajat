@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   Prisma,
+  SsmTrainingCategory,
   SsmTrainingPlanStatus
 } from "@prisma/client";
 import PDFDocument from "pdfkit";
@@ -12,6 +13,7 @@ import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import { JwtPayload } from "../../../../auth/jwt.strategy";
 import { hasAllPermissions, Permission } from "../../../../common/constants/permissions";
+import { SystemRole } from "../../../../common/prisma-enums";
 import {
   assertSsmEmployeeAccess,
   findEmployeeIdForUserEmail,
@@ -332,6 +334,47 @@ export class SsmTrainingSuiteService {
     return metaRecord;
   }
 
+  async startMaterial(tenantId: string, actorId: string, trainingPlanId: string, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
+    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId }
+    });
+    if (!plan) {
+      throw new NotFoundException("Training plan not found.");
+    }
+    if (!this.planHasMaterial(plan)) {
+      throw new BadRequestException("Nu există material de parcurs pentru această instruire.");
+    }
+    if (plan.materialCompletedAt) {
+      return {
+        trainingPlanId,
+        materialStartedAt: plan.materialStartedAt?.toISOString() ?? null,
+        materialTimeSpentSeconds: plan.materialTimeSpentSeconds ?? 0
+      };
+    }
+    const now = new Date();
+    const startedAt = plan.materialStartedAt ?? now;
+    if (!plan.materialStartedAt) {
+      await this.prisma.ssmTrainingPlan.update({
+        where: { id: trainingPlanId },
+        data: { materialStartedAt: startedAt }
+      });
+      await this.auditLog.write({
+        tenantId,
+        actorId,
+        module: "SSM",
+        action: "ELEARNING_MATERIAL_STARTED",
+        entityType: "SsmTrainingPlan",
+        entityId: trainingPlanId
+      });
+    }
+    return {
+      trainingPlanId,
+      materialStartedAt: startedAt.toISOString(),
+      materialTimeSpentSeconds: plan.materialTimeSpentSeconds ?? 0
+    };
+  }
+
   async markMaterialCompleted(
     tenantId: string,
     actorId: string,
@@ -362,22 +405,29 @@ export class SsmTrainingSuiteService {
       return { trainingPlanId, materialCompleted: true };
     }
 
-    if (plan.trainingType.legalMinDurationHours && durationSeconds != null) {
+    const now = new Date();
+    const trackedSeconds =
+      durationSeconds ??
+      (plan.materialStartedAt
+        ? Math.max(0, Math.floor((now.getTime() - plan.materialStartedAt.getTime()) / 1000))
+        : plan.materialTimeSpentSeconds ?? 0);
+
+    if (plan.trainingType.legalMinDurationHours && trackedSeconds > 0) {
       const minimumSeconds = plan.trainingType.legalMinDurationHours * 60 * 60;
-      if (durationSeconds < minimumSeconds) {
+      if (trackedSeconds < minimumSeconds) {
         throw new BadRequestException(
-          `Durata minimă legală de parcurgere a materialului este ${plan.trainingType.legalMinDurationHours} ore.`
+          `Durata minimă legală de parcurgere a materialului este ${plan.trainingType.legalMinDurationHours} ore. Timp înregistrat: ${Math.ceil(trackedSeconds / 60)} minute.`
         );
       }
     }
 
-    const now = new Date();
     await this.prisma.ssmTrainingPlan.update({
       where: { id: trainingPlanId },
       data: {
         materialStartedAt: plan.materialStartedAt ?? now,
         materialCompletedAt: now,
-        durationMinutes: durationSeconds ? Math.ceil(durationSeconds / 60) : plan.durationMinutes
+        materialTimeSpentSeconds: trackedSeconds,
+        durationMinutes: trackedSeconds ? Math.ceil(trackedSeconds / 60) : plan.durationMinutes
       }
     });
     await this.auditLog.write({
@@ -609,6 +659,8 @@ export class SsmTrainingSuiteService {
       where: { id: trainingPlanId, tenantId },
       include: {
         signature: true,
+        trainingType: { select: { category: true } },
+        employee: { select: { departmentId: true, worksiteId: true } },
         attempts: {
           where: { finishedAt: { not: null } },
           orderBy: { finishedAt: "desc" },
@@ -623,6 +675,8 @@ export class SsmTrainingSuiteService {
     if (!passedAttempt) {
       throw new BadRequestException("Semnarea necesită un test trecut cu succes.");
     }
+    const needsManager = plan.trainingType.category === SsmTrainingCategory.WORKPLACE;
+
     if (dto.role === "EMPLOYEE") {
       if (!hasAllPermissions(viewer.roles, [Permission.SSM_TRAINING_EDIT])) {
         throw new ForbiddenException("Semnătura angajatului necesită dreptul de parcurgere/finalizare instruire.");
@@ -634,12 +688,33 @@ export class SsmTrainingSuiteService {
       if (plan.signature?.employeeSignedAt) {
         throw new BadRequestException("Angajatul a semnat deja această instruire.");
       }
+    } else if (dto.role === "MANAGER") {
+      const isManager = (viewer.roles ?? []).some((role) =>
+        [SystemRole.DEPARTMENT_MANAGER, SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE].includes(role as SystemRole)
+      );
+      if (!isManager) {
+        throw new ForbiddenException("Semnătura managerului necesită rol de manager departament sau responsabil SSM.");
+      }
+      if (!needsManager) {
+        throw new BadRequestException("Această instruire nu necesită aprobarea managerului.");
+      }
+      if (!plan.signature?.employeeSignedAt) {
+        throw new BadRequestException("Instruirea trebuie semnată mai întâi de angajat.");
+      }
+      if (plan.signature?.managerSignedAt) {
+        throw new BadRequestException("Managerul a aprobat deja această instruire.");
+      }
+      const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
+      await assertSsmEmployeeAccess(this.prisma, tenantId, plan.employeeId, scope);
     } else {
       if (!hasAllPermissions(viewer.roles, [Permission.SSM_TRAINING_APPROVE])) {
         throw new ForbiddenException("Semnătura responsabilului necesită dreptul de aprobare instruire.");
       }
       if (!plan.signature?.employeeSignedAt) {
         throw new BadRequestException("Instruirea trebuie semnată mai întâi de angajat.");
+      }
+      if (needsManager && !plan.signature?.managerSignedAt) {
+        throw new BadRequestException("Instruirea la locul de muncă necesită aprobarea managerului înainte de validarea SSM.");
       }
       if (plan.signature?.responsibleSignedAt) {
         throw new BadRequestException("Responsabilul SSM a validat deja această instruire.");
@@ -653,12 +728,16 @@ export class SsmTrainingSuiteService {
         trainingPlanId,
         ...(dto.role === "EMPLOYEE"
           ? { employeeSignature: dto.signatureData, employeeSignedAt: now }
-          : { responsibleSignature: dto.signatureData, responsibleSignedAt: now })
+          : dto.role === "MANAGER"
+            ? { managerSignature: dto.signatureData, managerSignedAt: now, managerUserId: actorId }
+            : { responsibleSignature: dto.signatureData, responsibleSignedAt: now })
       },
       update:
         dto.role === "EMPLOYEE"
           ? { employeeSignature: dto.signatureData, employeeSignedAt: now }
-          : { responsibleSignature: dto.signatureData, responsibleSignedAt: now }
+          : dto.role === "MANAGER"
+            ? { managerSignature: dto.signatureData, managerSignedAt: now, managerUserId: actorId }
+            : { responsibleSignature: dto.signatureData, responsibleSignedAt: now }
     });
 
     if (dto.role === "RESPONSIBLE") {
@@ -730,7 +809,13 @@ export class SsmTrainingSuiteService {
         include: {
           employee: { select: { fullName: true } },
           trainingType: { select: { code: true, name: true, category: true } },
-          signature: { select: { employeeSignedAt: true, responsibleSignedAt: true } }
+          signature: {
+            select: {
+              employeeSignedAt: true,
+              managerSignedAt: true,
+              responsibleSignedAt: true
+            }
+          }
         },
         orderBy: [{ dueAt: "asc" }],
         skip: p.skip,
@@ -751,12 +836,15 @@ export class SsmTrainingSuiteService {
         completedAt: row.completedAt,
         materialTitle: row.materialTitle,
         materialUrl: row.materialUrl,
+        materialStartedAt: row.materialStartedAt,
         materialCompletedAt: row.materialCompletedAt,
+        materialTimeSpentSeconds: row.materialTimeSpentSeconds,
         score: row.score,
         durationMinutes: row.durationMinutes,
         status: row.status,
         blockedAdmission: row.blockedAdmission,
         employeeSignedAt: row.signature?.employeeSignedAt?.toISOString() ?? null,
+        managerSignedAt: row.signature?.managerSignedAt?.toISOString() ?? null,
         responsibleSignedAt: row.signature?.responsibleSignedAt?.toISOString() ?? null
       }));
     return paginatedResult(items, total, p.page, p.pageSize);

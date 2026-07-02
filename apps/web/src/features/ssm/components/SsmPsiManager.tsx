@@ -21,6 +21,8 @@ import {
   usePsiTrainings,
   useRegisterPsiEquipmentVerification
 } from "../hooks/useSsmPsi";
+import { useCreateEvacuationDrill, useEvacuationDrills } from "../hooks/useSsmPpp";
+import type { CreateSsmEvacuationDrillRequest } from "@repo/shared-types/ssm";
 
 const RESPONSIBLE_ROLES: SsmPsiResponsibleRole[] = [
   "PSI_RESPONSIBLE",
@@ -70,6 +72,17 @@ const EMPTY_RESPONSIBLE: CreateSsmPsiResponsibleRequest = {
   notes: ""
 };
 
+const EMPTY_EVACUATION: CreateSsmEvacuationDrillRequest = {
+  worksiteId: "",
+  conductedAt: new Date().toISOString().slice(0, 10),
+  nextDueAt: "",
+  durationMinutes: 30,
+  participantsCount: 0,
+  result: "Reușită",
+  coordinatorName: "",
+  notes: ""
+};
+
 function mutationErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "A apărut o eroare neașteptată.";
 }
@@ -82,16 +95,19 @@ export function SsmPsiManager() {
   const notificationsQuery = usePsiEquipmentNotifications();
   const trainingsQuery = usePsiTrainings();
   const responsiblesQuery = usePsiResponsibles();
+  const evacuationQuery = useEvacuationDrills();
 
   const createEquipment = useCreatePsiEquipment();
   const registerVerification = useRegisterPsiEquipmentVerification();
   const createTraining = useCreatePsiTraining();
   const createResponsible = useCreatePsiResponsible();
+  const createEvacuation = useCreateEvacuationDrill();
 
   const [equipmentForm, setEquipmentForm] = useState<CreateSsmPsiEquipmentRequest>(EMPTY_EQUIPMENT);
   const [verificationForm, setVerificationForm] = useState<RegisterSsmPsiEquipmentVerificationRequest>(EMPTY_VERIFICATION);
   const [trainingForm, setTrainingForm] = useState<CreateSsmPsiTrainingRecordRequest>(EMPTY_TRAINING);
   const [responsibleForm, setResponsibleForm] = useState<CreateSsmPsiResponsibleRequest>(EMPTY_RESPONSIBLE);
+  const [evacuationForm, setEvacuationForm] = useState<CreateSsmEvacuationDrillRequest>(EMPTY_EVACUATION);
 
   useEffect(() => {
     const firstWorksite = worksitesLookup.data?.items[0];
@@ -99,6 +115,7 @@ export function SsmPsiManager() {
     setEquipmentForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: firstWorksite.id }));
     setTrainingForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: firstWorksite.id }));
     setResponsibleForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: firstWorksite.id }));
+    setEvacuationForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: firstWorksite.id }));
   }, [worksitesLookup.data?.items]);
 
   useEffect(() => {
@@ -153,6 +170,16 @@ export function SsmPsiManager() {
       employeeId: responsibleForm.employeeId || undefined,
       email: responsibleForm.email || undefined,
       phone: responsibleForm.phone || undefined
+    });
+  };
+
+  const onEvacuationSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    createEvacuation.mutate({
+      ...evacuationForm,
+      nextDueAt: evacuationForm.nextDueAt || undefined,
+      coordinatorName: evacuationForm.coordinatorName || undefined,
+      notes: evacuationForm.notes || undefined
     });
   };
 
@@ -451,6 +478,77 @@ export function SsmPsiManager() {
                 <strong>{item.personName}</strong>
                 <span>
                   {item.role} · {item.worksiteName} · {item.active ? "activ" : "inactiv"}
+                </span>
+              </article>
+            ))}
+          </div>
+        </form>
+
+        <form className="card form-stack ssm-doc-card" onSubmit={onEvacuationSubmit}>
+          <div className="ssm-card-header">
+            <div>
+              <h3 className="card-title">Simulări evacuare</h3>
+              <p className="field-hint">Evidență separată pentru exercițiile de evacuare — apar în calendarul SSM.</p>
+            </div>
+          </div>
+          <FieldSelect
+            id="evac-worksite"
+            label="Punct de lucru"
+            value={evacuationForm.worksiteId}
+            onChange={(worksiteId) => setEvacuationForm((p) => ({ ...p, worksiteId }))}
+            required
+            allowEmpty
+            emptyLabel="Selectează punctul"
+            options={mapToOptions(
+              worksitesLookup.data?.items ?? [],
+              (worksite) => worksite.id,
+              (worksite) => `${worksite.code} - ${worksite.name}`
+            )}
+          />
+          <label>
+            Data simulare
+            <input
+              type="date"
+              required
+              value={evacuationForm.conductedAt.slice(0, 10)}
+              onChange={(e) => setEvacuationForm((p) => ({ ...p, conductedAt: e.target.value }))}
+            />
+          </label>
+          <label>
+            Următoarea simulare (scadență)
+            <input
+              type="date"
+              value={evacuationForm.nextDueAt?.slice(0, 10) ?? ""}
+              onChange={(e) => setEvacuationForm((p) => ({ ...p, nextDueAt: e.target.value }))}
+            />
+          </label>
+          <label>
+            Rezultat
+            <input
+              required
+              value={evacuationForm.result}
+              onChange={(e) => setEvacuationForm((p) => ({ ...p, result: e.target.value }))}
+            />
+          </label>
+          <label>
+            Participanți
+            <input
+              type="number"
+              min={0}
+              value={evacuationForm.participantsCount ?? 0}
+              onChange={(e) => setEvacuationForm((p) => ({ ...p, participantsCount: Number(e.target.value) }))}
+            />
+          </label>
+          <button className="btn-primary" type="submit" disabled={createEvacuation.isPending || !evacuationForm.worksiteId}>
+            {createEvacuation.isPending ? "Se salvează…" : "Înregistrează simulare"}
+          </button>
+          <div className="ssm-doc-items">
+            {(evacuationQuery.data?.items ?? []).slice(0, 6).map((item) => (
+              <article key={item.id} className="ssm-doc-item">
+                <strong>{item.worksiteName}</strong>
+                <span>
+                  {new Date(item.conductedAt).toLocaleDateString("ro-RO")} · {item.result}
+                  {item.nextDueAt ? ` · următoarea: ${new Date(item.nextDueAt).toLocaleDateString("ro-RO")}` : ""}
                 </span>
               </article>
             ))}

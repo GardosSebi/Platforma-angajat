@@ -134,10 +134,17 @@ export const ssmApi = {
       body: JSON.stringify(payload)
     });
   },
-  markMaterialCompleted(trainingPlanId: string) {
+  markMaterialCompleted(trainingPlanId: string, durationSeconds?: number) {
     return httpClient<{ materialCompleted: boolean }>(`/ssm/training-suite/plans/${trainingPlanId}/material-complete`, {
-      method: "PATCH"
+      method: "PATCH",
+      body: JSON.stringify(durationSeconds != null ? { durationSeconds } : {})
     });
+  },
+  startMaterial(trainingPlanId: string) {
+    return httpClient<{ materialStartedAt: string | null; materialTimeSpentSeconds: number }>(
+      `/ssm/training-suite/plans/${trainingPlanId}/material-start`,
+      { method: "PATCH" }
+    );
   },
   startTest(trainingPlanId: string) {
     return httpClient<import("@repo/shared-types/ssm-training-test").StartSsmTrainingTestResponse>(
@@ -159,7 +166,7 @@ export const ssmApi = {
       body: JSON.stringify(payload)
     });
   },
-  signPlan(trainingPlanId: string, role: "EMPLOYEE" | "RESPONSIBLE", signatureData: string) {
+  signPlan(trainingPlanId: string, role: "EMPLOYEE" | "MANAGER" | "RESPONSIBLE", signatureData: string) {
     return httpClient(`/ssm/training-suite/plans/${trainingPlanId}/sign`, {
       method: "PATCH",
       body: JSON.stringify({ role, signatureData })
@@ -389,5 +396,41 @@ export const ssmApi = {
   },
   getSsmReportExcelUrl(type: SsmReportType) {
     return `/ssm/reports/${type}.xlsx`;
+  },
+  listPreventionPlans() {
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmPreventionPlanItem[] }>("/ssm/prevention-plans");
+  },
+  createPreventionPlan(payload: import("@repo/shared-types/ssm").CreateSsmPreventionPlanRequest) {
+    return httpClient<{ planId: string }>("/ssm/prevention-plans", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  archivePreventionPlan(planId: string) {
+    return httpClient<{ archived: boolean }>(`/ssm/prevention-plans/${planId}/archive`, { method: "PATCH" });
+  },
+  createPreventionMeasure(payload: import("@repo/shared-types/ssm").CreateSsmPreventionMeasureRequest) {
+    return httpClient<{ measureId: string }>("/ssm/prevention-measures", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updatePreventionMeasure(measureId: string, payload: import("@repo/shared-types/ssm").UpdateSsmPreventionMeasureRequest) {
+    return httpClient(`/ssm/prevention-measures/${measureId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  listEvacuationDrills() {
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmEvacuationDrillItem[] }>("/ssm/evacuation-drills");
+  },
+  createEvacuationDrill(payload: import("@repo/shared-types/ssm").CreateSsmEvacuationDrillRequest) {
+    return httpClient<{ drillId: string }>("/ssm/evacuation-drills", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  getCalendarPdfUrl() {
+    return "/ssm/overview/calendar.pdf";
   }
 };

@@ -557,7 +557,7 @@ export function SsmTrainingSuiteManager() {
                   type="button"
                   className="btn-secondary"
                   disabled={!activePlan.id || completeMaterial.isPending || Boolean(activePlan.materialCompletedAt)}
-                  onClick={() => activePlan.id && completeMaterial.mutate(activePlan.id)}
+                  onClick={() => activePlan.id && completeMaterial.mutate({ planId: activePlan.id })}
                 >
                   {activePlan.materialCompletedAt ? "Material parcurs" : "Material parcurs"}
                 </button>
@@ -605,6 +605,19 @@ export function SsmTrainingSuiteManager() {
                   }
                 >
                   Semnează angajat
+                </button>
+              ) : null}
+              {canApproveTraining && activePlan.trainingTypeCategory === "WORKPLACE" ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={!signature.startsWith("data:image") || !activePlan.employeeSignedAt || Boolean(activePlan.managerSignedAt)}
+                  onClick={() =>
+                    activePlan.id &&
+                    signPlan.mutate({ planId: activePlan.id, role: "MANAGER", signatureData: signature })
+                  }
+                >
+                  Aprobă ca manager (instruire la locul de muncă)
                 </button>
               ) : null}
               {canApproveTraining ? (

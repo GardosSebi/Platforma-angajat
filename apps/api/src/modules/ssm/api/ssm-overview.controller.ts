@@ -26,6 +26,16 @@ export class SsmOverviewController {
     return body;
   }
 
+  @Get("overview/calendar.pdf")
+  @RequirePermissions(Permission.SSM_DASHBOARD_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async calendarPdf(@TenantId() tenantId: string, @Query("legalEntityId") legalEntityId?: string) {
+    const buffer = await this.overview.calendarPdf(tenantId, legalEntityId);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename="ssm-calendar.pdf"`
+    });
+  }
+
   @Get("overview/compliance-dashboard")
   @RequirePermissions(Permission.SSM_DASHBOARD_VIEW)
   complianceDashboard(@TenantId() tenantId: string, @Query("legalEntityId") legalEntityId?: string) {

@@ -5,6 +5,10 @@ import react from "@vitejs/plugin-react";
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export default defineConfig({
     plugins: [react()],
+    server: {
+        port: 5173,
+        strictPort: true
+    },
     resolve: {
         alias: {
             "@repo/shared-types": path.join(workspaceRoot, "packages/shared-types/src"),

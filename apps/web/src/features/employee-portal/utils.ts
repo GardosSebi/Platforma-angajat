@@ -25,7 +25,8 @@ export function planHasMaterial(plan: Pick<SsmTrainingPlanItem, "materialTitle" 
 }
 
 export function trainingStep(plan: SsmTrainingPlanItem): number {
-  if (plan.responsibleSignedAt) return 5;
+  if (plan.responsibleSignedAt) return 6;
+  if (plan.trainingTypeCategory === "WORKPLACE" && plan.managerSignedAt) return 5;
   if (plan.employeeSignedAt) return 4;
   if (plan.score != null && plan.status !== "BLOCKED") return 3;
   if (plan.materialCompletedAt || !planHasMaterial(plan)) return 2;
@@ -43,6 +44,9 @@ export function planWorkflowLabel(plan: SsmTrainingPlanItem): string {
     return "Expirată";
   }
   if (plan.employeeSignedAt && !plan.responsibleSignedAt) {
+    if (plan.trainingTypeCategory === "WORKPLACE" && !plan.managerSignedAt) {
+      return "Așteaptă aprobare manager";
+    }
     return "Așteaptă validare SSM";
   }
   if (plan.score != null) {

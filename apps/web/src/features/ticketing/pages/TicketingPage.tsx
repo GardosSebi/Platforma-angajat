@@ -2,7 +2,7 @@ import { FormEvent, useMemo, useState, type DragEvent } from "react";
 import type { CreateHelpdeskTicketRequest, HelpdeskTicketItem, HelpdeskTicketStatus } from "@repo/shared-types/ticketing";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 import type { TicketFilters } from "../api/ticketing.api";
-import { useAssignTicket, useCreateTicket, useMoveTicket, useTicketingKanban, useTicketingStats } from "../hooks/useTicketing";
+import { useAssignTicket, useCreateTicket, useMoveTicket, useTicketingKanban, useTicketingStats, useTicketOperatorOptions } from "../hooks/useTicketing";
 import { TicketCreateForm } from "../components/TicketCreateForm";
 import { TicketDetailModal } from "../components/TicketDetailModal";
 import { TicketKanbanPanel } from "../components/TicketKanbanPanel";
@@ -12,15 +12,13 @@ import { mutationErrorMessage, STATUSES, type TicketingTab, type TicketViewMode 
 const EMPTY_TICKET: CreateHelpdeskTicketRequest = {
   title: "",
   description: "",
-  category: "",
+  category: "HR",
   priority: "MEDIUM",
-  source: "PORTAL",
   reporterEmployeeId: "",
   reporterName: "",
   reporterEmail: "",
   assignedToUserId: "",
   assignedToName: "",
-  sourceSurveyResponseId: "",
   dueAt: ""
 };
 
@@ -38,6 +36,7 @@ export function TicketingPage() {
 
   const kanbanQuery = useTicketingKanban(filters);
   const statsQuery = useTicketingStats();
+  const operators = useTicketOperatorOptions();
   const createTicket = useCreateTicket();
   const moveTicket = useMoveTicket();
   const assignTicket = useAssignTicket();
@@ -61,12 +60,22 @@ export function TicketingPage() {
     }));
   };
 
+  const onOperatorChange = (operatorId: string) => {
+    const operator = operators.find((item) => item.id === operatorId);
+    setTicketForm((prev) => ({
+      ...prev,
+      assignedToUserId: operatorId,
+      assignedToName: operator?.name ?? ""
+    }));
+  };
+
   const onTicketSubmit = (event: FormEvent) => {
     event.preventDefault();
     setCreateFeedback(null);
     createTicket.mutate(
       {
         ...ticketForm,
+        source: "MANUAL",
         title: ticketForm.title.trim(),
         description: ticketForm.description.trim(),
         category: ticketForm.category || undefined,
@@ -75,13 +84,12 @@ export function TicketingPage() {
         reporterEmail: ticketForm.reporterEmail || undefined,
         assignedToUserId: ticketForm.assignedToUserId || undefined,
         assignedToName: ticketForm.assignedToName || undefined,
-        sourceSurveyResponseId: ticketForm.sourceSurveyResponseId || undefined,
         dueAt: ticketForm.dueAt || undefined
       },
       {
         onSuccess: () => {
           setTicketForm(EMPTY_TICKET);
-          setCreateFeedback({ type: "success", message: "Tichet creat. Îl găsești pe board." });
+          setCreateFeedback({ type: "success", message: "Tichet înregistrat în coloana Deschis." });
           setTab("board");
         },
         onError: (error) => {
@@ -137,7 +145,7 @@ export function TicketingPage() {
 
   const tabs: Array<{ id: TicketingTab; label: string }> = [
     { id: "board", label: "Board" },
-    { id: "create", label: "Tichet nou" },
+    { id: "create", label: "Înregistrare manuală" },
     { id: "stats", label: "Statistici" }
   ];
 
@@ -194,7 +202,6 @@ export function TicketingPage() {
           draggedTicketId={draggedTicket?.id ?? null}
           dragOverStatus={dragOverStatus}
           openedTicketId={openedTicketId}
-          employees={employees}
           onViewModeChange={setViewMode}
           onFiltersChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
           onClearFilters={() => setFilters({})}
@@ -218,10 +225,12 @@ export function TicketingPage() {
         <TicketCreateForm
           form={ticketForm}
           employees={employees}
+          operators={operators}
           isPending={createTicket.isPending}
           feedback={createFeedback}
           onChange={(patch) => setTicketForm((prev) => ({ ...prev, ...patch }))}
           onReporterChange={onReporterChange}
+          onOperatorChange={onOperatorChange}
           onSubmit={onTicketSubmit}
           onCancel={() => setTab("board")}
         />
@@ -235,6 +244,7 @@ export function TicketingPage() {
         <TicketDetailModal
           ticket={openedTicket}
           assignState={assignState}
+          operators={operators}
           movePending={moveTicket.isPending}
           assignPending={assignTicket.isPending}
           onClose={() => setOpenedTicketId("")}

@@ -6,6 +6,8 @@ import { MasterDataGroupsPanel } from "../components/MasterDataGroupsPanel";
 import { MasterDataLegalEntitiesPanel } from "../components/MasterDataLegalEntitiesPanel";
 import { MasterDataPositionsPanel } from "../components/MasterDataPositionsPanel";
 import { MasterDataWorksitesPanel } from "../components/MasterDataWorksitesPanel";
+import { MasterDataSsmResponsiblesPanel } from "../components/MasterDataSsmResponsiblesPanel";
+import { MasterDataImportPanel } from "../components/MasterDataImportPanel";
 import type { MasterDataTab } from "../master-data-shared";
 
 export function MasterDataPage() {
@@ -24,7 +26,9 @@ export function MasterDataPage() {
     { id: "worksites", label: "Puncte de lucru" },
     { id: "departments", label: "Departamente" },
     { id: "positions", label: "Posturi" },
-    { id: "groups", label: "Grupuri instruire" }
+    { id: "groups", label: "Grupuri instruire" },
+    { id: "ssm-responsibles", label: "Responsabili SSM" },
+    { id: "import", label: "Import CSV" }
   ];
 
   return (
@@ -84,6 +88,8 @@ export function MasterDataPage() {
       {tab === "departments" ? <MasterDataDepartmentsPanel /> : null}
       {tab === "positions" ? <MasterDataPositionsPanel /> : null}
       {tab === "groups" ? <MasterDataGroupsPanel /> : null}
+      {tab === "ssm-responsibles" ? <MasterDataSsmResponsiblesPanel /> : null}
+      {tab === "import" ? <MasterDataImportPanel /> : null}
     </div>
   );
 }
