@@ -1,6 +1,6 @@
 import type { CommunicationAnnouncementItem } from "@repo/shared-types/communications";
 import { PaginationBar } from "../../../shared/components/PaginationBar";
-import { AUDIENCE_LABELS, STATUS_LABELS, formatCommsDate, statusTone } from "../comms-shared";
+import { AUDIENCE_LABELS, STATUS_LABELS, canDeleteAnnouncement, formatCommsDate, statusTone } from "../comms-shared";
 
 type Props = {
   items: CommunicationAnnouncementItem[];
@@ -21,9 +21,11 @@ type Props = {
   onPageSizeChange: (size: number) => void;
   onSelect: (id: string) => void;
   onCreateClick: () => void;
+  onEdit: (id: string) => void;
   onPublish: (id: string) => void;
   onRetract: (id: string) => void;
   onDuplicate: (id: string) => void;
+  onDelete: (id: string) => void;
 };
 
 const STATUS_FILTERS = [
@@ -54,9 +56,11 @@ export function CommsAnnouncementList({
   onPageSizeChange,
   onSelect,
   onCreateClick,
+  onEdit,
   onPublish,
   onRetract,
-  onDuplicate
+  onDuplicate,
+  onDelete
 }: Props) {
   return (
     <section className="card comms-panel">
@@ -163,6 +167,9 @@ export function CommsAnnouncementList({
                         <button type="button" onClick={() => onSelect(item.id)}>
                           Vezi detalii
                         </button>
+                        <button type="button" onClick={() => onEdit(item.id)}>
+                          Editează
+                        </button>
                         {item.status === "DRAFT" || item.status === "SCHEDULED" ? (
                           <button type="button" onClick={() => onPublish(item.id)}>
                             Publică acum
@@ -176,6 +183,11 @@ export function CommsAnnouncementList({
                         <button type="button" onClick={() => onDuplicate(item.id)}>
                           Duplică
                         </button>
+                        {canDeleteAnnouncement(item.status) ? (
+                          <button type="button" className="danger" onClick={() => onDelete(item.id)}>
+                            Șterge
+                          </button>
+                        ) : null}
                       </div>
                     </details>
                   </td>

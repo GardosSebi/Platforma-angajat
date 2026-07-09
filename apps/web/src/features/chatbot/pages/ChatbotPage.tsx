@@ -2,11 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { isWorksiteScopedViewer } from "../../../shared/auth/worksite-scope";
-import type {
-  CommunicationAnnouncementItem,
-  CreateCommunicationAnnouncementRequest,
-  CreateCommunicationTemplateRequest
-} from "@repo/shared-types/communications";
+import type { CreateCommunicationTemplateRequest } from "@repo/shared-types/communications";
 import {
   useDepartmentsLookup,
   useEmployeeOptions,
@@ -15,10 +11,12 @@ import {
 } from "../../master-data/hooks/useMasterData";
 import { paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { masterDataApi } from "../../master-data/api/master-data.api";
 import { surveysApi } from "../../surveys/api/surveys.api";
+import { chatbotApi } from "../api/chatbot.api";
 import {
+  useAnnouncement,
   useAnnouncements,
   useChatbotDashboard,
   useCommunicationCalendar,
@@ -26,14 +24,18 @@ import {
   useCommunicationTemplates,
   useCreateAnnouncement,
   useCreateCommunicationTemplate,
+  useDeleteAnnouncement,
   useDispatchCommunicationReminders,
   useDuplicateAnnouncement,
   usePublishAnnouncement,
   useRetractAnnouncement,
+  useUpdateAnnouncement,
   useUsageSummary
 } from "../hooks/useChatbot";
 import {
   AUDIENCE_TYPES,
+  announcementToForm,
+  buildAnnouncementPayload,
   type CommsTab,
   mutationErrorMessage
 } from "../comms-shared";
@@ -80,6 +82,7 @@ const EMPTY_TEMPLATE: CreateCommunicationTemplateRequest = {
 };
 
 export function ChatbotPage() {
+  const queryClient = useQueryClient();
   const session = useAuthSession();
   const roles = session?.roles;
   const canViewDashboard = hasPermission(roles, "communications:dashboard:view");
@@ -114,6 +117,8 @@ export function ChatbotPage() {
   const employeesOptions = useEmployeeOptions();
 
   const createAnnouncement = useCreateAnnouncement();
+  const updateAnnouncement = useUpdateAnnouncement();
+  const deleteAnnouncement = useDeleteAnnouncement();
   const publishAnnouncement = usePublishAnnouncement();
   const retractAnnouncement = useRetractAnnouncement();
   const duplicateAnnouncement = useDuplicateAnnouncement();
@@ -130,6 +135,9 @@ export function ChatbotPage() {
   const [templateFeedback, setTemplateFeedback] = useState<FeedbackState | null>(null);
   const [actionFeedback, setActionFeedback] = useState<FeedbackState | null>(null);
   const [openedAnnouncementId, setOpenedAnnouncementId] = useState("");
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState("");
+
+  const openedAnnouncementQuery = useAnnouncement(openedAnnouncementId, Boolean(openedAnnouncementId));
 
   useEffect(() => {
     if (!worksiteRestricted) return;
@@ -156,15 +164,6 @@ export function ChatbotPage() {
     });
   }, [announcementsPaged.items, search, statusFilter]);
 
-  const announcementById = useMemo(() => {
-    const map = new Map<string, CommunicationAnnouncementItem>();
-    for (const item of [...announcementsPaged.items, ...latest]) {
-      map.set(item.id, item);
-    }
-    return map;
-  }, [announcementsPaged.items, latest]);
-
-  const openedAnnouncement = openedAnnouncementId ? announcementById.get(openedAnnouncementId) : undefined;
   const reminders = remindersQuery.data ?? [];
   const kpi = dashboardQuery.data?.kpi;
   const templates = templatesQuery.data?.items ?? [];
@@ -202,7 +201,9 @@ export function ChatbotPage() {
 
   const tabs = useMemo(() => {
     const items: Array<{ id: CommsTab; label: string }> = [{ id: "list", label: "Anunțuri" }];
-    if (canEditAnnouncements) items.push({ id: "compose", label: "Anunț nou" });
+    if (canEditAnnouncements) {
+      items.push({ id: "compose", label: editingAnnouncementId ? "Editează anunț" : "Anunț nou" });
+    }
     if (canEditTemplates) items.push({ id: "templates", label: "Șabloane" });
     if (canViewDashboard) items.push({ id: "calendar", label: "Calendar" });
     if (canViewUsage) items.push({ id: "usage", label: "Rapoarte" });
@@ -210,7 +211,15 @@ export function ChatbotPage() {
       items.push({ id: "reminders", label: `Mementouri${reminders.length ? ` (${reminders.length})` : ""}` });
     }
     return items;
-  }, [canEditAnnouncements, canEditTemplates, canViewDashboard, canViewUsage, reminders.length]);
+  }, [canEditAnnouncements, canEditTemplates, canViewDashboard, canViewUsage, editingAnnouncementId, reminders.length]);
+
+  const resetCompose = () => {
+    setAnnouncementForm(EMPTY_ANNOUNCEMENT);
+    setSelectedTemplateId("");
+    setEditingAnnouncementId("");
+    setAnnouncementFeedback(null);
+    setTab("list");
+  };
 
   const selectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -236,51 +245,51 @@ export function ChatbotPage() {
 
   const openCompose = () => {
     setAnnouncementFeedback(null);
+    setEditingAnnouncementId("");
+    setAnnouncementForm(EMPTY_ANNOUNCEMENT);
+    setSelectedTemplateId("");
     setTab("compose");
+  };
+
+  const openEdit = async (announcementId: string) => {
+    setAnnouncementFeedback(null);
+    setOpenedAnnouncementId("");
+    try {
+      const item = await queryClient.fetchQuery({
+        queryKey: ["chatbot", "announcement", announcementId],
+        queryFn: () => chatbotApi.getAnnouncement(announcementId)
+      });
+      setAnnouncementForm(announcementToForm(item));
+      setSelectedTemplateId(item.templateId ?? "");
+      setEditingAnnouncementId(announcementId);
+      setTab("compose");
+    } catch (error) {
+      setActionFeedback({ type: "error", message: mutationErrorMessage(error) });
+    }
   };
 
   const onAnnouncementSubmit = (event: FormEvent) => {
     event.preventDefault();
     setAnnouncementFeedback(null);
-    const { targetEmployeeIdsCsv, translationRoTitle, translationRoBody, translationEnTitle, translationEnBody, ...form } =
-      announcementForm;
-    const translations: CreateCommunicationAnnouncementRequest["translations"] = {};
-    if (translationRoTitle.trim() || translationRoBody.trim()) {
-      translations.ro = { title: translationRoTitle.trim() || announcementForm.title, body: translationRoBody.trim() || announcementForm.body };
-    }
-    if (translationEnTitle.trim() || translationEnBody.trim()) {
-      translations.en = { title: translationEnTitle.trim(), body: translationEnBody.trim() };
-    }
-    const payload: CreateCommunicationAnnouncementRequest = {
-      ...form,
-      title: announcementForm.title.trim(),
-      body: announcementForm.body.trim(),
-      contentUrl: announcementForm.contentUrl || undefined,
-      linkedSurveyId: announcementForm.linkedSurveyId || undefined,
-      buttonLabel: announcementForm.buttonLabel || undefined,
-      buttonUrl: announcementForm.buttonUrl || undefined,
-      translations: Object.keys(translations).length ? translations : undefined,
-      audienceRefId: announcementForm.audienceRefId || undefined,
-      audienceLabel: announcementForm.audienceLabel || undefined,
-      targetEmployeeIds:
-        announcementForm.audienceType === "CUSTOM"
-          ? targetEmployeeIdsCsv.split(",").map((item) => item.trim()).filter(Boolean)
-          : undefined,
-      publishAt: announcementForm.publishAt || undefined,
-      expiresAt: announcementForm.expiresAt || undefined,
-      reminderAt: announcementForm.reminderAt || undefined,
-      templateId: announcementForm.templateId || undefined
+    const payload = buildAnnouncementPayload(announcementForm);
+    const isEdit = Boolean(editingAnnouncementId);
+    const onSuccess = () => {
+      const message = isEdit ? "Anunț actualizat." : "Anunț salvat. Poți continua din listă.";
+      resetCompose();
+      setActionFeedback({ type: "success", message });
     };
+    const onError = (error: unknown) => {
+      setAnnouncementFeedback({ type: "error", message: mutationErrorMessage(error) });
+    };
+
+    if (editingAnnouncementId) {
+      updateAnnouncement.mutate({ id: editingAnnouncementId, payload }, { onSuccess, onError });
+      return;
+    }
+
     createAnnouncement.mutate(payload, {
-      onSuccess: () => {
-        setAnnouncementForm(EMPTY_ANNOUNCEMENT);
-        setSelectedTemplateId("");
-        setAnnouncementFeedback({ type: "success", message: "Anunț salvat. Poți continua din listă." });
-        setTab("list");
-      },
-      onError: (error) => {
-        setAnnouncementFeedback({ type: "error", message: mutationErrorMessage(error) });
-      }
+      onSuccess,
+      onError
     });
   };
 
@@ -304,6 +313,18 @@ export function ChatbotPage() {
         }
       }
     );
+  };
+
+  const runDelete = (announcementId: string) => {
+    if (!window.confirm("Sigur vrei să ștergi acest anunț? Acțiunea nu poate fi anulată.")) return;
+    setActionFeedback(null);
+    deleteAnnouncement.mutate(announcementId, {
+      onSuccess: () => {
+        setOpenedAnnouncementId("");
+        setActionFeedback({ type: "success", message: "Anunț șters." });
+      },
+      onError: (error: unknown) => setActionFeedback({ type: "error", message: mutationErrorMessage(error) })
+    });
   };
 
   const runAnnouncementAction = (action: "publish" | "retract" | "duplicate", announcementId: string) => {
@@ -409,20 +430,23 @@ export function ChatbotPage() {
           onPageSizeChange={announcementsPage.setPageSize}
           onSelect={setOpenedAnnouncementId}
           onCreateClick={openCompose}
+          onEdit={openEdit}
           onPublish={(id) => runAnnouncementAction("publish", id)}
           onRetract={(id) => runAnnouncementAction("retract", id)}
           onDuplicate={(id) => runAnnouncementAction("duplicate", id)}
+          onDelete={runDelete}
         />
       ) : null}
 
       {tab === "compose" && canEditAnnouncements ? (
         <CommsAnnouncementForm
+          mode={editingAnnouncementId ? "edit" : "create"}
           form={announcementForm}
           templates={templates.map((t) => ({ id: t.id, name: t.name }))}
           audienceTypes={audienceTypesForForm}
           audienceOptions={audienceOptions}
           employeeNameHint={employeeNameHint}
-          isPending={createAnnouncement.isPending}
+          isPending={createAnnouncement.isPending || updateAnnouncement.isPending}
           feedback={announcementFeedback}
           selectedTemplateId={selectedTemplateId}
           onTemplateSelect={selectTemplate}
@@ -430,7 +454,7 @@ export function ChatbotPage() {
           onAudienceRefChange={onAudienceRefChange}
           surveyOptions={(surveysLookup.data?.items ?? []).map((s) => ({ id: s.id, title: s.title }))}
           onSubmit={onAnnouncementSubmit}
-          onCancel={() => setTab("list")}
+          onCancel={resetCompose}
         />
       ) : null}
 
@@ -476,14 +500,20 @@ export function ChatbotPage() {
         />
       ) : null}
 
-      {openedAnnouncement ? (
+      {openedAnnouncementId ? (
         <CommsAnnouncementDetail
-          announcement={openedAnnouncement}
+          announcement={openedAnnouncementQuery.data}
+          isLoading={openedAnnouncementQuery.isLoading}
+          error={
+            openedAnnouncementQuery.error instanceof Error ? mutationErrorMessage(openedAnnouncementQuery.error) : null
+          }
           canEdit={canEditAnnouncements}
           onClose={() => setOpenedAnnouncementId("")}
-          onPublish={() => runAnnouncementAction("publish", openedAnnouncement.id)}
-          onRetract={() => runAnnouncementAction("retract", openedAnnouncement.id)}
-          onDuplicate={() => runAnnouncementAction("duplicate", openedAnnouncement.id)}
+          onEdit={() => void openEdit(openedAnnouncementId)}
+          onPublish={() => runAnnouncementAction("publish", openedAnnouncementId)}
+          onRetract={() => runAnnouncementAction("retract", openedAnnouncementId)}
+          onDuplicate={() => runAnnouncementAction("duplicate", openedAnnouncementId)}
+          onDelete={() => runDelete(openedAnnouncementId)}
         />
       ) : null}
     </div>

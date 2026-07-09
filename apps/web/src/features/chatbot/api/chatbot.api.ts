@@ -25,6 +25,9 @@ export const chatbotApi = {
       `/chatbot/announcements${buildPaginationQuery(params)}`
     );
   },
+  getAnnouncement(id: string) {
+    return httpClient<CommunicationAnnouncementItem>(`/chatbot/announcements/${id}`);
+  },
   createAnnouncement(payload: CreateCommunicationAnnouncementRequest) {
     return httpClient<CommunicationAnnouncementItem>("/chatbot/announcements", {
       method: "POST",
@@ -50,6 +53,11 @@ export const chatbotApi = {
   duplicateAnnouncement(id: string) {
     return httpClient<CommunicationAnnouncementItem>(`/chatbot/announcements/${id}/duplicate`, {
       method: "POST"
+    });
+  },
+  deleteAnnouncement(id: string) {
+    return httpClient<{ ok: true }>(`/chatbot/announcements/${id}`, {
+      method: "DELETE"
     });
   },
   markAnnouncementRead(id: string, payload: MarkCommunicationReadRequest) {

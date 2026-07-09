@@ -2,27 +2,28 @@ import { FormEvent } from "react";
 import type {
   CommunicationAudienceType,
   CommunicationCategory,
-  CommunicationContentType,
-  CreateCommunicationAnnouncementRequest
+  CommunicationContentType
 } from "@repo/shared-types/communications";
 import { COMMUNICATION_CATEGORIES, COMMUNICATION_CATEGORY_LABELS } from "@repo/shared-types/communications";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
-import { AUDIENCE_LABELS, CONTENT_TYPE_LABELS, CONTENT_TYPES, MESSAGE_TYPE_LABELS, MESSAGE_TYPES } from "../comms-shared";
+import {
+  AUDIENCE_LABELS,
+  CONTENT_TYPE_LABELS,
+  CONTENT_TYPES,
+  MESSAGE_TYPE_LABELS,
+  MESSAGE_TYPES,
+  type AnnouncementFormFields
+} from "../comms-shared";
 
-export type AnnouncementFormState = CreateCommunicationAnnouncementRequest & {
-  targetEmployeeIdsCsv: string;
-  translationRoTitle: string;
-  translationRoBody: string;
-  translationEnTitle: string;
-  translationEnBody: string;
-};
+export type AnnouncementFormState = AnnouncementFormFields;
 
 type AudienceOption = { id: string; label: string };
 
 type TemplateOption = { id: string; name: string };
 
 type Props = {
+  mode: "create" | "edit";
   form: AnnouncementFormState;
   templates: TemplateOption[];
   audienceTypes: CommunicationAudienceType[];
@@ -40,6 +41,7 @@ type Props = {
 };
 
 export function CommsAnnouncementForm({
+  mode,
   form,
   templates,
   audienceTypes,
@@ -71,8 +73,12 @@ export function CommsAnnouncementForm({
     <form className="card form-stack comms-panel comms-compose" onSubmit={onSubmit}>
       <div className="comms-compose-head">
         <div>
-          <h2 className="card-title">Anunț nou</h2>
-          <p className="comms-toolbar-hint">Completează mesajul, alege destinatarii, apoi salvează sau publică.</p>
+          <h2 className="card-title">{mode === "edit" ? "Editează anunț" : "Anunț nou"}</h2>
+          <p className="comms-toolbar-hint">
+            {mode === "edit"
+              ? "Modifică mesajul sau destinatarii, apoi salvează."
+              : "Completează mesajul, alege destinatarii, apoi salvează sau publică."}
+          </p>
         </div>
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Înapoi la listă
@@ -209,6 +215,10 @@ export function CommsAnnouncementForm({
 
       <fieldset className="comms-fieldset">
         <legend>Traduceri (opțional)</legend>
+        <p className="field-hint">
+          Titlul și mesajul de mai sus sunt limba principală. Traducerile RO/EN sunt afișate angajaților după limba
+          browserului; dacă lipsește o traducere, se folosește textul principal.
+        </p>
         <div className="comms-form-row">
           <div className="field">
             <label htmlFor="tr-ro-title">Titlu RO</label>
@@ -345,7 +355,13 @@ export function CommsAnnouncementForm({
 
       <div className="comms-form-actions">
         <button className="btn-primary" type="submit" disabled={isPending}>
-          {isPending ? "Se salvează..." : form.status === "PUBLISHED" ? "Salvează și publică" : "Salvează anunț"}
+          {isPending
+            ? "Se salvează..."
+            : mode === "edit"
+              ? "Salvează modificările"
+              : form.status === "PUBLISHED"
+                ? "Salvează și publică"
+                : "Salvează anunț"}
         </button>
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Anulează

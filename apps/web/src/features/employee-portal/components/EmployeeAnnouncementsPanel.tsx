@@ -7,6 +7,7 @@ import { chatbotApi } from "../../chatbot/api/chatbot.api";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
 import { formatRoDateTime, mutationErrorMessage } from "../utils";
+import { resolveAnnouncementText } from "../../chatbot/comms-shared";
 
 const REACTIONS: CommunicationReaction[] = ["THUMBS_UP", "HEART", "CLAP", "CHECK"];
 
@@ -67,13 +68,14 @@ export function EmployeeAnnouncementsPanel() {
         {published.map((item) => {
           const needsRead = item.requireReadConfirmation || item.messageType === "READ_CONFIRMATION";
           const isUnread = item.stats.unreadCount > 0;
+          const text = resolveAnnouncementText(item);
           return (
             <li key={item.id} className="card employee-announcement-item">
               <header>
-                <strong>{item.title}</strong>
+                <strong>{text.title}</strong>
                 <span className="field-hint">{formatRoDateTime(item.publishAt ?? item.createdAt)}</span>
               </header>
-              <p className="employee-announcement-body">{item.body}</p>
+              <p className="employee-announcement-body">{text.body}</p>
               {item.contentType === "IMAGE" && item.contentUrl ? (
                 <img src={item.contentUrl} alt="" className="employee-announcement-media" />
               ) : null}

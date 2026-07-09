@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateCommunicationAnnouncementRequest, CreateCommunicationTemplateRequest } from "@repo/shared-types/communications";
+import type {
+  CreateCommunicationAnnouncementRequest,
+  CreateCommunicationTemplateRequest,
+  UpdateCommunicationAnnouncementRequest
+} from "@repo/shared-types/communications";
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { chatbotApi } from "../api/chatbot.api";
 
@@ -15,6 +19,14 @@ export function useAnnouncements(params?: PaginationParams) {
   return useQuery({
     queryKey: ["chatbot", "announcements", params?.page ?? 1, params?.pageSize ?? 25],
     queryFn: () => chatbotApi.listAnnouncements(params)
+  });
+}
+
+export function useAnnouncement(id: string, enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "announcement", id],
+    queryFn: () => chatbotApi.getAnnouncement(id),
+    enabled: enabled && Boolean(id)
   });
 }
 
@@ -54,6 +66,7 @@ function useRefreshChatbot() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["chatbot", "dashboard"] }),
       queryClient.invalidateQueries({ queryKey: ["chatbot", "announcements"] }),
+      queryClient.invalidateQueries({ queryKey: ["chatbot", "announcement"] }),
       queryClient.invalidateQueries({ queryKey: ["chatbot", "reminders"] }),
       queryClient.invalidateQueries({ queryKey: ["chatbot", "templates"] })
     ]);
@@ -64,6 +77,15 @@ export function useCreateAnnouncement() {
   const refresh = useRefreshChatbot();
   return useMutation({
     mutationFn: (payload: CreateCommunicationAnnouncementRequest) => chatbotApi.createAnnouncement(payload),
+    onSuccess: refresh
+  });
+}
+
+export function useUpdateAnnouncement() {
+  const refresh = useRefreshChatbot();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateCommunicationAnnouncementRequest }) =>
+      chatbotApi.updateAnnouncement(id, payload),
     onSuccess: refresh
   });
 }
@@ -88,6 +110,14 @@ export function useDuplicateAnnouncement() {
   const refresh = useRefreshChatbot();
   return useMutation({
     mutationFn: (id: string) => chatbotApi.duplicateAnnouncement(id),
+    onSuccess: refresh
+  });
+}
+
+export function useDeleteAnnouncement() {
+  const refresh = useRefreshChatbot();
+  return useMutation({
+    mutationFn: (id: string) => chatbotApi.deleteAnnouncement(id),
     onSuccess: refresh
   });
 }

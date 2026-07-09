@@ -103,3 +103,19 @@ export function paginationFromResult<T>(
     totalPages: data?.totalPages ?? 1
   };
 }
+
+/** Paginare client-side pentru liste deja încărcate. */
+export function paginateClientSlice<T>(items: T[], page: number, pageSize: number) {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const skip = (safePage - 1) * pageSize;
+
+  return {
+    items: items.slice(skip, skip + pageSize),
+    total,
+    page: safePage,
+    pageSize,
+    totalPages
+  };
+}

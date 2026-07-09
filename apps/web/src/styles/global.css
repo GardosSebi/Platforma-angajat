@@ -3716,6 +3716,14 @@ button.ssm-doc-item:hover {
   background: var(--color-bg);
 }
 
+.comms-actions-dropdown button.danger {
+  color: #b91c1c;
+}
+
+.comms-actions-dropdown button.danger:hover {
+  background: #fef2f2;
+}
+
 .comms-compose-head {
   display: flex;
   flex-wrap: wrap;
@@ -3851,6 +3859,38 @@ button.ssm-doc-item:hover {
   margin: 0 0 1rem;
   white-space: pre-wrap;
   line-height: 1.55;
+}
+
+.comms-detail-section {
+  margin-bottom: 1rem;
+}
+
+.comms-detail-section-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.comms-translation-block {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #f8fafc;
+}
+
+.comms-translation-locale {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.comms-translation-title {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
 }
 
 .comms-modal-link {

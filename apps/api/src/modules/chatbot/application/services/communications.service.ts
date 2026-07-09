@@ -663,11 +663,38 @@ export class CommunicationsService {
     }
   }
 
-  private async getAnnouncement(tenantId: string, id: string, viewer?: JwtPayload) {
+  async getAnnouncement(tenantId: string, id: string, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
     const row = await this.assertAnnouncementVisible(tenantId, id, scope);
     const [item] = await this.withStats(tenantId, [row], scope);
     return item;
+  }
+
+  async deleteAnnouncement(tenantId: string, actorId: string, id: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const current = await this.assertAnnouncementVisible(tenantId, id, scope);
+    const deletable: CommunicationAnnouncementStatus[] = [
+      CommunicationAnnouncementStatus.DRAFT,
+      CommunicationAnnouncementStatus.READY_TO_SEND,
+      CommunicationAnnouncementStatus.RETRACTED,
+      CommunicationAnnouncementStatus.ARCHIVED
+    ];
+    if (!deletable.includes(current.status)) {
+      throw new BadRequestException(
+        "Doar ciornele, anunțurile gata de trimis, retrase sau arhivate pot fi șterse. Retrage mai întâi anunțurile publicate."
+      );
+    }
+    await this.prisma.communicationAnnouncement.delete({ where: { id } });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "COMMUNICATIONS",
+      action: "ANNOUNCEMENT_DELETED",
+      entityType: "CommunicationAnnouncement",
+      entityId: id,
+      payload: { status: current.status, title: current.title }
+    });
+    return { ok: true };
   }
 
   private async assertAnnouncement(tenantId: string, id: string) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -43,6 +43,12 @@ export class CommunicationsController {
     return this.communications.listAnnouncements(tenantId, query, user);
   }
 
+  @Get("announcements/:id")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
+  getAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.communications.getAnnouncement(tenantId, id, user);
+  }
+
   @Post("announcements")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
   createAnnouncement(
@@ -80,6 +86,12 @@ export class CommunicationsController {
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
   duplicateAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
     return this.communications.duplicateAnnouncement(tenantId, user.sub, id, user);
+  }
+
+  @Delete("announcements/:id")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
+  deleteAnnouncement(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.communications.deleteAnnouncement(tenantId, user.sub, id, user);
   }
 
   @Post("announcements/:id/read")
