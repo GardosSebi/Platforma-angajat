@@ -38,6 +38,8 @@ type Props = {
   surveyOptions?: Array<{ id: string; title: string }>;
   onSubmit: (event: FormEvent) => void;
   onCancel: () => void;
+  onDelete?: () => void;
+  canDelete?: boolean;
 };
 
 export function CommsAnnouncementForm({
@@ -55,7 +57,9 @@ export function CommsAnnouncementForm({
   onAudienceRefChange,
   onSubmit,
   onCancel,
-  surveyOptions = []
+  surveyOptions = [],
+  onDelete,
+  canDelete = false
 }: Props) {
   const needsSegment = audienceOptions.length > 0;
   const needsCustomList = form.audienceType === "CUSTOM";
@@ -366,6 +370,11 @@ export function CommsAnnouncementForm({
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Anulează
         </button>
+        {mode === "edit" && canDelete && onDelete ? (
+          <button type="button" className="btn-secondary comms-btn-danger" onClick={onDelete}>
+            Șterge ciorna
+          </button>
+        ) : null}
       </div>
 
       {feedback ? (

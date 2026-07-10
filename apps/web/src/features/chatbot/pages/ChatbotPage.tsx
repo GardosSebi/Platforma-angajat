@@ -36,6 +36,7 @@ import {
   AUDIENCE_TYPES,
   announcementToForm,
   buildAnnouncementPayload,
+  canDeleteAnnouncement,
   type CommsTab,
   mutationErrorMessage
 } from "../comms-shared";
@@ -43,7 +44,6 @@ import { CommsAnnouncementDetail } from "../components/CommsAnnouncementDetail";
 import { CommsAnnouncementForm, type AnnouncementFormState } from "../components/CommsAnnouncementForm";
 import { CommsAnnouncementList } from "../components/CommsAnnouncementList";
 import { CommsCalendarPanel } from "../components/CommsCalendarPanel";
-import { CommsLatestPanel } from "../components/CommsLatestPanel";
 import { CommsUsagePanel } from "../components/CommsUsagePanel";
 import { CommsRemindersPanel } from "../components/CommsRemindersPanel";
 import { CommsTemplatesPanel } from "../components/CommsTemplatesPanel";
@@ -147,7 +147,6 @@ export function ChatbotPage() {
     setTemplateForm((prev) => (prev.audienceType === "ALL" ? { ...prev, audienceType: "WORKSITE" } : prev));
   }, [worksiteRestricted]);
 
-  const latest = dashboardQuery.data?.latestAnnouncements ?? [];
   const announcementsPaged = paginationFromResult(
     announcementsQuery.data,
     announcementsPage.page,
@@ -167,6 +166,11 @@ export function ChatbotPage() {
   const reminders = remindersQuery.data ?? [];
   const kpi = dashboardQuery.data?.kpi;
   const templates = templatesQuery.data?.items ?? [];
+
+  const editingAnnouncement = useMemo(
+    () => filteredAnnouncements.find((item) => item.id === editingAnnouncementId),
+    [editingAnnouncementId, filteredAnnouncements]
+  );
 
   const audienceOptions = useMemo(() => {
     if (announcementForm.audienceType === "WORKSITE") {
@@ -321,6 +325,9 @@ export function ChatbotPage() {
     deleteAnnouncement.mutate(announcementId, {
       onSuccess: () => {
         setOpenedAnnouncementId("");
+        if (editingAnnouncementId === announcementId) {
+          resetCompose();
+        }
         setActionFeedback({ type: "success", message: "Anunț șters." });
       },
       onError: (error: unknown) => setActionFeedback({ type: "error", message: mutationErrorMessage(error) })
@@ -386,16 +393,6 @@ export function ChatbotPage() {
         </div>
       ) : null}
 
-      {canViewDashboard && latest.length ? (
-        <CommsLatestPanel
-          items={latest}
-          onOpen={(id) => {
-            setOpenedAnnouncementId(id);
-            setTab("list");
-          }}
-        />
-      ) : null}
-
       <nav className="comms-tabs comms-section-nav" aria-label="Secțiuni comunicări">
         {tabs.map((item) => (
           <button
@@ -455,6 +452,8 @@ export function ChatbotPage() {
           surveyOptions={(surveysLookup.data?.items ?? []).map((s) => ({ id: s.id, title: s.title }))}
           onSubmit={onAnnouncementSubmit}
           onCancel={resetCompose}
+          canDelete={editingAnnouncement ? canDeleteAnnouncement(editingAnnouncement.status) : false}
+          onDelete={editingAnnouncementId ? () => runDelete(editingAnnouncementId) : undefined}
         />
       ) : null}
 

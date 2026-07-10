@@ -186,7 +186,7 @@ export function CommsAnnouncementDetail({
                   Duplică
                 </button>
                 {canDeleteAnnouncement(announcement.status) ? (
-                  <button className="btn-text danger" type="button" onClick={onDelete}>
+                  <button className="btn-secondary comms-btn-danger" type="button" onClick={onDelete}>
                     Șterge
                   </button>
                 ) : null}

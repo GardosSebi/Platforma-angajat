@@ -67,7 +67,9 @@ export function CommsAnnouncementList({
       <div className="comms-toolbar">
         <div className="comms-toolbar-start">
           <h2 className="card-title">Anunțuri</h2>
-          <p className="comms-toolbar-hint">{total} în total · click pe rând pentru detalii</p>
+          <p className="comms-toolbar-hint">
+            {total} în total · filtrează ciornele cu chip-ul „Ciorne” · acțiuni vizibile în coloana din dreapta
+          </p>
         </div>
         {canEdit ? (
           <button type="button" className="btn-primary comms-toolbar-cta" onClick={onCreateClick}>
@@ -161,20 +163,27 @@ export function CommsAnnouncementList({
                 <td>{formatCommsDate(item.publishAt ?? item.createdAt)}</td>
                 {canEdit ? (
                   <td className="comms-row-menu" onClick={(event) => event.stopPropagation()}>
+                    <div className="comms-row-quick-actions">
+                      <button type="button" className="comms-action-link" onClick={() => onEdit(item.id)}>
+                        Editează
+                      </button>
+                      {item.status === "DRAFT" || item.status === "SCHEDULED" ? (
+                        <button type="button" className="comms-action-link" onClick={() => onPublish(item.id)}>
+                          Publică
+                        </button>
+                      ) : null}
+                      {canDeleteAnnouncement(item.status) ? (
+                        <button type="button" className="comms-action-link danger" onClick={() => onDelete(item.id)}>
+                          Șterge
+                        </button>
+                      ) : null}
+                    </div>
                     <details className="comms-actions-menu">
-                      <summary aria-label={`Acțiuni pentru ${item.title}`}>⋯</summary>
+                      <summary aria-label={`Mai multe acțiuni pentru ${item.title}`}>⋯</summary>
                       <div className="comms-actions-dropdown">
                         <button type="button" onClick={() => onSelect(item.id)}>
                           Vezi detalii
                         </button>
-                        <button type="button" onClick={() => onEdit(item.id)}>
-                          Editează
-                        </button>
-                        {item.status === "DRAFT" || item.status === "SCHEDULED" ? (
-                          <button type="button" onClick={() => onPublish(item.id)}>
-                            Publică acum
-                          </button>
-                        ) : null}
                         {item.status === "PUBLISHED" ? (
                           <button type="button" onClick={() => onRetract(item.id)}>
                             Retrage
@@ -183,11 +192,6 @@ export function CommsAnnouncementList({
                         <button type="button" onClick={() => onDuplicate(item.id)}>
                           Duplică
                         </button>
-                        {canDeleteAnnouncement(item.status) ? (
-                          <button type="button" className="danger" onClick={() => onDelete(item.id)}>
-                            Șterge
-                          </button>
-                        ) : null}
                       </div>
                     </details>
                   </td>
