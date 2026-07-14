@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { HelpdeskTicket, HelpdeskTicketPriority, HelpdeskTicketSource, HelpdeskTicketStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { MailService } from "../../../../infrastructure/mail/mail.service";
+import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import {
   AddTicketCommentDto,
   AssignTicketDto,
@@ -51,7 +53,9 @@ function parseOptionalDate(value?: string): Date | undefined {
 export class TicketingService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly notifications: NotificationsService,
+    private readonly mailService: MailService
   ) {}
 
   async kanban(tenantId: string, query: ListTicketsDto, viewer?: JwtPayload) {
@@ -108,6 +112,7 @@ export class TicketingService {
       entityId: ticket.id,
       payload: { priority: ticket.priority, source: ticket.source }
     });
+    await this.notifyTicketCreated(tenantId, ticket);
     return this.serializeTicket(ticket, 0);
   }
 
@@ -144,6 +149,7 @@ export class TicketingService {
       entityType: "HelpdeskTicket",
       entityId: id
     });
+    await this.notifyTicketUpdated(tenantId, current, ticket, dto);
     return this.serializeTicket(ticket, await this.commentCount(tenantId, id));
   }
 
@@ -178,6 +184,10 @@ export class TicketingService {
       entityId: ticketId,
       payload: { commentId: comment.id, internal: comment.internal }
     });
+    if (!comment.internal) {
+      const ticket = await this.assertTicket(tenantId, ticketId);
+      await this.notifyTicketComment(tenantId, ticket, actorId, dto.body.trim());
+    }
     return comment;
   }
 
@@ -366,5 +376,164 @@ export class TicketingService {
       updatedAt: ticket.updatedAt,
       commentsCount
     };
+  }
+
+  private ticketLink(ticketId: string) {
+    return `/ticketing?ticket=${ticketId}`;
+  }
+
+  private portalTicketLink() {
+    return "/portal?tab=tickets";
+  }
+
+  private async notifyTicketCreated(tenantId: string, ticket: HelpdeskTicket) {
+    const title = `Tichet nou: ${ticket.title}`;
+    const body = ticket.description.slice(0, 240);
+
+    if (ticket.assignedToUserId) {
+      await this.notifications.notifyUser({
+        tenantId,
+        userId: ticket.assignedToUserId,
+        category: "TICKET_ASSIGNED",
+        title,
+        body: "Ai fost desemnat operator pe acest tichet.",
+        linkPath: this.ticketLink(ticket.id),
+        entityType: "HelpdeskTicket",
+        entityId: ticket.id
+      });
+      await this.sendTicketEmail(tenantId, ticket.assignedToUserId, title, body);
+    }
+
+    if (ticket.reporterEmployeeId) {
+      await this.notifications.notifyEmployee({
+        tenantId,
+        employeeId: ticket.reporterEmployeeId,
+        category: "TICKET_CREATED",
+        title: "Tichet înregistrat",
+        body: `Solicitarea „${ticket.title}” a fost înregistrată.`,
+        linkPath: this.portalTicketLink(),
+        entityType: "HelpdeskTicket",
+        entityId: ticket.id
+      });
+    } else if (ticket.reporterEmail) {
+      await this.mailService.sendMail({
+        to: ticket.reporterEmail,
+        subject: title,
+        text: `${body}\n\nPoți urmări statusul în platforma internă.`
+      });
+    }
+  }
+
+  private async notifyTicketUpdated(
+    tenantId: string,
+    previous: HelpdeskTicket,
+    current: HelpdeskTicket,
+    dto: UpdateTicketDto
+  ) {
+    const statusChanged = dto.status !== undefined && dto.status !== previous.status;
+    const assigneeChanged =
+      dto.assignedToUserId !== undefined && dto.assignedToUserId !== previous.assignedToUserId;
+
+    if (assigneeChanged && current.assignedToUserId) {
+      await this.notifications.notifyUser({
+        tenantId,
+        userId: current.assignedToUserId,
+        category: "TICKET_ASSIGNED",
+        title: `Tichet atribuit: ${current.title}`,
+        body: "Ai fost desemnat operator pe acest tichet.",
+        linkPath: this.ticketLink(current.id),
+        entityType: "HelpdeskTicket",
+        entityId: current.id
+      });
+      await this.sendTicketEmail(
+        tenantId,
+        current.assignedToUserId,
+        `Tichet atribuit: ${current.title}`,
+        current.description.slice(0, 240)
+      );
+    }
+
+    if (statusChanged && current.reporterEmployeeId) {
+      await this.notifications.notifyEmployee({
+        tenantId,
+        employeeId: current.reporterEmployeeId,
+        category: "TICKET_STATUS",
+        title: `Actualizare tichet: ${current.title}`,
+        body: `Status nou: ${current.status.replaceAll("_", " ").toLowerCase()}.`,
+        linkPath: this.portalTicketLink(),
+        entityType: "HelpdeskTicket",
+        entityId: current.id
+      });
+    } else if (statusChanged && current.reporterEmail) {
+      await this.mailService.sendMail({
+        to: current.reporterEmail,
+        subject: `Actualizare tichet: ${current.title}`,
+        text: `Status nou: ${current.status}`
+      });
+    }
+  }
+
+  private async notifyTicketComment(
+    tenantId: string,
+    ticket: HelpdeskTicket,
+    actorId: string,
+    commentBody: string
+  ) {
+    const snippet = commentBody.slice(0, 200);
+    const targets = new Set<string>();
+
+    if (ticket.assignedToUserId && ticket.assignedToUserId !== actorId) {
+      targets.add(ticket.assignedToUserId);
+    }
+    if (ticket.createdBy !== actorId) {
+      targets.add(ticket.createdBy);
+    }
+
+    for (const userId of targets) {
+      await this.notifications.notifyUser({
+        tenantId,
+        userId,
+        category: "TICKET_COMMENT",
+        title: `Comentariu nou: ${ticket.title}`,
+        body: snippet,
+        linkPath: this.ticketLink(ticket.id),
+        entityType: "HelpdeskTicket",
+        entityId: ticket.id
+      });
+      await this.sendTicketEmail(tenantId, userId, `Comentariu nou: ${ticket.title}`, snippet);
+    }
+
+    if (ticket.reporterEmployeeId) {
+      const reporterUserId = await this.notifications.findUserIdForEmployee(
+        tenantId,
+        ticket.reporterEmployeeId
+      );
+      if (!reporterUserId || reporterUserId === actorId) {
+        return;
+      }
+      await this.notifications.notifyUser({
+        tenantId,
+        userId: reporterUserId,
+        category: "TICKET_COMMENT",
+        title: `Răspuns la tichet: ${ticket.title}`,
+        body: snippet,
+        linkPath: this.portalTicketLink(),
+        entityType: "HelpdeskTicket",
+        entityId: ticket.id
+      });
+    }
+  }
+
+  private async sendTicketEmail(tenantId: string, userId: string, subject: string, text: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId, active: true },
+      select: { email: true }
+    });
+    if (!user?.email) return;
+    await this.mailService.sendMail({
+      to: user.email,
+      subject,
+      text: `${text}\n\nDeschide platforma pentru detalii.`
+    });
   }
 }

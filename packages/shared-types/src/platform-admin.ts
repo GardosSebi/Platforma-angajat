@@ -68,6 +68,18 @@ export interface EmployeeStaticPageListItem {
   updatedAt: string;
 }
 
+export interface ItmAccessLogRow {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  metadata: unknown;
+  createdAt: string;
+}
+
 export interface EmployeeTeamMemberSummary {
   id: string;
   fullName: string;

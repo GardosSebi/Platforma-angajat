@@ -134,7 +134,7 @@ export function ItmInspectorPage() {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => downloadWithAuth("/ssm/reports/compliance.xlsx", "raport-conformitate.xls")}
+                onClick={() => downloadWithAuth("/ssm/reports/compliance.xlsx", "raport-conformitate.xlsx")}
               >
                 Raport conformitate (Excel)
               </button>

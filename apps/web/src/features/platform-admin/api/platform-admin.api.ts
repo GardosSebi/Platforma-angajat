@@ -1,6 +1,7 @@
 import type {
   EmployeeStaticPageListItem,
   EmployeeStaticPageRow,
+  ItmAccessLogRow,
   TenantUserSummary,
   UsageSummaryResponse,
   UserScopedRoleRow
@@ -104,5 +105,14 @@ export const platformAdminApi = {
     if (to) q.set("to", to);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return httpClient<UsageSummaryResponse>(`/admin/usage/summary${suffix}`);
+  },
+  grantItmAccess(userId: string, expiresAt: string) {
+    return httpClient<{ id: string; itmAccessExpiresAt: string | null }>("/ssm/itm/grant-access", {
+      method: "POST",
+      body: JSON.stringify({ userId, expiresAt })
+    });
+  },
+  listItmAccessLogs() {
+    return httpClient<ItmAccessLogRow[]>("/ssm/itm/access-logs");
   }
 };

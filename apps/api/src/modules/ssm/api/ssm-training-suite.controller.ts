@@ -24,6 +24,7 @@ import { SsmTrainingSuiteService } from "../application/services/ssm-training-su
 import {
   CompleteTestDto,
   CreateTrainingPlanDto,
+  CreateTrainingPlanGroupDto,
   CreateTrainingTypeDto,
   GenerateCollectiveSheetDto,
   MaterialCompleteDto,
@@ -73,6 +74,17 @@ export class SsmTrainingSuiteController {
   ) {
     assertSsmTrainingCatalogManagement(user);
     return this.trainingSuite.createTrainingPlan(tenantId, user.sub, dto);
+  }
+
+  @Post("plans/group")
+  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  createGroupPlans(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateTrainingPlanGroupDto
+  ) {
+    assertSsmTrainingCatalogManagement(user);
+    return this.trainingSuite.createTrainingPlansForGroup(tenantId, user.sub, dto);
   }
 
   @Patch("plans/:id/material-start")

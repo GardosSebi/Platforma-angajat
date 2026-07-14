@@ -102,6 +102,32 @@ export class CreateTrainingPlanDto {
   materialUrl?: string;
 }
 
+export class CreateTrainingPlanGroupDto {
+  @IsString()
+  @MinLength(2)
+  employeeGroupId!: string;
+
+  @IsString()
+  @MinLength(2)
+  trainingTypeId!: string;
+
+  @IsDateString()
+  scheduledAt!: string;
+
+  @IsDateString()
+  dueAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  materialTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  materialUrl?: string;
+}
+
 export class CompleteTestDto {
   @IsString()
   @MinLength(2)

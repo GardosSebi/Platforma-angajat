@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CompleteSsmTestRequest, CreateSsmTrainingPlanRequest, CreateSsmTrainingTypeRequest } from "@repo/shared-types/ssm";
+import type { CompleteSsmTestRequest, CreateSsmTrainingPlanGroupRequest, CreateSsmTrainingPlanRequest, CreateSsmTrainingTypeRequest } from "@repo/shared-types/ssm";
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { ssmApi } from "../api/ssm.api";
 
@@ -45,6 +45,20 @@ export function useCreateTrainingPlan() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateSsmTrainingPlanRequest) => ssmApi.createTrainingPlan(payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "reminders"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "compliance"] })
+      ]);
+    }
+  });
+}
+
+export function useCreateTrainingPlanGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateSsmTrainingPlanGroupRequest) => ssmApi.createTrainingPlanGroup(payload),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] }),

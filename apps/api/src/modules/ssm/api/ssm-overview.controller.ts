@@ -54,11 +54,11 @@ export class SsmOverviewController {
 
   @Get("reports/:type.xlsx")
   @RequirePermissions(Permission.SSM_REPORT_EXPORT)
-  @Header("Content-Type", "application/vnd.ms-excel")
+  @Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
   async reportExcel(@TenantId() tenantId: string, @Param("type") type: string) {
     const buffer = await this.overview.reportExcel(tenantId, type);
     return new StreamableFile(buffer, {
-      disposition: `attachment; filename=\"ssm-${type}-report.xls\"`
+      disposition: `attachment; filename=\"ssm-${type}-report.xlsx\"`
     });
   }
 

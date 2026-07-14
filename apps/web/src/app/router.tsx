@@ -17,6 +17,18 @@ import { SsmBackofficeRoute } from "./SsmBackofficeRoute";
 import { EmployeePortalRoute } from "./EmployeePortalRoute";
 import { ItmInspectorRoute } from "./ItmInspectorRoute";
 import { NotificationsPage } from "../features/notifications/pages/NotificationsPage";
+import { PlatformAdminPage } from "../features/platform-admin/pages/PlatformAdminPage";
+
+function PlatformAdminRoute() {
+  const session = useAuthSession();
+  if (isEmployeePortalUser(session)) {
+    return <Navigate to="/portal" replace />;
+  }
+  if (!canAccessTenantAdmin(session)) {
+    return <Navigate to={getAppHomePath(session)} replace />;
+  }
+  return <PlatformAdminPage />;
+}
 
 function MasterDataRoute() {
   const session = useAuthSession();
@@ -50,6 +62,7 @@ export function AppRouter() {
           <Route path="/itm" element={<ItmInspectorRoute />} />
           <Route path="/ssm" element={<SsmBackofficeRoute />} />
           <Route path="/master-data" element={<MasterDataRoute />} />
+          <Route path="/platform-admin" element={<PlatformAdminRoute />} />
           <Route
             path="/chatbot"
             element={

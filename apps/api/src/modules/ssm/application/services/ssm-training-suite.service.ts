@@ -24,6 +24,7 @@ import {
 import {
   CompleteTestDto,
   CreateTrainingPlanDto,
+  CreateTrainingPlanGroupDto,
   CreateTrainingTypeDto,
   GenerateCollectiveSheetDto,
   SignPlanDto,
@@ -294,6 +295,56 @@ export class SsmTrainingSuiteService {
     });
 
     return created;
+  }
+
+  async createTrainingPlansForGroup(tenantId: string, actorId: string, dto: CreateTrainingPlanGroupDto) {
+    const group = await this.prisma.employeeGroup.findFirst({
+      where: { id: dto.employeeGroupId, tenantId, active: true },
+      include: {
+        members: {
+          include: {
+            employee: {
+              select: { id: true, active: true }
+            }
+          }
+        }
+      }
+    });
+    if (!group) {
+      throw new NotFoundException("Training group not found for tenant.");
+    }
+
+    const employeeIds = [
+      ...new Set(
+        group.members
+          .map((member) => member.employee)
+          .filter((employee) => employee.active)
+          .map((employee) => employee.id)
+      )
+    ];
+    if (!employeeIds.length) {
+      throw new BadRequestException("Grupul nu are membri activi.");
+    }
+
+    const createdPlans = [];
+    for (const employeeId of employeeIds) {
+      const plan = await this.createTrainingPlan(tenantId, actorId, {
+        employeeId,
+        trainingTypeId: dto.trainingTypeId,
+        scheduledAt: dto.scheduledAt,
+        dueAt: dto.dueAt,
+        materialTitle: dto.materialTitle,
+        materialUrl: dto.materialUrl
+      });
+      createdPlans.push(plan);
+    }
+
+    return {
+      groupId: group.id,
+      groupName: group.name,
+      createdCount: createdPlans.length,
+      planIds: createdPlans.map((plan) => plan.id)
+    };
   }
 
   private planHasMaterial(plan: { materialUrl?: string | null; materialTitle?: string | null }): boolean {
@@ -1246,45 +1297,117 @@ export class SsmTrainingSuiteService {
     const dossier = await this.digitalFile(tenantId, employeeId, viewer);
     const zip = new JSZip();
     zip.file("dossier.json", JSON.stringify(dossier, null, 2));
+    zip.file(
+      "README.txt",
+      [
+        "Dosar digital SSM — export complet",
+        `Angajat: ${dossier.employee.fullName}`,
+        "",
+        "Structură:",
+        "- documents/ — documente SSM aplicabile angajatului",
+        "- instruiri/ — fișe individuale de instruire (PDF)",
+        "- medicina-muncii/ — fișe de aptitudini",
+        "- dossier.json — index structurat"
+      ].join("\n")
+    );
 
-    const docs = await this.prisma.ssmDocument.findMany({
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      include: { department: true, jobPosition: true, worksite: true }
+    });
+    if (!employee) {
+      throw new NotFoundException("Employee not found.");
+    }
+
+    const documents = await this.prisma.ssmDocument.findMany({
       where: {
         tenantId,
-        status: "ACTIVE"
+        status: "ACTIVE",
+        OR: [
+          { targetType: "ALL" },
+          { targetType: "DEPARTMENT", targetLabel: employee.department?.name ?? undefined },
+          { targetType: "JOB_POSITION", targetLabel: employee.jobPosition?.name ?? undefined },
+          { targetType: "WORKSITE", targetLabel: employee.worksite?.name ?? undefined }
+        ]
       },
       include: { activeVersion: true },
-      take: 20
+      orderBy: { updatedAt: "desc" }
     });
 
-    for (const doc of docs) {
+    for (const doc of documents) {
       const version = doc.activeVersion;
       if (!version?.storagePath) continue;
       try {
         const fileBuffer = await readFile(version.storagePath);
-        zip.file(`documents/${doc.title}-${version.versionNumber}-${version.fileName}`, fileBuffer);
+        const safeName = this.sanitizeZipPath(`${doc.type}-${doc.title}-v${version.versionNumber}-${version.fileName}`);
+        zip.file(`documents/${safeName}`, fileBuffer);
       } catch {
-        // staged export: skip files that are unavailable on disk
+        // skip unavailable files on disk
+      }
+    }
+
+    const trainings = await this.prisma.ssmTrainingPlan.findMany({
+      where: { tenantId, employeeId },
+      include: {
+        employee: true,
+        trainingType: true,
+        signature: true
+      },
+      orderBy: { dueAt: "desc" }
+    });
+
+    for (const plan of trainings) {
+      if (!plan.signature?.employeeSignedAt && plan.score == null && !plan.completedAt) {
+        continue;
+      }
+      try {
+        const pdfBuffer = await this.buildIndividualSheetPdfBuffer(plan);
+        const safeName = this.sanitizeZipPath(
+          `${plan.trainingType.code}-${plan.dueAt.toISOString().slice(0, 10)}-${plan.id.slice(0, 8)}.pdf`
+        );
+        zip.file(`instruiri/${safeName}`, pdfBuffer);
+      } catch {
+        // skip PDF generation failures
+      }
+    }
+
+    const medicalControls = await (this.prisma as PrismaWithMedicalControl).ssmMedicalControl.findMany({
+      where: { tenantId, employeeId },
+      orderBy: { scheduledAt: "desc" }
+    });
+    for (const control of medicalControls) {
+      if (!control.aptitudeSheetPath) continue;
+      try {
+        const fileBuffer = await readFile(control.aptitudeSheetPath);
+        const safeName = this.sanitizeZipPath(
+          control.aptitudeSheetName ?? `aptitudini-${control.id.slice(0, 8)}.pdf`
+        );
+        zip.file(`medicina-muncii/${safeName}`, fileBuffer);
+      } catch {
+        // skip unavailable aptitude sheets
       }
     }
 
     return zip.generateAsync({ type: "nodebuffer" });
   }
 
-  async generateIndividualSheetPdf(tenantId: string, trainingPlanId: string, viewer: JwtPayload) {
-    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
-    const plan = await this.prisma.ssmTrainingPlan.findFirst({
-      where: { id: trainingPlanId, tenantId },
-      include: {
-        employee: true,
-        trainingType: true,
-        signature: true
-      }
-    });
-    if (!plan) {
-      throw new NotFoundException("Training plan not found.");
-    }
+  private sanitizeZipPath(value: string): string {
+    return value.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/\s+/g, "-").slice(0, 180);
+  }
 
-    const buffer = await new Promise<Buffer>((resolve, reject) => {
+  private buildIndividualSheetPdfBuffer(plan: {
+    employee: { fullName: string; jobPositionId: string | null };
+    trainingType: { name: string; code: string };
+    scheduledAt: Date;
+    dueAt: Date;
+    durationMinutes?: number | null;
+    score?: number | null;
+    signature?: {
+      employeeSignedAt: Date | null;
+      responsibleSignedAt: Date | null;
+    } | null;
+  }): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       const doc = new PDFDocument({ margin: 40, size: "A4" });
       doc.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -1322,8 +1445,23 @@ export class SsmTrainingSuiteService {
       doc.fontSize(9).text("Document generat electronic — păstrare conform legislației muncii.");
       doc.end();
     });
+  }
 
-    return buffer;
+  async generateIndividualSheetPdf(tenantId: string, trainingPlanId: string, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
+    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId },
+      include: {
+        employee: true,
+        trainingType: true,
+        signature: true
+      }
+    });
+    if (!plan) {
+      throw new NotFoundException("Training plan not found.");
+    }
+
+    return this.buildIndividualSheetPdfBuffer(plan);
   }
 
   private async assertTrainingPlanVisibleToViewer(

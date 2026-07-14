@@ -51,7 +51,7 @@ export function SsmReportsManager() {
   const download = async (format: "pdf" | "excel") => {
     setDownloadError(null);
     const path = format === "pdf" ? ssmApi.getSsmReportPdfUrl(selectedType) : ssmApi.getSsmReportExcelUrl(selectedType);
-    const extension = format === "pdf" ? "pdf" : "xls";
+    const extension = format === "pdf" ? "pdf" : "xlsx";
     try {
       await downloadWithAuth(path, `ssm-${selectedType}-report.${extension}`);
     } catch (error) {

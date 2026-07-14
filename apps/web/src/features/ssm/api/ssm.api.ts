@@ -15,6 +15,8 @@ import type {
   CreateSsmPsiTrainingRecordRequest,
   CreateSsmRiskAssessmentRequest,
   RegisterSsmPsiEquipmentVerificationRequest,
+  CreateSsmTrainingPlanGroupRequest,
+  CreateSsmTrainingPlanGroupResponse,
   CreateSsmTrainingPlanRequest,
   CreateSsmTrainingTypeRequest,
   CreateSsmDocumentRequest,
@@ -130,6 +132,12 @@ export const ssmApi = {
   },
   createTrainingPlan(payload: CreateSsmTrainingPlanRequest) {
     return httpClient<{ id: string }>("/ssm/training-suite/plans", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  createTrainingPlanGroup(payload: CreateSsmTrainingPlanGroupRequest) {
+    return httpClient<CreateSsmTrainingPlanGroupResponse>("/ssm/training-suite/plans/group", {
       method: "POST",
       body: JSON.stringify(payload)
     });

@@ -17,6 +17,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/portal": "Spațiul meu",
   "/ssm": "SSM",
   "/master-data": "Master Data",
+  "/platform-admin": "Administrare",
   "/chatbot": "Comunicări",
   "/surveys": "Sondaje",
   "/ticketing": "Ticketing",
@@ -71,6 +72,7 @@ function buildNavGroups(session: NonNullable<ReturnType<typeof useAuthSession>>)
   }
   if (isAdmin) {
     operations.push({ to: "/master-data", label: "Master Data", icon: NavIcons.masterData() });
+    operations.push({ to: "/platform-admin", label: "Administrare", icon: NavIcons.info() });
   }
   if (operations.length) {
     groups.push({ title: "Operațiuni", items: operations });

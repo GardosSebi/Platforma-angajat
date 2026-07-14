@@ -7,6 +7,7 @@ import {
   SsmPsiEquipmentStatus,
   SsmTrainingPlanStatus
 } from "@prisma/client";
+import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,13 +34,23 @@ function formatCell(value: ReportCell): string {
   return String(value).replace(/\t/g, " ").replace(/\r?\n/g, " ");
 }
 
-function toExcelBuffer(rows: ReportRow[]): Buffer {
+async function toExcelBuffer(rows: ReportRow[]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Employee Platform SSM";
+  const sheet = workbook.addWorksheet("Raport");
   const headers = rows[0] ? Object.keys(rows[0]) : ["message"];
-  const lines = [
-    headers.join("\t"),
-    ...(rows.length ? rows : [{ message: "No rows" }]).map((row) => headers.map((header) => formatCell(row[header] ?? "")).join("\t"))
-  ];
-  return Buffer.from(lines.join("\n"), "utf8");
+  const dataRows = rows.length ? rows : [{ message: "No rows" }];
+  sheet.addRow(headers);
+  for (const row of dataRows) {
+    sheet.addRow(headers.map((header) => formatCell(row[header] ?? "")));
+  }
+  sheet.getRow(1).font = { bold: true };
+  sheet.columns = headers.map((header) => ({
+    header,
+    width: Math.min(48, Math.max(header.length + 2, 14))
+  }));
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
 }
 
 function pdfBuffer(title: string, rows: ReportRow[]): Promise<Buffer> {
@@ -466,7 +477,7 @@ export class SsmOverviewService {
   async reportExcel(tenantId: string, type: string) {
     const reportType = normalizeReportType(type);
     const rows = await this.reportRows(tenantId, reportType);
-    return toExcelBuffer(rows);
+    return await toExcelBuffer(rows);
   }
 
   private async reportRows(tenantId: string, type: ReportType): Promise<ReportRow[]> {

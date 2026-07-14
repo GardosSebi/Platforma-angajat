@@ -35,6 +35,7 @@
     "class-transformer": "latest",
     "class-validator": "latest",
     "dotenv": "latest",
+    "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "multer": "latest",
     "nodemailer": "latest",

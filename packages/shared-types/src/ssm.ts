@@ -177,6 +177,22 @@ export interface CreateSsmTrainingPlanRequest {
   materialUrl?: string;
 }
 
+export interface CreateSsmTrainingPlanGroupRequest {
+  employeeGroupId: string;
+  trainingTypeId: string;
+  scheduledAt: string;
+  dueAt: string;
+  materialTitle?: string;
+  materialUrl?: string;
+}
+
+export interface CreateSsmTrainingPlanGroupResponse {
+  groupId: string;
+  groupName: string;
+  createdCount: number;
+  planIds: string[];
+}
+
 export interface CompleteSsmTestRequest {
   trainingPlanId: string;
   /** Map questionId → selected option index (0-based, în ordinea afișată). */
