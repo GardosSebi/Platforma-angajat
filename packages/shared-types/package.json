@@ -12,6 +12,6 @@
     "test": "echo \"test shared-types\""
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "5.6.3"
   }
 }
