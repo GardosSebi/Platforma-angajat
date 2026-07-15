@@ -8,6 +8,10 @@ export async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
 
   if (!import.meta.env.PROD) {
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: "SKIP_WAITING" });
+    }
+
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
     await clearServiceWorkerCaches();

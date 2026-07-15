@@ -63,6 +63,10 @@ export function FieldSelect({
       return;
     }
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.classList.add("field-select-open");
+    document.body.style.overflow = "hidden";
+
     const onPointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
@@ -78,6 +82,8 @@ export function FieldSelect({
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      document.body.classList.remove("field-select-open");
+      document.body.style.overflow = previousOverflow;
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };

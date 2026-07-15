@@ -63,7 +63,8 @@ body {
   background: var(--color-bg);
 }
 
-body.sidebar-mobile-open {
+body.sidebar-mobile-open,
+body.field-select-open {
   overflow: hidden;
 }
 
@@ -102,6 +103,7 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  margin-left: 0;
 }
 
 .app-sidebar-backdrop {
@@ -127,7 +129,8 @@ button {
   border-right: 1px solid var(--sidebar-border);
   transform: translateX(-100%);
   transition: transform 0.22s ease;
-  overflow: visible;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .app-sidebar.open {
@@ -164,6 +167,7 @@ button {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 0.75rem 0.65rem 1rem;
 }
 
@@ -469,11 +473,11 @@ button {
 }
 
 .form-stack .field-select.open {
-  z-index: 40;
+  z-index: 80;
 }
 
 .form-stack .field-select-menu {
-  z-index: 50;
+  z-index: 90;
 }
 
 .field label {
@@ -585,9 +589,13 @@ button {
   transform: rotate(-135deg) translateY(1px);
 }
 
+.field-select.open {
+  z-index: 80;
+}
+
 .field-select-menu {
   position: absolute;
-  z-index: 30;
+  z-index: 90;
   top: calc(100% + 0.35rem);
   left: 0;
   right: 0;
@@ -596,6 +604,7 @@ button {
   list-style: none;
   max-height: 16rem;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
@@ -2555,9 +2564,9 @@ button.ssm-doc-item:hover {
   }
 
   .app-sidebar {
-    position: sticky;
+    position: fixed;
     top: 0;
-    left: auto;
+    left: 0;
     transform: none;
     flex-shrink: 0;
     height: 100vh;
@@ -2570,6 +2579,7 @@ button.ssm-doc-item:hover {
     z-index: 1;
     flex: 1;
     min-width: 0;
+    margin-left: var(--sidebar-width);
   }
 
   .app-sidebar-close,
@@ -4691,11 +4701,11 @@ button.ssm-doc-item:hover {
 }
 
 .ticket-primary-filters .field-select.open {
-  z-index: 40;
+  z-index: 80;
 }
 
 .ticket-primary-filters .field-select-menu {
-  z-index: 50;
+  z-index: 90;
   right: auto;
   min-width: 100%;
   width: max-content;

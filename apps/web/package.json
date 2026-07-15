@@ -2,9 +2,10 @@
   "name": "@apps/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
-    "dev": "vite",
+    "dev": "node scripts/ensure-dev-port.mjs 5173 && vite --force",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo \"lint web\"",
