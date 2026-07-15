@@ -1,12 +1,14 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import type { CreateEmployeeGroupPayload, EmployeeGroupItem } from "../api/master-data.api";
-import { masterDataApi } from "../api/master-data.api";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { OptionCardRadioGroup } from "../../../shared/components/OptionCardRadioGroup";
+import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   useAddGroupMember,
   useCreateGroup,
+  useEmployeeOptions,
   useGroup,
   useGroups,
   useRemoveGroupMember,
@@ -28,13 +30,14 @@ export function MasterDataGroupsPanel() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreateEmployeeGroupPayload>(EMPTY_FORM);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [memberEmail, setMemberEmail] = useState("");
+  const [memberToAdd, setMemberToAdd] = useState("");
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const detailQuery = useGroup(selectedId ?? undefined);
+  const employeeOptions = useEmployeeOptions(undefined, { enabled: Boolean(selectedId) });
   const createGroup = useCreateGroup();
   const updateGroup = useUpdateGroup();
   const addMember = useAddGroupMember();
@@ -45,7 +48,7 @@ export function MasterDataGroupsPanel() {
     setEditName(item.name);
     setEditDescription(item.description ?? "");
     setEditActive(item.active);
-    setMemberEmail("");
+    setMemberToAdd("");
     setFeedback(null);
   };
 
@@ -90,40 +93,25 @@ export function MasterDataGroupsPanel() {
 
   const members = detailQuery.data?.members ?? [];
   const memberIds = new Set(members.map((m) => m.id));
+  const addableOptions = useMemo(
+    () => (employeeOptions.data?.items ?? []).filter((employee) => !memberIds.has(employee.id)),
+    [employeeOptions.data?.items, members]
+  );
 
-  const onAddMember = async () => {
-    const email = memberEmail.trim().toLowerCase();
-    if (!selectedId || !email) return;
+  const onAddMember = () => {
+    if (!selectedId || !memberToAdd) return;
 
     setFeedback(null);
-
-    try {
-      const { items } = await masterDataApi.listEmployeeOptions(email);
-      const employee = items.find((item) => item.email.toLowerCase() === email);
-
-      if (!employee) {
-        setFeedback({ type: "error", message: "Nu există angajat cu acest e-mail." });
-        return;
+    addMember.mutate(
+      { groupId: selectedId, employeeId: memberToAdd },
+      {
+        onSuccess: () => {
+          setMemberToAdd("");
+          setFeedback({ type: "success", message: "Angajat adăugat în grup." });
+        },
+        onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
       }
-
-      if (memberIds.has(employee.id)) {
-        setFeedback({ type: "error", message: "Angajatul este deja în grup." });
-        return;
-      }
-
-      addMember.mutate(
-        { groupId: selectedId, employeeId: employee.id },
-        {
-          onSuccess: () => {
-            setMemberEmail("");
-            setFeedback({ type: "success", message: "Angajat adăugat în grup." });
-          },
-          onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
-        }
-      );
-    } catch (error) {
-      setFeedback({ type: "error", message: mutationErrorMessage(error) });
-    }
+    );
   };
 
   return (
@@ -281,21 +269,25 @@ export function MasterDataGroupsPanel() {
           <div className="md-members-block">
             <h4>Membri ({members.length})</h4>
             <div className="comms-filters">
-              <div className="field comms-search-field">
-                <label htmlFor="md-grp-add-member-email">Adaugă angajat</label>
-                <input
-                  id="md-grp-add-member-email"
-                  type="email"
-                  value={memberEmail}
-                  onChange={(e) => setMemberEmail(e.target.value)}
-                  placeholder="ex: angajat@firma.ro"
-                />
-              </div>
+              <FieldSelect
+                id="md-grp-add-member"
+                label="Adaugă angajat"
+                value={memberToAdd}
+                onChange={setMemberToAdd}
+                allowEmpty
+                emptyLabel="Selectează..."
+                disabled={employeeOptions.isLoading}
+                options={mapToOptions(
+                  addableOptions,
+                  (employee) => employee.id,
+                  (employee) => `${employee.fullName} (${employee.email})`
+                )}
+              />
               <button
                 type="button"
                 className="btn-primary"
-                disabled={!memberEmail.trim() || addMember.isPending}
-                onClick={() => void onAddMember()}
+                disabled={!memberToAdd || addMember.isPending}
+                onClick={onAddMember}
               >
                 Adaugă
               </button>
