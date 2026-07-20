@@ -37,13 +37,15 @@
     "dotenv": "latest",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
+    "ldapts": "^9.0.0",
     "multer": "latest",
     "nodemailer": "latest",
     "passport": "latest",
     "passport-jwt": "latest",
     "pdfkit": "^0.18.0",
     "reflect-metadata": "latest",
-    "rxjs": "latest"
+    "rxjs": "latest",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "latest",
@@ -54,8 +56,9 @@
     "@types/nodemailer": "latest",
     "@types/passport-jwt": "latest",
     "@types/pdfkit": "^0.17.6",
+    "@types/web-push": "^3.6.4",
     "prisma": "^6.18.0",
     "ts-node": "latest",
-    "typescript": "5.6.3"
+    "typescript": "6.0.3"
   }
 }

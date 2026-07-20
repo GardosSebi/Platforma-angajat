@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import type { InAppNotificationItem } from "@repo/shared-types/notifications";
 import { NotificationListItem } from "../../../shared/components/NotificationListItem";
@@ -7,15 +8,18 @@ import {
   useMarkNotificationRead,
   useNotifications
 } from "../../../shared/hooks/use-notifications";
+import { usePushNotifications } from "../../../shared/hooks/use-push-notifications";
 
 type Filter = "all" | "unread";
 
 export function NotificationsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>("all");
   const listQuery = useNotifications(filter === "unread");
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+  const push = usePushNotifications();
 
   const items = listQuery.data?.items ?? [];
   const unreadCount = listQuery.data?.unreadCount ?? 0;
@@ -40,17 +44,50 @@ export function NotificationsPage() {
               : "Toate notificările sunt citite."}
           </p>
         </div>
-        {unreadCount > 0 ? (
-          <button
-            type="button"
-            className="btn-secondary notifications-page-mark-all"
-            onClick={() => markAllRead.mutate()}
-            disabled={markAllRead.isPending}
-          >
-            Marchează toate citite
-          </button>
-        ) : null}
+        <div className="notifications-page-header-actions">
+          {push.isSupported && push.status !== "enabled" ? (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={push.enable}
+              disabled={push.isPending || push.status === "denied"}
+            >
+              {push.isPending ? t("common.loading") : t("push.enable")}
+            </button>
+          ) : null}
+          {push.status === "enabled" ? (
+            <span className="notifications-push-status" role="status">
+              {t("push.enabled")}
+            </span>
+          ) : null}
+          {unreadCount > 0 ? (
+            <button
+              type="button"
+              className="btn-secondary notifications-page-mark-all"
+              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
+            >
+              Marchează toate citite
+            </button>
+          ) : null}
+        </div>
       </header>
+
+      {push.status === "denied" ? (
+        <p className="feedback error" role="alert">
+          {t("push.denied")}
+        </p>
+      ) : null}
+      {push.status === "unsupported" ? (
+        <p className="feedback error" role="alert">
+          {t("push.unsupported")}
+        </p>
+      ) : null}
+      {push.status === "error" ? (
+        <p className="feedback error" role="alert">
+          {push.errorMessage ?? t("push.error")}
+        </p>
+      ) : null}
 
       <div className="notifications-page-filters" role="tablist" aria-label="Filtru notificări">
         <button

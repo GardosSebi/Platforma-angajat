@@ -29,6 +29,7 @@ import {
   worksiteIdsFromScope,
   type WorksiteViewerScope
 } from "../../../../common/worksite-viewer-scope";
+import { CommunicationRightsService } from "./communication-rights.service";
 
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
@@ -81,7 +82,8 @@ export class CommunicationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly publishRights: CommunicationRightsService
   ) {}
 
   private async scopeFor(viewer?: JwtPayload, tenantId?: string): Promise<WorksiteViewerScope> {
@@ -210,6 +212,15 @@ export class CommunicationsService {
   async createAnnouncement(tenantId: string, actorId: string, dto: CreateAnnouncementDto, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
     await this.assertAudience(tenantId, dto.audienceType, dto.audienceRefId, dto.targetEmployeeIds, scope);
+    if (viewer) {
+      await this.publishRights.assertCanPublish(
+        tenantId,
+        viewer.sub,
+        viewer.roles ?? [],
+        dto.audienceType,
+        dto.audienceRefId
+      );
+    }
     if (dto.templateId) {
       await this.assertTemplate(tenantId, dto.templateId);
     }
@@ -317,6 +328,15 @@ export class CommunicationsService {
   async publishAnnouncement(tenantId: string, actorId: string, id: string, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
     const current = await this.assertAnnouncementVisible(tenantId, id, scope);
+    if (viewer) {
+      await this.publishRights.assertCanPublish(
+        tenantId,
+        viewer.sub,
+        viewer.roles ?? [],
+        current.audienceType,
+        current.audienceRefId
+      );
+    }
     const status = statusForPublish("PUBLISHED", current.publishAt ?? undefined);
     await this.prisma.communicationAnnouncement.update({ where: { id }, data: { status, retractedAt: null } });
     if (status === CommunicationAnnouncementStatus.PUBLISHED) {
@@ -571,6 +591,9 @@ export class CommunicationsService {
 
   async createTemplate(tenantId: string, actorId: string, dto: CreateTemplateDto, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
+    if (viewer) {
+      await this.publishRights.assertCanManageTemplates(tenantId, viewer.sub, viewer.roles ?? []);
+    }
     await this.assertAudience(
       tenantId,
       dto.audienceType ?? CommunicationAudienceType.ALL,

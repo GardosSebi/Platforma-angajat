@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
+import { LocaleSwitcher } from "../shared/components/LocaleSwitcher";
 import { NotificationBell } from "../shared/components/NotificationBell";
 import { NavIcons } from "./nav-icons";
 
@@ -123,6 +124,9 @@ export function AppTopbar({
         {NavIcons.menu()}
       </button>
       {title ? <h1 className="app-topbar-title">{title}</h1> : null}
+      <div className="app-topbar-actions">
+        <LocaleSwitcher />
+      </div>
     </header>
   );
 }

@@ -316,6 +316,10 @@ model Tenant {
   inAppNotifications         InAppNotification[]
   legalEntities              LegalEntity[]
   itmAccessLogs              ItmAccessLog[]
+  communicationPublishRights CommunicationPublishRight[]
+  ssmScheduledReports        SsmScheduledReport[]
+  pushSubscriptions          PushSubscription[]
+  tenantSsoConfig            TenantSsoConfig?
 }
 
 model User {
@@ -326,6 +330,8 @@ model User {
   fullName     String?
   active       Boolean      @default(true)
   roles        SystemRole[] @default([])
+  authProvider String       @default("LOCAL")
+  externalId   String?
   lastLoginAt  DateTime?
   itmAccessExpiresAt DateTime?
   createdAt    DateTime     @default(now())
@@ -335,10 +341,13 @@ model User {
   scopedRoles      UserScopedRole[]
   inAppNotifications InAppNotification[]
   itmAccessLogs    ItmAccessLog[]
+  communicationPublishRights CommunicationPublishRight[]
+  pushSubscriptions PushSubscription[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
   @@index([tenantId, lastLoginAt])
+  @@index([tenantId, authProvider, externalId])
 }
 
 model LegalEntity {
@@ -357,6 +366,7 @@ model LegalEntity {
   jobPositions    JobPosition[]
   ssmResponsibles SsmResponsible[]
   ssmDocuments    SsmDocument[]
+  communicationPublishRights CommunicationPublishRight[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -387,6 +397,7 @@ model Worksite {
   ssmPreventionPlans         SsmPreventionPlan[]
   userScopedRoles            UserScopedRole[]
   jobPositions               JobPosition[]
+  communicationPublishRights CommunicationPublishRight[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -524,6 +535,7 @@ model EmployeeGroup {
   tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   members         EmployeeGroupMember[]
   userScopedRoles UserScopedRole[]
+  communicationPublishRights CommunicationPublishRight[]
 
   @@unique([tenantId, name])
   @@index([tenantId, active])
@@ -1476,5 +1488,111 @@ model EmployeeStaticPage {
 
   @@unique([tenantId, slug])
   @@index([tenantId, published, sortOrder])
+}
+
+enum CommunicationPublishScope {
+  ALL
+  LEGAL_ENTITY
+  EMPLOYEE_GROUP
+  WORKSITE
+}
+
+enum SsmReportCadence {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum SsmReportDeliveryFormat {
+  PDF
+  XLSX
+  BOTH
+}
+
+model CommunicationPublishRight {
+  id                 String                     @id @default(cuid())
+  tenantId           String
+  userId             String
+  scopeType          CommunicationPublishScope
+  legalEntityId      String?
+  employeeGroupId    String?
+  worksiteId         String?
+  canPublish         Boolean                    @default(true)
+  canManageTemplates Boolean                    @default(false)
+  createdByUserId    String
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  legalEntity   LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  employeeGroup EmployeeGroup? @relation(fields: [employeeGroupId], references: [id], onDelete: Cascade)
+  worksite      Worksite?      @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@index([tenantId, scopeType])
+  @@index([tenantId, legalEntityId])
+  @@index([tenantId, employeeGroupId])
+  @@index([tenantId, worksiteId])
+}
+
+model SsmScheduledReport {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  reportType      String
+  cadence         SsmReportCadence
+  dayOfWeek       Int?
+  dayOfMonth      Int?
+  recipients      String[]
+  format          SsmReportDeliveryFormat @default(PDF)
+  active          Boolean                @default(true)
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, active, nextRunAt])
+  @@index([tenantId, reportType])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  endpoint  String
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, endpoint])
+  @@index([tenantId, userId])
+}
+
+model TenantSsoConfig {
+  id                String   @id @default(cuid())
+  tenantId          String   @unique
+  azureEnabled      Boolean  @default(false)
+  azureTenantId     String?
+  azureClientId     String?
+  azureClientSecret String?
+  azureRedirectUri  String?
+  ldapEnabled       Boolean  @default(false)
+  ldapUrl           String?
+  ldapBaseDn        String?
+  ldapBindDn        String?
+  ldapBindPassword  String?
+  ldapSearchFilter  String?  @default("(mail={{username}})")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 

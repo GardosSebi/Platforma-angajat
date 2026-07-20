@@ -68,7 +68,7 @@ export const AUDIENCE_LABELS: Record<CommunicationAudienceType, string> = {
   CUSTOM: "Listă personalizată"
 };
 
-export type CommsTab = "list" | "compose" | "templates" | "reminders" | "calendar" | "usage";
+export type CommsTab = "list" | "compose" | "templates" | "reminders" | "calendar" | "usage" | "rights";
 
 export function formatCommsDate(value?: string | null): string {
   if (!value) return "—";

@@ -53,6 +53,11 @@ import type {
   SsmTrainingTypeItem,
   UploadSsmDocumentResponse
 } from "@repo/shared-types/ssm";
+import type {
+  CreateSsmScheduledReportRequest,
+  SsmScheduledReportRow,
+  UpdateSsmScheduledReportRequest
+} from "@repo/shared-types/ssm-scheduled-reports";
 import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
 import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
@@ -440,5 +445,25 @@ export const ssmApi = {
   },
   getCalendarPdfUrl() {
     return "/ssm/overview/calendar.pdf";
+  },
+  listScheduledReports() {
+    return httpClient<SsmScheduledReportRow[]>("/ssm/scheduled-reports");
+  },
+  createScheduledReport(payload: CreateSsmScheduledReportRequest) {
+    return httpClient<SsmScheduledReportRow>("/ssm/scheduled-reports", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateScheduledReport(id: string, payload: UpdateSsmScheduledReportRequest) {
+    return httpClient<SsmScheduledReportRow>(`/ssm/scheduled-reports/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  deleteScheduledReport(id: string) {
+    return httpClient<{ deleted: boolean }>(`/ssm/scheduled-reports/${id}`, {
+      method: "DELETE"
+    });
   }
 };

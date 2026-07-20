@@ -1,4 +1,8 @@
 import type {
+  CommunicationPublishRightRow,
+  CreateCommunicationPublishRightRequest
+} from "@repo/shared-types/communication-rights";
+import type {
   CommunicationAnnouncementItem,
   CommunicationCalendarEntry,
   CommunicationDashboardResponse,
@@ -97,6 +101,20 @@ export const chatbotApi = {
     return httpClient<CommunicationTemplateItem>("/chatbot/templates", {
       method: "POST",
       body: JSON.stringify(payload)
+    });
+  },
+  listPublishRights() {
+    return httpClient<CommunicationPublishRightRow[]>("/chatbot/publish-rights");
+  },
+  createPublishRight(payload: CreateCommunicationPublishRightRequest) {
+    return httpClient<CommunicationPublishRightRow>("/chatbot/publish-rights", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  deletePublishRight(id: string) {
+    return httpClient<{ deleted: true }>(`/chatbot/publish-rights/${id}`, {
+      method: "DELETE"
     });
   }
 };

@@ -1,5 +1,6 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { WebPushService } from "./web-push.service";
 
 export type NotifyUserInput = {
   tenantId: string;
@@ -14,7 +15,10 @@ export type NotifyUserInput = {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly webPush?: WebPushService
+  ) {}
 
   async findUserIdForEmployee(tenantId: string, employeeId: string): Promise<string | null> {
     const employee = await this.prisma.employee.findFirst({
@@ -34,7 +38,7 @@ export class NotificationsService {
   }
 
   async notifyUser(input: NotifyUserInput) {
-    return this.prisma.inAppNotification.create({
+    const created = await this.prisma.inAppNotification.create({
       data: {
         tenantId: input.tenantId,
         userId: input.userId,
@@ -46,6 +50,16 @@ export class NotificationsService {
         entityId: input.entityId
       }
     });
+
+    void this.webPush
+      ?.sendToUser(input.tenantId, input.userId, {
+        title: input.title,
+        body: input.body,
+        linkPath: input.linkPath
+      })
+      .catch(() => undefined);
+
+    return created;
   }
 
   async notifyEmployee(input: Omit<NotifyUserInput, "userId"> & { employeeId: string }) {

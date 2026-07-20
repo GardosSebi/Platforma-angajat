@@ -18,6 +18,7 @@ import {
   useRiskAssessmentHistory,
   useRiskAssessments
 } from "../hooks/useSsmRisk";
+import { RiskMatrixPicker } from "./RiskMatrixPicker";
 
 type RiskFormState = {
   title: string;
@@ -134,6 +135,10 @@ export function SsmRiskManager() {
     setSelectedAssessmentId(items[0].id);
   }, [assessmentsQuery.data?.items, selectedAssessmentId]);
 
+  const onMatrixChange = (probability: number, severity: number, riskLevel: number) => {
+    setForm((prev) => ({ ...prev, probability, severity, riskLevel }));
+  };
+
   const onCreate = (event: FormEvent) => {
     event.preventDefault();
     createAssessment.mutate(toPayload(form), {
@@ -232,9 +237,60 @@ export function SsmRiskManager() {
                 (option) => option.label
               )}
             />
+            <div className="field wide">
+              <RiskMatrixPicker
+                probability={form.probability}
+                severity={form.severity}
+                onChange={onMatrixChange}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="risk-probability">Probabilitate (1–5)</label>
+              <input
+                id="risk-probability"
+                type="number"
+                min={1}
+                max={5}
+                value={form.probability}
+                onChange={(e) => {
+                  const probability = Math.min(5, Math.max(1, Number(e.target.value) || 1));
+                  setForm((p) => ({
+                    ...p,
+                    probability,
+                    riskLevel: probability * p.severity
+                  }));
+                }}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="risk-severity">Severitate (1–5)</label>
+              <input
+                id="risk-severity"
+                type="number"
+                min={1}
+                max={5}
+                value={form.severity}
+                onChange={(e) => {
+                  const severity = Math.min(5, Math.max(1, Number(e.target.value) || 1));
+                  setForm((p) => ({
+                    ...p,
+                    severity,
+                    riskLevel: p.probability * severity
+                  }));
+                }}
+              />
+            </div>
             <div className="field">
               <label htmlFor="risk-level">Nivel risc global</label>
-              <input id="risk-level" type="number" min={1} max={25} value={form.riskLevel} onChange={(e) => setForm((p) => ({ ...p, riskLevel: Number(e.target.value || 1) }))} />
+              <input
+                id="risk-level"
+                type="number"
+                min={1}
+                max={25}
+                value={form.riskLevel}
+                readOnly
+                aria-readonly="true"
+              />
             </div>
             <div className="field">
               <label htmlFor="risk-reason">Motiv versiune</label>

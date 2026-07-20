@@ -47,6 +47,7 @@ import { CommsCalendarPanel } from "../components/CommsCalendarPanel";
 import { CommsUsagePanel } from "../components/CommsUsagePanel";
 import { CommsRemindersPanel } from "../components/CommsRemindersPanel";
 import { CommsTemplatesPanel } from "../components/CommsTemplatesPanel";
+import { CommsPublishRightsPanel } from "../components/CommsPublishRightsPanel";
 
 type FeedbackState = {
   type: "success" | "error";
@@ -89,6 +90,8 @@ export function ChatbotPage() {
   const canEditAnnouncements = hasPermission(roles, "communications:announcements:edit");
   const canEditTemplates = hasPermission(roles, "communications:templates:edit");
   const canViewUsage = hasPermission(roles, "admin:usage:view");
+  const canManagePublishRights =
+    Boolean(session?.roles?.includes("SSM_ADMIN")) || hasPermission(roles, "admin:users:edit");
   const worksiteRestricted = isWorksiteScopedViewer(session?.roles);
 
   const audienceTypesForForm = useMemo(
@@ -211,11 +214,12 @@ export function ChatbotPage() {
     if (canEditTemplates) items.push({ id: "templates", label: "Șabloane" });
     if (canViewDashboard) items.push({ id: "calendar", label: "Calendar" });
     if (canViewUsage) items.push({ id: "usage", label: "Rapoarte" });
+    if (canManagePublishRights) items.push({ id: "rights", label: "Drepturi" });
     if (canEditAnnouncements || reminders.length > 0) {
       items.push({ id: "reminders", label: `Mementouri${reminders.length ? ` (${reminders.length})` : ""}` });
     }
     return items;
-  }, [canEditAnnouncements, canEditTemplates, canViewDashboard, canViewUsage, editingAnnouncementId, reminders.length]);
+  }, [canEditAnnouncements, canEditTemplates, canManagePublishRights, canViewDashboard, canViewUsage, editingAnnouncementId, reminders.length]);
 
   const resetCompose = () => {
     setAnnouncementForm(EMPTY_ANNOUNCEMENT);
@@ -482,6 +486,8 @@ export function ChatbotPage() {
       {tab === "usage" && canViewUsage ? (
         <CommsUsagePanel data={usageQuery.data} isLoading={usageQuery.isLoading} />
       ) : null}
+
+      {tab === "rights" && canManagePublishRights ? <CommsPublishRightsPanel /> : null}
 
       {tab === "reminders" ? (
         <CommsRemindersPanel

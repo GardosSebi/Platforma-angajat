@@ -4,6 +4,8 @@ import {
   platformAdminApi,
   type CreateScopedRolePayload,
   type CreateStaticPagePayload,
+  type CreateTenantUserPayload,
+  type PatchUserPayload,
   type UpdateStaticPagePayload
 } from "../api/platform-admin.api";
 
@@ -11,6 +13,33 @@ export function useAdminUsers(params?: PaginationParams) {
   return useQuery({
     queryKey: ["platform-admin", "users", params?.page ?? 1, params?.pageSize ?? 50],
     queryFn: () => platformAdminApi.listUsers(params)
+  });
+}
+
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateTenantUserPayload) => platformAdminApi.createUser(payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["platform-admin", "users"] }),
+        queryClient.invalidateQueries({ queryKey: ["master-data", "employees"] })
+      ]);
+    }
+  });
+}
+
+export function usePatchUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, payload }: { userId: string; payload: PatchUserPayload }) =>
+      platformAdminApi.patchUser(userId, payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["platform-admin", "users"] }),
+        queryClient.invalidateQueries({ queryKey: ["master-data", "employees"] })
+      ]);
+    }
   });
 }
 

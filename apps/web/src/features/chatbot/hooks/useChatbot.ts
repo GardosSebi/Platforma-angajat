@@ -4,6 +4,7 @@ import type {
   CreateCommunicationTemplateRequest,
   UpdateCommunicationAnnouncementRequest
 } from "@repo/shared-types/communications";
+import type { CreateCommunicationPublishRightRequest } from "@repo/shared-types/communication-rights";
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { chatbotApi } from "../api/chatbot.api";
 
@@ -135,5 +136,33 @@ export function useCreateCommunicationTemplate() {
   return useMutation({
     mutationFn: (payload: CreateCommunicationTemplateRequest) => chatbotApi.createTemplate(payload),
     onSuccess: refresh
+  });
+}
+
+export function usePublishRights(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "publish-rights"],
+    queryFn: chatbotApi.listPublishRights,
+    enabled
+  });
+}
+
+export function useCreatePublishRight() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateCommunicationPublishRightRequest) => chatbotApi.createPublishRight(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["chatbot", "publish-rights"] });
+    }
+  });
+}
+
+export function useDeletePublishRight() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => chatbotApi.deletePublishRight(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["chatbot", "publish-rights"] });
+    }
   });
 }

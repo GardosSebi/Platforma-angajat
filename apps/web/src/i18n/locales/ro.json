@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "home": "Spațiul meu",
+    "ssm": "SSM",
+    "masterData": "Master Data",
+    "admin": "Administrare",
+    "communications": "Comunicări",
+    "surveys": "Sondaje",
+    "ticketing": "Ticketing",
+    "info": "Informații",
+    "notifications": "Notificări",
+    "portal": "Spațiul meu",
+    "itm": "Control ITM/ISU"
+  },
+  "common": {
+    "save": "Salvează",
+    "cancel": "Anulează",
+    "loading": "Se încarcă…",
+    "error": "Eroare",
+    "search": "Caută",
+    "active": "Activ",
+    "inactive": "Inactiv"
+  },
+  "auth": {
+    "login": "Autentificare",
+    "email": "E-mail",
+    "password": "Parolă",
+    "tenant": "Organizație (ID tenant)",
+    "submit": "Conectare",
+    "ssoAzure": "Continuă cu Azure AD",
+    "ssoLdap": "Continuă cu LDAP"
+  },
+  "admin": {
+    "users": {
+      "title": "Utilizatori",
+      "email": "E-mail",
+      "fullName": "Nume complet",
+      "roles": "Roluri",
+      "status": "Status",
+      "create": "Adaugă utilizator",
+      "search": "Caută utilizatori"
+    }
+  },
+  "riskMatrix": {
+    "title": "Evaluări risc",
+    "targetType": "Țintă",
+    "riskLevel": "Nivel risc global",
+    "probability": "Probabilitate",
+    "severity": "Severitate",
+    "factors": "Factori de risc",
+    "measures": "Măsuri / PPP",
+    "jobPosition": "Post",
+    "worksite": "Punct de lucru",
+    "department": "Departament",
+    "newAssessment": "Evaluare nouă",
+    "existingAssessments": "Evaluări existente"
+  },
+  "pwa": {
+    "install": "Instalează aplicația pe dispozitiv",
+    "installAction": "Instalează",
+    "later": "Mai târziu"
+  },
+  "push": {
+    "enable": "Activează notificări push",
+    "enabled": "Notificări push activate",
+    "denied": "Notificările push sunt blocate în browser",
+    "unsupported": "Notificările push nu sunt suportate pe acest dispozitiv",
+    "error": "Nu s-au putut activa notificările push"
+  },
+  "locale": {
+    "label": "Limbă"
+  }
+}

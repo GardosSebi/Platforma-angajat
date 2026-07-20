@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "home": "My space",
+    "ssm": "H&S",
+    "masterData": "Master Data",
+    "admin": "Administration",
+    "communications": "Communications",
+    "surveys": "Surveys",
+    "ticketing": "Ticketing",
+    "info": "Information",
+    "notifications": "Notifications",
+    "portal": "My space",
+    "itm": "ITM/ISU inspection"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "error": "Error",
+    "search": "Search",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "auth": {
+    "login": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "tenant": "Organization (tenant ID)",
+    "submit": "Sign in",
+    "ssoAzure": "Continue with Azure AD",
+    "ssoLdap": "Continue with LDAP"
+  },
+  "admin": {
+    "users": {
+      "title": "Users",
+      "email": "Email",
+      "fullName": "Full name",
+      "roles": "Roles",
+      "status": "Status",
+      "create": "Add user",
+      "search": "Search users"
+    }
+  },
+  "riskMatrix": {
+    "title": "Risk assessments",
+    "targetType": "Target",
+    "riskLevel": "Overall risk level",
+    "probability": "Probability",
+    "severity": "Severity",
+    "factors": "Risk factors",
+    "measures": "Measures / PPE",
+    "jobPosition": "Job position",
+    "worksite": "Worksite",
+    "department": "Department",
+    "newAssessment": "New assessment",
+    "existingAssessments": "Existing assessments"
+  },
+  "pwa": {
+    "install": "Install the app on your device",
+    "installAction": "Install",
+    "later": "Later"
+  },
+  "push": {
+    "enable": "Enable push notifications",
+    "enabled": "Push notifications enabled",
+    "denied": "Push notifications are blocked in the browser",
+    "unsupported": "Push notifications are not supported on this device",
+    "error": "Could not enable push notifications"
+  },
+  "locale": {
+    "label": "Language"
+  }
+}

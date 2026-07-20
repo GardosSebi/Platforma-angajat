@@ -9,3 +9,6 @@ export * from "./surveys";
 export * from "./ticketing";
 export * from "./platform-admin";
 export * from "./notifications";
+export * from "./communication-rights";
+export * from "./ssm-scheduled-reports";
+export * from "./auth-push";

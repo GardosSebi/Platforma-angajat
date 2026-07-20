@@ -3,6 +3,7 @@ import type { SsmReportType } from "@repo/shared-types/ssm";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { ssmApi } from "../api/ssm.api";
 import { useSsmReport } from "../hooks/useSsmOverview";
+import { SsmScheduledReportsPanel } from "./SsmScheduledReportsPanel";
 
 const REPORT_TYPES: Array<{ type: SsmReportType; label: string; shortLabel: string; description: string }> = [
   { type: "trainings", label: "Instruiri", shortLabel: "Instruiri", description: "Planuri, statusuri, scadențe, scoruri." },
@@ -165,6 +166,8 @@ export function SsmReportsManager() {
           <p className="field-hint">Acces inspector read-only poate folosi aceleași endpoint-uri cu permisiuni limitate.</p>
         </div>
       </div>
+
+      <SsmScheduledReportsPanel />
     </section>
   );
 }

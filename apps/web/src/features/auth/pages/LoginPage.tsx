@@ -1,9 +1,12 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { loginRequest } from "../api/auth.api";
+import { LocaleSwitcher } from "../../../shared/components/LocaleSwitcher";
+import { getSsoStatus, loginAzureCallback, loginLdap, loginRequest } from "../api/auth.api";
 import { authStore, getStoredExpiresInLabel, type SessionData } from "../../../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../../../shared/auth/clear-user-query-cache";
-import { hasSsmBackofficeAccess, isEmployeePortalUser, isItmInspectorUser } from "../../../shared/auth/roles";
+import { getAppHomePath } from "../../../shared/auth/roles";
+import type { TenantSsoStatusResponse } from "@repo/shared-types/auth-push";
 
 const HERO_FEATURES = [
   "Instruiri SSM și semnături digitale",
@@ -16,6 +19,32 @@ function safeReturnPath(raw: string | null): string | null {
   if (raw.startsWith("//")) return null;
   if (raw.includes("://")) return null;
   return raw;
+}
+
+function parseAzureState(state: string | null): string | null {
+  if (!state) return null;
+  try {
+    const padded = state + "=".repeat((4 - (state.length % 4)) % 4);
+    const json = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+    const parsed = JSON.parse(json) as { tenantId?: string };
+    return parsed.tenantId?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function applyLoginSession(data: Awaited<ReturnType<typeof loginRequest>>): SessionData {
+  clearUserScopedQueryCache();
+  const session: SessionData = {
+    accessToken: data.accessToken,
+    tenantId: data.user.tenantId,
+    userId: data.user.id,
+    roles: data.user.roles,
+    expiresInLabel: data.expiresIn,
+    linkedEmployeeId: data.linkedEmployeeId ?? null
+  };
+  authStore.set(session);
+  return session;
 }
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -38,16 +67,82 @@ function EyeIcon({ open }: { open: boolean }) {
 }
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnUrl = useMemo(() => safeReturnPath(searchParams.get("returnUrl")), [searchParams]);
   const sessionExpired = searchParams.get("expired") === "1";
+  const azureCallbackHandled = useRef(false);
+
   const [tenantId, setTenantId] = useState("e01");
+  const [debouncedTenantId, setDebouncedTenantId] = useState("e01");
   const [email, setEmail] = useState("admin@company.local");
   const [password, setPassword] = useState("");
+  const [ldapUsername, setLdapUsername] = useState("");
+  const [ldapPassword, setLdapPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [ssoStatus, setSsoStatus] = useState<TenantSsoStatusResponse | null>(null);
+  const [ssoLoading, setSsoLoading] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedTenantId(tenantId.trim()), 400);
+    return () => window.clearTimeout(timer);
+  }, [tenantId]);
+
+  useEffect(() => {
+    if (!debouncedTenantId) {
+      setSsoStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSsoLoading(true);
+    void getSsoStatus(debouncedTenantId)
+      .then((status) => {
+        if (!cancelled) setSsoStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setSsoStatus(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSsoLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedTenantId]);
+
+  useEffect(() => {
+    if (azureCallbackHandled.current) return;
+
+    const code = searchParams.get("code");
+    const stateTenantId = parseAzureState(searchParams.get("state"));
+    if (!code) return;
+
+    azureCallbackHandled.current = true;
+    const tenantForCallback = stateTenantId || tenantId.trim();
+    if (!tenantForCallback) {
+      setError("Autentificarea Azure AD a eșuat: lipsește organizația.");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    void loginAzureCallback(tenantForCallback, code)
+      .then((data) => {
+        const session = applyLoginSession(data);
+        navigate(returnUrl ?? getAppHomePath(session), { replace: true });
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : "Autentificarea Azure AD a eșuat.");
+      })
+      .finally(() => {
+        setPending(false);
+      });
+  }, [navigate, returnUrl, searchParams, tenantId]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -55,30 +150,37 @@ export function LoginPage() {
     setPending(true);
     try {
       const data = await loginRequest(tenantId.trim(), email.trim(), password);
-      clearUserScopedQueryCache();
-      const session: SessionData = {
-        accessToken: data.accessToken,
-        tenantId: data.user.tenantId,
-        userId: data.user.id,
-        roles: data.user.roles,
-        expiresInLabel: data.expiresIn,
-        linkedEmployeeId: data.linkedEmployeeId ?? null
-      };
-      authStore.set(session);
-      const home = isEmployeePortalUser(session)
-        ? "/portal"
-        : isItmInspectorUser(session)
-          ? "/itm"
-          : hasSsmBackofficeAccess(session)
-            ? "/ssm"
-            : "/portal";
-      navigate(returnUrl ?? home, { replace: true });
+      const session = applyLoginSession(data);
+      navigate(returnUrl ?? getAppHomePath(session), { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Autentificarea a eșuat.");
     } finally {
       setPending(false);
     }
   };
+
+  const onLdapSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setPending(true);
+    try {
+      const data = await loginLdap(tenantId.trim(), ldapUsername.trim(), ldapPassword);
+      const session = applyLoginSession(data);
+      navigate(returnUrl ?? getAppHomePath(session), { replace: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Autentificarea LDAP a eșuat.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const onAzureLogin = () => {
+    if (!ssoStatus?.azureAuthorizeUrl) return;
+    window.location.assign(ssoStatus.azureAuthorizeUrl);
+  };
+
+  const showAzure = Boolean(ssoStatus?.azureEnabled && ssoStatus.azureAuthorizeUrl);
+  const showLdap = Boolean(ssoStatus?.ldapEnabled);
 
   return (
     <div className="login-page">
@@ -119,19 +221,22 @@ export function LoginPage() {
 
       <aside className="login-panel" aria-label="Autentificare">
         <div className="login-card">
+          <div className="login-locale-row">
+            <LocaleSwitcher />
+          </div>
           <header className="login-brand">
             <span className="login-brand-mark" aria-hidden>
               EP
             </span>
             <div>
-              <h2 className="login-title">Autentificare</h2>
+              <h2 className="login-title">{t("auth.login")}</h2>
               <p className="login-sub">Introduceți organizația, e-mailul și parola contului.</p>
             </div>
           </header>
 
           <form onSubmit={onSubmit} className="login-form">
             <div className="field">
-              <label htmlFor="tenant-id">Organizație (ID tenant)</label>
+              <label htmlFor="tenant-id">{t("auth.tenant")}</label>
               <input
                 id="tenant-id"
                 name="tenantId"
@@ -142,7 +247,7 @@ export function LoginPage() {
               />
             </div>
             <div className="field">
-              <label htmlFor="email">E-mail</label>
+              <label htmlFor="email">{t("auth.email")}</label>
               <input
                 id="email"
                 name="email"
@@ -154,7 +259,7 @@ export function LoginPage() {
               />
             </div>
             <div className="field">
-              <label htmlFor="password">Parolă</label>
+              <label htmlFor="password">{t("auth.password")}</label>
               <div className="password-field-row">
                 <input
                   id="password"
@@ -189,9 +294,52 @@ export function LoginPage() {
             ) : null}
 
             <button type="submit" className="btn-primary login-submit" disabled={pending}>
-              {pending ? "Se conectează…" : "Conectare"}
+              {pending ? "Se conectează…" : t("auth.submit")}
             </button>
           </form>
+
+          {ssoLoading ? <p className="login-hint">Se verifică opțiunile SSO...</p> : null}
+
+          {showAzure ? (
+            <div className="login-sso-block">
+              <button type="button" className="btn-secondary login-sso-btn" disabled={pending} onClick={onAzureLogin}>
+                Conectare cu Microsoft (Azure AD)
+              </button>
+              <p className="login-hint">{t("auth.ssoAzure")}</p>
+            </div>
+          ) : null}
+
+          {showLdap ? (
+            <form className="login-form login-sso-block" onSubmit={onLdapSubmit}>
+              <h3 className="login-sso-title">Autentificare LDAP</h3>
+              <div className="field">
+                <label htmlFor="ldap-username">Utilizator LDAP</label>
+                <input
+                  id="ldap-username"
+                  name="ldapUsername"
+                  autoComplete="username"
+                  value={ldapUsername}
+                  onChange={(event) => setLdapUsername(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="ldap-password">Parolă LDAP</label>
+                <input
+                  id="ldap-password"
+                  name="ldapPassword"
+                  type="password"
+                  autoComplete="current-password"
+                  value={ldapPassword}
+                  onChange={(event) => setLdapPassword(event.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="btn-secondary login-submit" disabled={pending}>
+                {pending ? "Se conectează…" : t("auth.ssoLdap")}
+              </button>
+            </form>
+          ) : null}
 
           <p className="login-hint">
             Cont demo: <code>e01</code> · <code>admin@company.local</code>

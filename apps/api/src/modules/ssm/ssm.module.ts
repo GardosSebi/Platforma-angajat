@@ -24,8 +24,10 @@ import { SsmPsiController } from "./api/ssm-psi.controller";
 import { SsmPppController } from "./api/ssm-ppp.controller";
 import { SsmOverviewController } from "./api/ssm-overview.controller";
 import { SsmItmController } from "./api/ssm-itm.controller";
+import { SsmScheduledReportsController } from "./api/ssm-scheduled-reports.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
 import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-training.repository";
+import { SsmScheduledReportsService } from "./application/services/ssm-scheduled-reports.service";
 
 @Module({
   imports: [NotificationsModule],
@@ -40,7 +42,8 @@ import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-
     SsmPsiController,
     SsmPppController,
     SsmOverviewController,
-    SsmItmController
+    SsmItmController,
+    SsmScheduledReportsController
   ],
   providers: [
     PermissionsGuard,
@@ -54,6 +57,7 @@ import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-
     SsmPsiService,
     SsmPppService,
     SsmOverviewService,
+    SsmScheduledReportsService,
     SsmTrainingAutomationService,
     ItmAccessService,
     {
@@ -61,6 +65,12 @@ import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-
       useClass: PrismaSsmTrainingRepository
     }
   ],
-  exports: [SsmTrainingSuiteService, SsmMedicalService, SsmTrainingAutomationService, ItmAccessService]
+  exports: [
+    SsmTrainingSuiteService,
+    SsmMedicalService,
+    SsmTrainingAutomationService,
+    ItmAccessService,
+    SsmScheduledReportsService
+  ]
 })
 export class SsmModule {}
