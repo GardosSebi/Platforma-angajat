@@ -18,8 +18,6 @@ import { EmployeePortalRoute } from "./EmployeePortalRoute";
 import { ItmInspectorRoute } from "./ItmInspectorRoute";
 import { NotificationsPage } from "../features/notifications/pages/NotificationsPage";
 import { PlatformAdminPage } from "../features/platform-admin/pages/PlatformAdminPage";
-import { SsmDashboardPage } from "../features/ssm/pages/SsmDashboardPage";
-import { SsmSectionPage } from "../features/ssm/pages/SsmSectionPage";
 
 function PlatformAdminRoute() {
   const session = useAuthSession();
@@ -62,10 +60,7 @@ export function AppRouter() {
           <Route path="/" element={<HomeRedirect />} />
           <Route path="/portal" element={<EmployeePortalRoute />} />
           <Route path="/itm" element={<ItmInspectorRoute />} />
-          <Route path="/ssm" element={<SsmBackofficeRoute />}>
-            <Route index element={<SsmDashboardPage />} />
-            <Route path=":sectionId" element={<SsmSectionPage />} />
-          </Route>
+          <Route path="/ssm" element={<SsmBackofficeRoute />} />
           <Route path="/master-data" element={<MasterDataRoute />} />
           <Route path="/platform-admin" element={<PlatformAdminRoute />} />
           <Route

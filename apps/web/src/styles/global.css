@@ -856,61 +856,6 @@ button {
   gap: 0.6rem;
 }
 
-.ssm-hub-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.ssm-hub-card {
-  display: block;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: #fff;
-  padding: 0.85rem 1rem;
-  text-decoration: none;
-  color: var(--color-text);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-}
-
-.ssm-hub-card strong {
-  display: block;
-  font-size: 0.92rem;
-}
-
-.ssm-hub-card span {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--color-muted);
-  margin-top: 0.25rem;
-}
-
-.ssm-hub-card:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-muted);
-  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.08);
-}
-
-.ssm-section-breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.75rem;
-  font-size: 0.85rem;
-  color: var(--color-muted);
-}
-
-.ssm-section-breadcrumb a {
-  color: var(--color-primary);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.ssm-section-breadcrumb a:hover {
-  text-decoration: underline;
-}
-
 .ssm-overview-tab {
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -2995,10 +2940,6 @@ button.ssm-doc-item:hover {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
-  .ssm-hub-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .ssm-guidance-grid {
     grid-template-columns: 1fr;
   }
@@ -3039,10 +2980,6 @@ button.ssm-doc-item:hover {
 
 @media (max-width: 620px) {
   .ssm-overview-tabs {
-    grid-template-columns: 1fr;
-  }
-
-  .ssm-hub-grid {
     grid-template-columns: 1fr;
   }
 

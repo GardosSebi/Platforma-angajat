@@ -1,23 +1,150 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { canAccessSsmSection } from "../../../shared/auth/effective-permissions";
+import { canAccessSsmSection, type SsmSectionId } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
-import { SSM_SECTIONS } from "../ssm-sections";
+import { TrainingAssignForm } from "../components/TrainingAssignForm";
+import { SsmDocumentsManager } from "../components/SsmDocumentsManager";
+import { SsmTrainingSuiteManager } from "../components/SsmTrainingSuiteManager";
+import { SsmEipManager } from "../components/SsmEipManager";
+import { SsmAccidentsManager } from "../components/SsmAccidentsManager";
+import { SsmMedicalManager } from "../components/SsmMedicalManager";
+import { SsmRiskManager } from "../components/SsmRiskManager";
+import { SsmPppManager } from "../components/SsmPppManager";
+import { SsmPsiManager } from "../components/SsmPsiManager";
+import { SsmComplianceDashboardManager } from "../components/SsmComplianceDashboardManager";
+import { SsmReportsManager } from "../components/SsmReportsManager";
+
+const SSM_SECTIONS: Array<{
+  id: SsmSectionId;
+  title: string;
+  caption: string;
+  description: string;
+}> = [
+  {
+    id: "quick",
+    title: "Acțiune rapidă",
+    caption: "Alocare instruire",
+    description: "Folosește această secțiune pentru alocări punctuale către angajați."
+  },
+  {
+    id: "documents",
+    title: "Documente SSM",
+    caption: "Vizualizare / upload",
+    description:
+      "Documente aplicabile postului și istoricul versiunilor; angajații văd doar documentele relevante pentru ei."
+  },
+  {
+    id: "training",
+    title: "Instruire și conformitate",
+    caption: "Calendar, teste, fișe",
+    description:
+      "Modul 3.3: tipuri legale, e-learning, teste, semnături, calendar scadențe, remindere și raport conformitate pe departament."
+  },
+  {
+    id: "eip",
+    title: "Echipamente EIP",
+    caption: "Normative, mișcări, stoc",
+    description: "Administrează tipurile EIP, normarea pe post și distribuțiile către personal."
+  },
+  {
+    id: "accidents",
+    title: "Accidente și incidente",
+    caption: "Cazuri, task-uri, statistici",
+    description: "Înregistrează cazuri și urmărește fluxul de cercetare până la închidere."
+  },
+  {
+    id: "medical",
+    title: "Medicina muncii",
+    caption: "Aptitudini, fișe, reminder",
+    description: "Configurează tipuri de controale medicale, rezultate și următoarele scadențe."
+  },
+  {
+    id: "risk",
+    title: "Evaluări risc",
+    caption: "Factori, nivel risc",
+    description: "Versionează evaluări pe post, loc de muncă sau departament și păstrează motivul actualizării."
+  },
+  {
+    id: "ppp",
+    title: "Plan PPP",
+    caption: "Măsuri, responsabili, termene",
+    description: "Modul dedicat pentru planuri de prevenire și protecție cu măsuri urmărite individual."
+  },
+  {
+    id: "psi",
+    title: "PSI / urgențe",
+    caption: "Documentație, echipamente, instruiri",
+    description: "Urmărește documentația PSI pe punct de lucru, scadențele echipamentelor și responsabilii."
+  },
+  {
+    id: "compliance",
+    title: "Calendar + conformitate",
+    caption: "KPI, status, restanțe",
+    description: "Calendar unificat și dashboard cu breakdown, top neconformități și drill-down restanțe."
+  },
+  {
+    id: "reports",
+    title: "Rapoarte & export",
+    caption: "PDF, Excel, inspector",
+    description: "Rapoarte pentru instruiri, EIP, medicina muncii și documente/versionare."
+  }
+];
 
 export function SsmDashboardPage() {
   const session = useAuthSession();
+  const [activeSection, setActiveSection] = useState<SsmSectionId>("quick");
 
   const visibleSections = useMemo(
-    () => SSM_SECTIONS.filter((section) => canAccessSsmSection(session?.roles, section.id)),
+    () => SSM_SECTIONS.filter((s) => canAccessSsmSection(session?.roles, s.id)),
     [session?.roles]
   );
+
+  useEffect(() => {
+    if (!session?.roles?.length) return;
+    if (!visibleSections.some((s) => s.id === activeSection)) {
+      setActiveSection(visibleSections[0]?.id ?? "documents");
+    }
+  }, [session?.roles, visibleSections, activeSection]);
+
+  const activeSectionMeta = useMemo(
+    () => SSM_SECTIONS.find((section) => section.id === activeSection) ?? visibleSections[0] ?? SSM_SECTIONS[0],
+    [activeSection, visibleSections]
+  );
+
+  const renderSection = () => {
+    switch (activeSection) {
+      case "documents":
+        return <SsmDocumentsManager />;
+      case "training":
+        return <SsmTrainingSuiteManager />;
+      case "eip":
+        return <SsmEipManager />;
+      case "accidents":
+        return <SsmAccidentsManager />;
+      case "medical":
+        return <SsmMedicalManager />;
+      case "risk":
+        return <SsmRiskManager />;
+      case "ppp":
+        return <SsmPppManager />;
+      case "psi":
+        return <SsmPsiManager />;
+      case "compliance":
+        return <SsmComplianceDashboardManager />;
+      case "reports":
+        return <SsmReportsManager />;
+      case "quick":
+      default:
+        return <TrainingAssignForm />;
+    }
+  };
 
   return (
     <>
       <h1 className="page-title">SSM</h1>
       <p className="page-lead">
-        Alege un modul din listă sau din meniul lateral. Fiecare zonă are propria pagină, ca să fie mai ușor de
-        urmărit.
+        Centru operațional SSM: drepturile urmează matricea 3.12 (administrator SSM, responsabil pe entitate, manager
+        departament, angajat).
       </p>
       {!session ? (
         <div className="callout-warn" role="status">
@@ -26,22 +153,34 @@ export function SsmDashboardPage() {
         </div>
       ) : null}
 
-      <section className="ssm-overview-card" aria-label="Module SSM">
+      <section className="ssm-overview-card" aria-label="Navigare SSM">
         <div className="ssm-overview-header">
           <h2 className="card-title">Module SSM</h2>
           <p className="field-hint">Sunt afișate doar modulele permise de rolul contului tău.</p>
         </div>
-        <div className="ssm-hub-grid">
+        <div className="ssm-overview-tabs" role="tablist" aria-label="Secțiuni SSM">
           {visibleSections.map((section) => (
-            <Link key={section.id} to={section.path} className="ssm-hub-card">
+            <button
+              key={section.id}
+              type="button"
+              role="tab"
+              aria-selected={activeSection === section.id}
+              className={`ssm-overview-tab ${activeSection === section.id ? "active" : ""}`}
+              onClick={() => setActiveSection(section.id)}
+            >
               <strong>{section.title}</strong>
               <span>{section.caption}</span>
-            </Link>
+            </button>
           ))}
         </div>
-        {!visibleSections.length ? (
-          <p className="field-hint">Nu ai acces la niciun modul SSM pentru acest cont.</p>
-        ) : null}
+      </section>
+
+      <section className="ssm-active-section" aria-live="polite">
+        <header className="ssm-active-section-header">
+          <h2 className="card-title">{activeSectionMeta.title}</h2>
+          <p className="field-hint">{activeSectionMeta.description}</p>
+        </header>
+        <div className="ssm-dashboard-grid">{renderSection()}</div>
       </section>
     </>
   );
