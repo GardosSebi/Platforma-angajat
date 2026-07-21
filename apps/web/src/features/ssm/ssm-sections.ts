@@ -1,4 +1,4 @@
-import type { SsmSectionId } from "../../../shared/auth/effective-permissions";
+import type { SsmSectionId } from "../../shared/auth/effective-permissions";
 
 export type SsmSectionMeta = {
   id: SsmSectionId;
