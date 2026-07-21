@@ -73,6 +73,8 @@ export interface SurveyFormFillerProps {
   questions: SurveyQuestion[];
   conditionalLogic?: SurveyConditionalRule[] | null;
   onSubmit: (answers: Record<string, SurveyAnswerValue>) => Promise<void>;
+  /** Uploads a file and returns the answerValue to store (`path|originalName`). */
+  onUploadFile?: (file: File) => Promise<string>;
   submitLabel?: string;
   thanksFooter?: ReactNode;
 }
@@ -83,6 +85,7 @@ export function SurveyFormFiller({
   questions,
   conditionalLogic,
   onSubmit,
+  onUploadFile,
   submitLabel = "Trimite răspunsurile",
   thanksFooter
 }: SurveyFormFillerProps) {
@@ -90,6 +93,7 @@ export function SurveyFormFiller({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
+  const [uploadingQuestionId, setUploadingQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
     setAnswers((prev) => {
@@ -367,13 +371,46 @@ export function SurveyFormFiller({
             ) : null}
 
             {q.type === "FILE_UPLOAD" ? (
-              <input
-                type="file"
-                onChange={(ev) => {
-                  const file = ev.target.files?.[0];
-                  setAnswer(q.id, file ? file.name : null);
-                }}
-              />
+              <div className="field">
+                <input
+                  type="file"
+                  disabled={pending || uploadingQuestionId === q.id}
+                  onChange={(ev) => {
+                    const file = ev.target.files?.[0];
+                    if (!file) {
+                      setAnswer(q.id, null);
+                      return;
+                    }
+                    if (!onUploadFile) {
+                      setAnswer(q.id, file.name);
+                      return;
+                    }
+                    setError(null);
+                    setUploadingQuestionId(q.id);
+                    void onUploadFile(file)
+                      .then((answerValue) => {
+                        setAnswer(q.id, answerValue);
+                      })
+                      .catch((uploadError) => {
+                        setAnswer(q.id, null);
+                        ev.target.value = "";
+                        setError(
+                          uploadError instanceof Error
+                            ? uploadError.message
+                            : "Încărcarea fișierului a eșuat."
+                        );
+                      })
+                      .finally(() => {
+                        setUploadingQuestionId(null);
+                      });
+                  }}
+                />
+                {uploadingQuestionId === q.id ? (
+                  <p className="field-hint">Se încarcă fișierul…</p>
+                ) : typeof answers[q.id] === "string" && answers[q.id] ? (
+                  <p className="field-hint">Fișier încărcat.</p>
+                ) : null}
+              </div>
             ) : null}
 
             {q.type === "IMAGE_SELECT" && q.options ? (
@@ -402,8 +439,8 @@ export function SurveyFormFiller({
         </p>
       ) : null}
 
-      <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Se trimite…" : submitLabel}
+      <button type="submit" className="btn-primary" disabled={pending || Boolean(uploadingQuestionId)}>
+        {pending ? "Se trimite…" : uploadingQuestionId ? "Se încarcă fișierul…" : submitLabel}
       </button>
     </form>
   );

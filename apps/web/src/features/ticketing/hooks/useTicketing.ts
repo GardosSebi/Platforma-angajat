@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateHelpdeskTicketCommentRequest,
+  CreateHelpdeskTicketFromEmailRequest,
   CreateHelpdeskTicketRequest,
   HelpdeskTicketStatus
 } from "@repo/shared-types/ticketing";
@@ -92,6 +93,14 @@ export function useCreateTicket() {
   const refresh = useRefreshTicketing();
   return useMutation({
     mutationFn: (payload: CreateHelpdeskTicketRequest) => ticketingApi.createTicket(payload),
+    onSuccess: refresh
+  });
+}
+
+export function useCreateTicketFromEmail() {
+  const refresh = useRefreshTicketing();
+  return useMutation({
+    mutationFn: (payload: CreateHelpdeskTicketFromEmailRequest) => ticketingApi.createTicketFromEmail(payload),
     onSuccess: refresh
   });
 }

@@ -8,6 +8,7 @@ import {
   AddTicketCommentDto,
   AssignTicketDto,
   CreateTicketDto,
+  CreateTicketFromEmailDto,
   ListTicketsDto,
   MoveTicketDto,
   UpdateTicketDto
@@ -114,6 +115,40 @@ export class TicketingService {
     });
     await this.notifyTicketCreated(tenantId, ticket);
     return this.serializeTicket(ticket, 0);
+  }
+
+  async createTicketFromEmail(
+    tenantId: string,
+    actorId: string,
+    dto: CreateTicketFromEmailDto,
+    viewer?: JwtPayload
+  ) {
+    const fromEmail = dto.fromEmail.trim().toLowerCase();
+    const employee = await this.prisma.employee.findFirst({
+      where: { tenantId, email: { equals: fromEmail, mode: "insensitive" }, active: true },
+      select: { id: true, fullName: true, email: true }
+    });
+
+    const descriptionParts = [dto.body.trim()];
+    if (dto.messageId?.trim()) {
+      descriptionParts.push(`\n---\nEmail Message-ID: ${dto.messageId.trim()}`);
+    }
+
+    return this.createTicket(
+      tenantId,
+      actorId,
+      {
+        title: dto.subject.trim(),
+        description: descriptionParts.join(""),
+        category: dto.category,
+        priority: dto.priority,
+        source: "EMAIL",
+        reporterEmployeeId: employee?.id,
+        reporterName: clean(dto.fromName) ?? employee?.fullName ?? fromEmail,
+        reporterEmail: employee?.email ?? fromEmail
+      },
+      viewer
+    );
   }
 
   async updateTicket(tenantId: string, actorId: string, id: string, dto: UpdateTicketDto) {

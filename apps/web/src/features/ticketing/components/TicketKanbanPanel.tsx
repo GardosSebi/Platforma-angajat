@@ -2,6 +2,7 @@ import type { DragEvent } from "react";
 import type { HelpdeskTicketItem, HelpdeskTicketPriority, HelpdeskTicketStatus } from "@repo/shared-types/ticketing";
 import { HELPDESK_TICKET_PRIORITIES } from "@repo/shared-types/ticketing";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { mapToOptions } from "../../../shared/components/field-select-options";
 import type { TicketFilters } from "../api/ticketing.api";
 import {
   formatTicketDate,
@@ -12,10 +13,13 @@ import {
   statusTone,
   TICKET_CATEGORIES,
   TICKET_CATEGORY_LABELS,
+  type TicketOperatorOption,
   type TicketViewMode
 } from "../ticketing-shared";
 
 type Column = { status: HelpdeskTicketStatus; tickets: HelpdeskTicketItem[] };
+
+type EmployeeOption = { id: string; fullName: string; email?: string };
 
 type Props = {
   columns: Column[];
@@ -25,6 +29,8 @@ type Props = {
   draggedTicketId: string | null;
   dragOverStatus: HelpdeskTicketStatus | null;
   openedTicketId: string;
+  operators: TicketOperatorOption[];
+  employees: EmployeeOption[];
   onViewModeChange: (mode: TicketViewMode) => void;
   onFiltersChange: (patch: Partial<TicketFilters>) => void;
   onClearFilters: () => void;
@@ -45,6 +51,8 @@ export function TicketKanbanPanel({
   draggedTicketId,
   dragOverStatus,
   openedTicketId,
+  operators,
+  employees,
   onViewModeChange,
   onFiltersChange,
   onClearFilters,
@@ -58,7 +66,12 @@ export function TicketKanbanPanel({
 }: Props) {
   const allTickets = columns.flatMap((column) => column.tickets);
   const hasActiveFilters = Boolean(
-    filters.subject || filters.status || filters.priority || filters.category
+    filters.search ||
+      filters.assignedToUserId ||
+      filters.reporterEmployeeId ||
+      filters.status ||
+      filters.priority ||
+      filters.category
   );
 
   return (
@@ -75,15 +88,41 @@ export function TicketKanbanPanel({
 
       <div className="comms-filters ticket-primary-filters">
         <div className="field comms-search-field">
-          <label htmlFor="ticket-subject">Subiect</label>
+          <label htmlFor="ticket-search">Caută</label>
           <input
-            id="ticket-subject"
+            id="ticket-search"
             type="search"
-            placeholder="Titlul tichetului..."
-            value={filters.subject ?? ""}
-            onChange={(event) => onFiltersChange({ subject: event.target.value || undefined })}
+            placeholder="Titlu, descriere, solicitant..."
+            value={filters.search ?? ""}
+            onChange={(event) => onFiltersChange({ search: event.target.value || undefined })}
           />
         </div>
+        <FieldSelect
+          id="filter-assignee"
+          label="Operator"
+          value={filters.assignedToUserId ?? ""}
+          onChange={(assignedToUserId) => onFiltersChange({ assignedToUserId: assignedToUserId || undefined })}
+          allowEmpty
+          emptyLabel="Toți"
+          options={mapToOptions(
+            operators,
+            (operator) => operator.id,
+            (operator) => operator.name
+          )}
+        />
+        <FieldSelect
+          id="filter-reporter"
+          label="Solicitant"
+          value={filters.reporterEmployeeId ?? ""}
+          onChange={(reporterEmployeeId) => onFiltersChange({ reporterEmployeeId: reporterEmployeeId || undefined })}
+          allowEmpty
+          emptyLabel="Toți"
+          options={mapToOptions(
+            employees,
+            (employee) => employee.id,
+            (employee) => (employee.email ? `${employee.fullName} (${employee.email})` : employee.fullName)
+          )}
+        />
         <FieldSelect
           id="filter-destinatar"
           label="Destinatar"

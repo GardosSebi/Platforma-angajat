@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
-import type { CreateSurveyRequest, SurveyConditionalRule, SurveyQuestion, SurveyQuestionOption } from "@repo/shared-types/surveys";
+import type { CreateSurveyRequest, SurveyConditionalRule, SurveyItem, SurveyQuestion, SurveyQuestionOption, UpdateSurveyRequest } from "@repo/shared-types/surveys";
 import { surveyQuestionNeedsOptions } from "@repo/shared-types/surveys";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import {
@@ -22,7 +22,8 @@ import {
   useRespondedSurveyIds,
   useSurveyStats,
   useSurveys,
-  useSurveysOverview
+  useSurveysOverview,
+  useUpdateSurvey
 } from "../hooks/useSurveys";
 import { SurveyCreateForm, type QuestionFormState, type SurveyFormState } from "../components/SurveyCreateForm";
 import { SurveyListPanel } from "../components/SurveyListPanel";
@@ -59,14 +60,23 @@ const EMPTY_QUESTION: QuestionFormState = {
     { value: "Necesită îmbunătățiri", label: "Necesită îmbunătățiri" }
   ],
   min: 1,
-  max: 5
+  max: 5,
+  multiTextCount: 3
 };
 
-function cleanOptions(options: SurveyQuestionOption[]) {
+function cleanOptions(options: SurveyQuestionOption[]): SurveyQuestionOption[] {
   return options
-    .map((option) => option.label.trim())
-    .filter(Boolean)
-    .map((label) => ({ value: label, label }));
+    .map((option) => {
+      const label = option.label.trim();
+      if (!label) return null;
+      const imageUrl = option.imageUrl?.trim();
+      return {
+        value: label,
+        label,
+        ...(imageUrl ? { imageUrl } : {})
+      };
+    })
+    .filter((option): option is SurveyQuestionOption => option !== null);
 }
 
 function canOpenSurveyToComplete(roles: string[] | undefined): boolean {
@@ -85,6 +95,7 @@ export function SurveysPage() {
   const employeesOptions = useEmployeeOptions();
 
   const createSurvey = useCreateSurvey();
+  const updateSurvey = useUpdateSurvey();
   const activateSurvey = useActivateSurvey();
   const closeSurvey = useCloseSurvey();
   const createPublicLink = useCreatePublicSurveyLink();
@@ -99,6 +110,7 @@ export function SurveysPage() {
   const [questionForm, setQuestionForm] = useState<QuestionFormState>(EMPTY_QUESTION);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [conditionalLogic, setConditionalLogic] = useState<SurveyConditionalRule[]>([]);
+  const [editingSurveyId, setEditingSurveyId] = useState<string | null>(null);
   const [selectedSurveyId, setSelectedSurveyId] = useState("");
   const [publicExpiresAt, setPublicExpiresAt] = useState("");
   const [publicResponseLimit, setPublicResponseLimit] = useState("100");
@@ -165,7 +177,8 @@ export function SurveysPage() {
     required: questionForm.required,
     options: surveyQuestionNeedsOptions(questionForm.type) ? cleanOptions(questionForm.options) : undefined,
     min: questionForm.type === "SCALE" ? questionForm.min : undefined,
-    max: questionForm.type === "SCALE" ? questionForm.max : undefined
+    max: questionForm.type === "SCALE" ? questionForm.max : undefined,
+    multiTextCount: questionForm.type === "MULTI_TEXT" ? questionForm.multiTextCount : undefined
   });
 
   const addQuestion = () => {
@@ -183,8 +196,45 @@ export function SurveysPage() {
     setSurveyForm((prev) => ({ ...prev, audienceRefId: value, audienceLabel: option?.label ?? "" }));
   };
 
-  const openCreate = () => {
+  const resetCreateForm = () => {
+    setEditingSurveyId(null);
+    setSurveyForm(EMPTY_SURVEY);
+    setQuestions([]);
+    setConditionalLogic([]);
+    setQuestionForm(EMPTY_QUESTION);
     setCreateFeedback(null);
+  };
+
+  const openCreate = () => {
+    resetCreateForm();
+    setTab("create");
+  };
+
+  const openEdit = (survey: SurveyItem) => {
+    setCreateFeedback(null);
+    setEditingSurveyId(survey.id);
+    setSurveyForm({
+      title: survey.title,
+      description: survey.description ?? "",
+      surveyType: survey.surveyType,
+      audienceType: survey.audienceType,
+      audienceRefId: survey.audienceRefId ?? "",
+      audienceLabel: survey.audienceLabel ?? "",
+      targetEmployeeIdsCsv: survey.targetEmployeeIds.join(", "),
+      privateLinkEnabled: survey.privateLinkEnabled,
+      anonymousMode: survey.anonymousMode,
+      emailNotifyOnPublish: survey.emailNotifyOnPublish,
+      autoCreateTicket: survey.autoCreateTicket,
+      autoTicketTitle: survey.autoTicketTitle ?? "",
+      autoTicketCategory: survey.autoTicketCategory ?? "",
+      translationRoTitle: survey.translations?.ro?.title ?? "",
+      translationEnTitle: survey.translations?.en?.title ?? "",
+      closesAtInput: survey.closesAt ? survey.closesAt.slice(0, 10) : ""
+    });
+    setQuestions(survey.questionSchema);
+    setConditionalLogic(survey.conditionalLogic ?? []);
+    setQuestionForm(EMPTY_QUESTION);
+    setSelectedSurveyId(survey.id);
     setTab("create");
   };
 
@@ -196,13 +246,7 @@ export function SurveysPage() {
     setTab("manage");
   };
 
-  const onSurveySubmit = (event: FormEvent) => {
-    event.preventDefault();
-    setCreateFeedback(null);
-    if (!canSaveSurvey) {
-      setCreateFeedback({ type: "error", message: "Adaugă cel puțin o întrebare pentru a salva sondajul." });
-      return;
-    }
+  const buildSurveyPayload = (): CreateSurveyRequest => {
     const questionSchema = questions.length > 0 ? questions : [buildQuestionFromForm(1)];
     const translations: CreateSurveyRequest["translations"] = {};
     if (surveyForm.translationRoTitle.trim()) {
@@ -211,7 +255,7 @@ export function SurveysPage() {
     if (surveyForm.translationEnTitle.trim()) {
       translations.en = { title: surveyForm.translationEnTitle.trim() };
     }
-    const payload: CreateSurveyRequest = {
+    return {
       title: surveyForm.title.trim(),
       description: surveyForm.description?.trim() || undefined,
       surveyType: surveyForm.surveyType,
@@ -233,13 +277,41 @@ export function SurveysPage() {
       autoTicketTitle: surveyForm.autoTicketTitle || undefined,
       autoTicketCategory: surveyForm.autoTicketCategory || undefined
     };
+  };
+
+  const onSurveySubmit = (event: FormEvent) => {
+    event.preventDefault();
+    setCreateFeedback(null);
+    if (!canSaveSurvey) {
+      setCreateFeedback({ type: "error", message: "Adaugă cel puțin o întrebare pentru a salva sondajul." });
+      return;
+    }
+    const payload = buildSurveyPayload();
+    if (editingSurveyId) {
+      const updatePayload: UpdateSurveyRequest = {
+        ...payload,
+        conditionalLogic: conditionalLogic
+      };
+      updateSurvey.mutate(
+        { id: editingSurveyId, payload: updatePayload },
+        {
+          onSuccess: (updated) => {
+            setSelectedSurveyId(updated.id);
+            resetCreateForm();
+            setCreateFeedback({ type: "success", message: "Sondaj actualizat." });
+            setTab("manage");
+          },
+          onError: (error) => {
+            setCreateFeedback({ type: "error", message: mutationErrorMessage(error) });
+          }
+        }
+      );
+      return;
+    }
     createSurvey.mutate(payload, {
       onSuccess: (created) => {
         setSelectedSurveyId(created.id);
-        setSurveyForm(EMPTY_SURVEY);
-        setQuestions([]);
-        setConditionalLogic([]);
-        setQuestionForm(EMPTY_QUESTION);
+        resetCreateForm();
         setCreateFeedback({ type: "success", message: "Sondaj salvat. Poți continua din listă sau gestionare." });
         setTab("list");
       },
@@ -322,7 +394,7 @@ export function SurveysPage() {
 
   const tabs: Array<{ id: SurveyTab; label: string }> = [
     { id: "list", label: "Lista sondaje" },
-    { id: "create", label: "Sondaj nou" },
+    { id: "create", label: editingSurveyId ? "Editează sondaj" : "Sondaj nou" },
     { id: "manage", label: selectedSurvey ? `Gestionează: ${selectedSurvey.title.slice(0, 24)}${selectedSurvey.title.length > 24 ? "…" : ""}` : "Gestionează" }
   ];
 
@@ -392,12 +464,14 @@ export function SurveysPage() {
 
       {tab === "create" ? (
         <SurveyCreateForm
+          mode={editingSurveyId ? "edit" : "create"}
           surveyForm={surveyForm}
           questionForm={questionForm}
           questions={questions}
+          conditionalLogic={conditionalLogic}
           audienceOptions={audienceOptions}
           canSave={canSaveSurvey}
-          isPending={createSurvey.isPending}
+          isPending={createSurvey.isPending || updateSurvey.isPending}
           feedback={createFeedback}
           onSurveyChange={(patch) => setSurveyForm((prev) => ({ ...prev, ...patch }))}
           onQuestionChange={(patch) => setQuestionForm((prev) => ({ ...prev, ...patch }))}
@@ -407,7 +481,15 @@ export function SurveysPage() {
             setQuestionForm((prev) => ({
               ...prev,
               options: prev.options.map((option, optionIndex) =>
-                optionIndex === index ? { value: label, label } : option
+                optionIndex === index ? { ...option, value: label, label } : option
+              )
+            }))
+          }
+          onUpdateOptionImageUrl={(index, imageUrl) =>
+            setQuestionForm((prev) => ({
+              ...prev,
+              options: prev.options.map((option, optionIndex) =>
+                optionIndex === index ? { ...option, imageUrl } : option
               )
             }))
           }
@@ -415,8 +497,12 @@ export function SurveysPage() {
           onRemoveOption={(index) =>
             setQuestionForm((prev) => ({ ...prev, options: prev.options.filter((_, optionIndex) => optionIndex !== index) }))
           }
+          onConditionalLogicChange={setConditionalLogic}
           onSubmit={onSurveySubmit}
-          onCancel={() => setTab("list")}
+          onCancel={() => {
+            resetCreateForm();
+            setTab("list");
+          }}
         />
       ) : null}
 
@@ -444,6 +530,7 @@ export function SurveysPage() {
           onGeneratePublicLink={generatePublicLink}
           onDownload={(type) => void download(type)}
           onBackToList={() => setTab("list")}
+          onEdit={selectedSurvey ? () => openEdit(selectedSurvey) : undefined}
         />
       ) : null}
     </div>

@@ -145,6 +145,10 @@ export function SurveyRespondPage() {
           questions={survey.questionSchema}
           conditionalLogic={survey.conditionalLogic}
           onSubmit={handleSubmit}
+          onUploadFile={async (file) => {
+            const uploaded = await surveysApi.uploadAnswerFile(surveyId, file);
+            return uploaded.answerValue;
+          }}
           thanksFooter={thanksFooter}
         />
         <p className="survey-fill-footer-hint">

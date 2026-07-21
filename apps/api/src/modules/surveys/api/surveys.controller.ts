@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Query, Req, StreamableFile, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Header, Param, Patch, Post, Query, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { Request } from "express";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
@@ -100,6 +102,29 @@ export class SurveysController {
     return this.surveys.submitPrivateResponse(tenantId, user.sub, id, dto, user.email);
   }
 
+  @Post(":id/upload-answer-file")
+  @RequireAnyPermissions(Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: { fileSize: 20 * 1024 * 1024 }
+    })
+  )
+  uploadAnswerFile(
+    @TenantId() tenantId: string,
+    @Param("id") id: string,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    if (!file?.buffer) {
+      throw new BadRequestException("Missing multipart field 'file'");
+    }
+    return this.surveys.saveAnswerFile(tenantId, id, {
+      originalName: file.originalname,
+      buffer: file.buffer,
+      mimeType: file.mimetype
+    });
+  }
+
   @Get(":id/preview")
   @RequirePermissions(Permission.SURVEYS_EDIT)
   preview(@TenantId() tenantId: string, @Param("id") id: string) {
@@ -155,6 +180,24 @@ export class PublicSurveysController {
     return this.surveys.submitPublicResponse(token, dto, {
       ip: req.ip,
       userAgent: Array.isArray(userAgent) ? userAgent.join(" ") : userAgent
+    });
+  }
+
+  @Post(":token/upload-answer-file")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: { fileSize: 20 * 1024 * 1024 }
+    })
+  )
+  uploadPublicAnswerFile(@Param("token") token: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file?.buffer) {
+      throw new BadRequestException("Missing multipart field 'file'");
+    }
+    return this.surveys.savePublicAnswerFile(token, {
+      originalName: file.originalname,
+      buffer: file.buffer,
+      mimeType: file.mimetype
     });
   }
 }

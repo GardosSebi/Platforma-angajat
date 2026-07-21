@@ -25,6 +25,7 @@ type Props = {
   onGeneratePublicLink: () => void;
   onDownload: (type: "json" | "xlsx" | "pdf") => void;
   onBackToList: () => void;
+  onEdit?: () => void;
 };
 
 export function SurveyManagePanel({
@@ -49,7 +50,8 @@ export function SurveyManagePanel({
   onPublicLimitChange,
   onGeneratePublicLink,
   onDownload,
-  onBackToList
+  onBackToList,
+  onEdit
 }: Props) {
   if (!survey) {
     return (
@@ -72,6 +74,7 @@ export function SurveyManagePanel({
 
   const canRespond =
     canComplete && !responded && survey.status !== "CLOSED" && survey.status !== "ARCHIVED";
+  const canEdit = Boolean(onEdit) && (survey.status === "DRAFT" || survey.status === "ACTIVE");
 
   return (
     <div className="survey-manage-stack">
@@ -120,6 +123,11 @@ export function SurveyManagePanel({
                   : survey.status === "DRAFT"
                     ? "Activează și completează"
                     : "Deschide și completează"}
+              </button>
+            ) : null}
+            {canEdit ? (
+              <button type="button" className="btn-secondary" onClick={onEdit}>
+                Editează sondaj
               </button>
             ) : null}
             <button type="button" className="btn-secondary" disabled={activatePending} onClick={onActivate}>

@@ -11,9 +11,11 @@ import {
   isEmployeePortalUser,
   isItmInspectorUser
 } from "../shared/auth/roles";
+import { canAccessSsmSection } from "../shared/auth/effective-permissions";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 import { AppSidebar, AppTopbar, type SidebarNavGroup } from "./AppSidebar";
 import { NavIcons } from "./nav-icons";
+import { SSM_SECTIONS, getSsmSection } from "../features/ssm/ssm-sections";
 
 function buildNavGroups(
   session: NonNullable<ReturnType<typeof useAuthSession>>,
@@ -58,10 +60,23 @@ function buildNavGroups(
     });
   }
 
-  const operations: SidebarNavGroup["items"] = [];
   if (hasBackoffice) {
-    operations.push({ to: "/ssm", label: t("nav.ssm"), icon: NavIcons.ssm(), end: true });
+    const ssmItems: SidebarNavGroup["items"] = [
+      { to: "/ssm", label: t("nav.ssmOverview"), icon: NavIcons.ssm(), end: true }
+    ];
+    for (const section of SSM_SECTIONS) {
+      if (!canAccessSsmSection(session.roles, section.id)) continue;
+      ssmItems.push({
+        to: section.path,
+        label: section.navLabel,
+        icon: NavIcons.ssm(),
+        end: true
+      });
+    }
+    groups.push({ title: t("nav.ssm"), items: ssmItems });
   }
+
+  const operations: SidebarNavGroup["items"] = [];
   if (isAdmin) {
     operations.push({ to: "/master-data", label: t("nav.masterData"), icon: NavIcons.masterData() });
     operations.push({ to: "/platform-admin", label: t("nav.admin"), icon: NavIcons.info() });
@@ -97,12 +112,17 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const pageTitle = useMemo(() => {
-    const base = location.pathname.split("/").filter(Boolean)[0];
+    const parts = location.pathname.split("/").filter(Boolean);
+    const base = parts[0];
     if (!base) return undefined;
+
+    if (base === "ssm") {
+      const section = getSsmSection(parts[1]);
+      return section?.title ?? t("nav.ssm");
+    }
 
     const titleByRoute: Record<string, string> = {
       portal: t("nav.portal"),
-      ssm: t("nav.ssm"),
       "master-data": t("nav.masterData"),
       "platform-admin": t("nav.admin"),
       chatbot: t("nav.communications"),

@@ -26,13 +26,13 @@ import {
 import {
   ACTIVE_STATUS_CARD_OPTIONS,
   MASTER_DATA_ADD_LABELS,
-  MASTER_DATA_CLOSE_FORM_CTA,
   PLACEMENT_CHANGE_REASONS,
   activeLabel,
   activeTone,
   formatDate,
   mutationErrorMessage
 } from "../master-data-shared";
+import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateEmployeePayload = {
   email: "",
@@ -226,10 +226,10 @@ export function MasterDataEmployeesPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
-              setShowForm((prev) => !prev);
+              setShowForm(true);
             }}
           >
-            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.employees}
+            {MASTER_DATA_ADD_LABELS.employees}
           </button>
         </div>
 
@@ -385,119 +385,130 @@ export function MasterDataEmployeesPanel() {
       </section>
 
       {showForm ? (
-        <form className="card form-stack comms-panel md-create-form" onSubmit={onCreate}>
-          <h3 className="card-title">Angajat nou</h3>
-          <div className="comms-form-row">
+        <MasterDataCreateModal
+          title="Angajat nou"
+          titleId="md-employee-create-title"
+          onClose={() => setShowForm(false)}
+          size="wide"
+        >
+          <form className="form-stack" onSubmit={onCreate}>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-emp-name">Nume complet *</label>
+                <input
+                  id="md-emp-name"
+                  value={form.fullName}
+                  onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-emp-email">E-mail *</label>
+                <input
+                  id="md-emp-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                  required
+                />
+              </div>
+            </div>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-emp-cnp">CNP</label>
+                <input id="md-emp-cnp" value={form.cnp ?? ""} onChange={(e) => setForm((p) => ({ ...p, cnp: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label htmlFor="md-emp-hire">Dată angajare</label>
+                <input
+                  id="md-emp-hire"
+                  type="date"
+                  value={form.hireDate ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, hireDate: e.target.value }))}
+                />
+              </div>
+            </div>
+            <FieldSelect
+              id="md-emp-create-worksite"
+              label="Punct de lucru"
+              value={form.worksiteId ?? ""}
+              onChange={(worksiteId) => setForm((p) => ({ ...p, worksiteId }))}
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={mapToOptions(
+                worksitesLookup.data?.items ?? [],
+                (w) => w.id,
+                (w) => `${w.code} — ${w.name}`
+              )}
+            />
+            <FieldSelect
+              id="md-emp-create-dep"
+              label="Departament"
+              value={form.departmentId ?? ""}
+              onChange={(departmentId) => setForm((p) => ({ ...p, departmentId }))}
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={mapToOptions(
+                departmentsLookup.data?.items ?? [],
+                (d) => d.id,
+                (d) => `${d.code} — ${d.name}`
+              )}
+            />
+            <FieldSelect
+              id="md-emp-create-job"
+              label="Post / funcție"
+              value={form.jobPositionId ?? ""}
+              onChange={(jobPositionId) => setForm((p) => ({ ...p, jobPositionId }))}
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={mapToOptions(
+                jobsLookup.data?.items ?? [],
+                (j) => j.id,
+                (j) => `${j.code} — ${j.name}`
+              )}
+            />
             <div className="field">
-              <label htmlFor="md-emp-name">Nume complet *</label>
-              <input
-                id="md-emp-name"
-                value={form.fullName}
-                onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
-                required
-              />
+              <label htmlFor="md-emp-create-password">Parolă cont autentificare *</label>
+              <div className="password-field-row">
+                <input
+                  id="md-emp-create-password"
+                  type={showCreatePassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.target.value)}
+                  placeholder="Minim 8 caractere"
+                  required
+                />
+                <PasswordToggleButton
+                  visible={showCreatePassword}
+                  onToggle={() => setShowCreatePassword((value) => !value)}
+                />
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="md-emp-email">E-mail *</label>
-              <input
-                id="md-emp-email"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                required
-              />
+            <OptionCardRadioGroup
+              name="md-emp-create-role"
+              legend="Rol la creare"
+              hint="Alege un singur rol pentru contul de autentificare al angajatului."
+              value={createRole}
+              onChange={(role) => setCreateRole(role as SystemRoleCode)}
+              options={roleCardOptions}
+            />
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={createTenantUser.isPending}>
+                {createTenantUser.isPending ? "Se salvează..." : "Salvează"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
             </div>
-          </div>
-          <div className="comms-form-row">
-            <div className="field">
-              <label htmlFor="md-emp-cnp">CNP</label>
-              <input id="md-emp-cnp" value={form.cnp ?? ""} onChange={(e) => setForm((p) => ({ ...p, cnp: e.target.value }))} />
-            </div>
-            <div className="field">
-              <label htmlFor="md-emp-hire">Dată angajare</label>
-              <input
-                id="md-emp-hire"
-                type="date"
-                value={form.hireDate ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, hireDate: e.target.value }))}
-              />
-            </div>
-          </div>
-          <FieldSelect
-            id="md-emp-create-worksite"
-            label="Punct de lucru"
-            value={form.worksiteId ?? ""}
-            onChange={(worksiteId) => setForm((p) => ({ ...p, worksiteId }))}
-            allowEmpty
-            emptyLabel="Neselectat"
-            options={mapToOptions(
-              worksitesLookup.data?.items ?? [],
-              (w) => w.id,
-              (w) => `${w.code} — ${w.name}`
-            )}
-          />
-          <FieldSelect
-            id="md-emp-create-dep"
-            label="Departament"
-            value={form.departmentId ?? ""}
-            onChange={(departmentId) => setForm((p) => ({ ...p, departmentId }))}
-            allowEmpty
-            emptyLabel="Neselectat"
-            options={mapToOptions(
-              departmentsLookup.data?.items ?? [],
-              (d) => d.id,
-              (d) => `${d.code} — ${d.name}`
-            )}
-          />
-          <FieldSelect
-            id="md-emp-create-job"
-            label="Post / funcție"
-            value={form.jobPositionId ?? ""}
-            onChange={(jobPositionId) => setForm((p) => ({ ...p, jobPositionId }))}
-            allowEmpty
-            emptyLabel="Neselectat"
-            options={mapToOptions(
-              jobsLookup.data?.items ?? [],
-              (j) => j.id,
-              (j) => `${j.code} — ${j.name}`
-            )}
-          />
-          <div className="field">
-            <label htmlFor="md-emp-create-password">Parolă cont autentificare *</label>
-            <div className="password-field-row">
-              <input
-                id="md-emp-create-password"
-                type={showCreatePassword ? "text" : "password"}
-                autoComplete="new-password"
-                minLength={8}
-                value={createPassword}
-                onChange={(e) => setCreatePassword(e.target.value)}
-                placeholder="Minim 8 caractere"
-                required
-              />
-              <PasswordToggleButton
-                visible={showCreatePassword}
-                onToggle={() => setShowCreatePassword((value) => !value)}
-              />
-            </div>
-          </div>
-          <OptionCardRadioGroup
-            name="md-emp-create-role"
-            legend="Rol la creare"
-            hint="Alege un singur rol pentru contul de autentificare al angajatului."
-            value={createRole}
-            onChange={(role) => setCreateRole(role as SystemRoleCode)}
-            options={roleCardOptions}
-          />
-          <div className="comms-compose-actions">
-            <button className="btn-primary" type="submit" disabled={createTenantUser.isPending}>
-              {createTenantUser.isPending ? "Se salvează..." : "Salvează"}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-              Anulează
-            </button>
-          </div>
-        </form>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
 
       {selectedId ? (

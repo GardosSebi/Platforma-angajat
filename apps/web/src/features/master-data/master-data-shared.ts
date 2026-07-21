@@ -26,8 +26,6 @@ export interface LegalEntityItem {
   worksites?: LegalEntityWorksiteItem[];
 }
 
-export const MASTER_DATA_CLOSE_FORM_CTA = "Închide";
-
 /** Etichete buton adăugare — „Adaugă” + numele secțiunii (fără „+”). */
 export const MASTER_DATA_ADD_LABELS = {
   employees: "Adaugă angajat",

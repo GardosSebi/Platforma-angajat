@@ -1,5 +1,4 @@
-import { Navigate } from "react-router-dom";
-import { SsmDashboardPage } from "../features/ssm/pages/SsmDashboardPage";
+import { Navigate, Outlet } from "react-router-dom";
 import { useAuthSession } from "../shared/auth/use-auth-session";
 import {
   getAppHomePath,
@@ -19,5 +18,5 @@ export function SsmBackofficeRoute() {
   if (!hasSsmBackofficeAccess(session)) {
     return <Navigate to={getAppHomePath(session)} replace />;
   }
-  return <SsmDashboardPage />;
+  return <Outlet />;
 }

@@ -191,3 +191,39 @@ export class AddTicketCommentDto {
   @IsBoolean()
   internal?: boolean;
 }
+
+export class CreateTicketFromEmailDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(320)
+  fromEmail!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  fromName?: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(180)
+  subject!: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(8000)
+  body!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  category?: string;
+
+  @IsOptional()
+  @IsIn(TICKET_PRIORITIES)
+  priority?: TicketPriorityCode;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  messageId?: string;
+}

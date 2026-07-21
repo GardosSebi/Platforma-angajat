@@ -1,8 +1,21 @@
 import { FormEvent, useMemo, useState, type DragEvent } from "react";
-import type { CreateHelpdeskTicketRequest, HelpdeskTicketItem, HelpdeskTicketStatus } from "@repo/shared-types/ticketing";
+import type {
+  CreateHelpdeskTicketFromEmailRequest,
+  CreateHelpdeskTicketRequest,
+  HelpdeskTicketItem,
+  HelpdeskTicketStatus
+} from "@repo/shared-types/ticketing";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 import type { TicketFilters } from "../api/ticketing.api";
-import { useAssignTicket, useCreateTicket, useMoveTicket, useTicketingKanban, useTicketingStats, useTicketOperatorOptions } from "../hooks/useTicketing";
+import {
+  useAssignTicket,
+  useCreateTicket,
+  useCreateTicketFromEmail,
+  useMoveTicket,
+  useTicketingKanban,
+  useTicketingStats,
+  useTicketOperatorOptions
+} from "../hooks/useTicketing";
 import { TicketCreateForm } from "../components/TicketCreateForm";
 import { TicketDetailModal } from "../components/TicketDetailModal";
 import { TicketKanbanPanel } from "../components/TicketKanbanPanel";
@@ -22,22 +35,32 @@ const EMPTY_TICKET: CreateHelpdeskTicketRequest = {
   dueAt: ""
 };
 
+const EMPTY_EMAIL_TICKET: CreateHelpdeskTicketFromEmailRequest = {
+  fromEmail: "",
+  fromName: "",
+  subject: "",
+  body: ""
+};
+
 export function TicketingPage() {
   const employeesQuery = useEmployeeOptions();
   const [tab, setTab] = useState<TicketingTab>("board");
   const [viewMode, setViewMode] = useState<TicketViewMode>("kanban");
   const [filters, setFilters] = useState<TicketFilters>({});
   const [ticketForm, setTicketForm] = useState<CreateHelpdeskTicketRequest>(EMPTY_TICKET);
+  const [emailForm, setEmailForm] = useState<CreateHelpdeskTicketFromEmailRequest>(EMPTY_EMAIL_TICKET);
   const [assignByTicketId, setAssignByTicketId] = useState<Record<string, { assignedToUserId: string; assignedToName: string }>>({});
   const [draggedTicket, setDraggedTicket] = useState<{ id: string; status: HelpdeskTicketStatus } | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<HelpdeskTicketStatus | null>(null);
   const [openedTicketId, setOpenedTicketId] = useState("");
   const [createFeedback, setCreateFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [emailFeedback, setEmailFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const kanbanQuery = useTicketingKanban(filters);
   const statsQuery = useTicketingStats();
   const operators = useTicketOperatorOptions();
   const createTicket = useCreateTicket();
+  const createTicketFromEmail = useCreateTicketFromEmail();
   const moveTicket = useMoveTicket();
   const assignTicket = useAssignTicket();
 
@@ -94,6 +117,29 @@ export function TicketingPage() {
         },
         onError: (error) => {
           setCreateFeedback({ type: "error", message: mutationErrorMessage(error) });
+        }
+      }
+    );
+  };
+
+  const onEmailSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    setEmailFeedback(null);
+    createTicketFromEmail.mutate(
+      {
+        fromEmail: emailForm.fromEmail.trim(),
+        fromName: emailForm.fromName?.trim() || undefined,
+        subject: emailForm.subject.trim(),
+        body: emailForm.body.trim()
+      },
+      {
+        onSuccess: () => {
+          setEmailForm(EMPTY_EMAIL_TICKET);
+          setEmailFeedback({ type: "success", message: "Tichet creat din email." });
+          setTab("board");
+        },
+        onError: (error) => {
+          setEmailFeedback({ type: "error", message: mutationErrorMessage(error) });
         }
       }
     );
@@ -202,11 +248,14 @@ export function TicketingPage() {
           draggedTicketId={draggedTicket?.id ?? null}
           dragOverStatus={dragOverStatus}
           openedTicketId={openedTicketId}
+          operators={operators}
+          employees={employees}
           onViewModeChange={setViewMode}
           onFiltersChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
           onClearFilters={() => setFilters({})}
           onCreateClick={() => {
             setCreateFeedback(null);
+            setEmailFeedback(null);
             setTab("create");
           }}
           onOpenTicket={setOpenedTicketId}
@@ -222,18 +271,88 @@ export function TicketingPage() {
       ) : null}
 
       {tab === "create" ? (
-        <TicketCreateForm
-          form={ticketForm}
-          employees={employees}
-          operators={operators}
-          isPending={createTicket.isPending}
-          feedback={createFeedback}
-          onChange={(patch) => setTicketForm((prev) => ({ ...prev, ...patch }))}
-          onReporterChange={onReporterChange}
-          onOperatorChange={onOperatorChange}
-          onSubmit={onTicketSubmit}
-          onCancel={() => setTab("board")}
-        />
+        <div className="form-stack">
+          <TicketCreateForm
+            form={ticketForm}
+            employees={employees}
+            operators={operators}
+            isPending={createTicket.isPending}
+            feedback={createFeedback}
+            onChange={(patch) => setTicketForm((prev) => ({ ...prev, ...patch }))}
+            onReporterChange={onReporterChange}
+            onOperatorChange={onOperatorChange}
+            onSubmit={onTicketSubmit}
+            onCancel={() => setTab("board")}
+          />
+
+          <form className="card form-stack comms-panel ticket-create-form" onSubmit={onEmailSubmit}>
+            <div className="comms-compose-head">
+              <div>
+                <h2 className="card-title">Înregistrează din email</h2>
+                <p className="comms-toolbar-hint">Creează un tichet pe baza unui mesaj email primit.</p>
+              </div>
+            </div>
+
+            <fieldset className="comms-fieldset">
+              <legend>Email</legend>
+              <div className="comms-form-row">
+                <div className="field">
+                  <label htmlFor="email-from">De la (email) *</label>
+                  <input
+                    id="email-from"
+                    type="email"
+                    value={emailForm.fromEmail}
+                    onChange={(event) => setEmailForm((prev) => ({ ...prev, fromEmail: event.target.value }))}
+                    placeholder="ex: angajat@companie.ro"
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="email-from-name">Nume expeditor</label>
+                  <input
+                    id="email-from-name"
+                    value={emailForm.fromName ?? ""}
+                    onChange={(event) => setEmailForm((prev) => ({ ...prev, fromName: event.target.value }))}
+                    placeholder="Nume afișat"
+                  />
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="email-subject">Subiect *</label>
+                <input
+                  id="email-subject"
+                  value={emailForm.subject}
+                  onChange={(event) => setEmailForm((prev) => ({ ...prev, subject: event.target.value }))}
+                  placeholder="Subiectul mesajului"
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="email-body">Conținut *</label>
+                <textarea
+                  id="email-body"
+                  value={emailForm.body}
+                  onChange={(event) => setEmailForm((prev) => ({ ...prev, body: event.target.value }))}
+                  placeholder="Corpul mesajului email..."
+                  rows={4}
+                  required
+                />
+              </div>
+            </fieldset>
+
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={createTicketFromEmail.isPending}>
+                {createTicketFromEmail.isPending ? "Se înregistrează..." : "Înregistrează din email"}
+              </button>
+            </div>
+
+            {emailFeedback ? (
+              <div className={`feedback ${emailFeedback.type}`} role={emailFeedback.type === "error" ? "alert" : "status"}>
+                {emailFeedback.message}
+              </div>
+            ) : null}
+          </form>
+        </div>
       ) : null}
 
       {tab === "stats" ? (

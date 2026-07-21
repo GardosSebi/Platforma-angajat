@@ -1,8 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { isWorksiteScopedViewer } from "../../../shared/auth/worksite-scope";
-import type { CreateCommunicationTemplateRequest } from "@repo/shared-types/communications";
+import type {
+  CommunicationTemplateItem,
+  CreateCommunicationTemplateRequest
+} from "@repo/shared-types/communications";
 import {
   useDepartmentsLookup,
   useEmployeeOptions,
@@ -25,11 +29,13 @@ import {
   useCreateAnnouncement,
   useCreateCommunicationTemplate,
   useDeleteAnnouncement,
+  useDeleteCommunicationTemplate,
   useDispatchCommunicationReminders,
   useDuplicateAnnouncement,
   usePublishAnnouncement,
   useRetractAnnouncement,
   useUpdateAnnouncement,
+  useUpdateCommunicationTemplate,
   useUsageSummary
 } from "../hooks/useChatbot";
 import {
@@ -66,6 +72,7 @@ const EMPTY_ANNOUNCEMENT: AnnouncementFormState = {
   expiresAt: "",
   reminderAt: "",
   contentUrl: "",
+  reactionsEnabled: false,
   targetEmployeeIdsCsv: "",
   translationRoTitle: "",
   translationRoBody: "",
@@ -83,6 +90,7 @@ const EMPTY_TEMPLATE: CreateCommunicationTemplateRequest = {
 };
 
 export function ChatbotPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const session = useAuthSession();
   const roles = session?.roles;
@@ -95,7 +103,7 @@ export function ChatbotPage() {
   const worksiteRestricted = isWorksiteScopedViewer(session?.roles);
 
   const audienceTypesForForm = useMemo(
-    () => (worksiteRestricted ? AUDIENCE_TYPES.filter((t) => t !== "ALL") : AUDIENCE_TYPES),
+    () => (worksiteRestricted ? AUDIENCE_TYPES.filter((type) => type !== "ALL") : AUDIENCE_TYPES),
     [worksiteRestricted]
   );
 
@@ -127,12 +135,15 @@ export function ChatbotPage() {
   const duplicateAnnouncement = useDuplicateAnnouncement();
   const dispatchReminders = useDispatchCommunicationReminders();
   const createTemplate = useCreateCommunicationTemplate();
+  const updateTemplate = useUpdateCommunicationTemplate();
+  const deleteTemplate = useDeleteCommunicationTemplate();
 
   const [tab, setTab] = useState<CommsTab>("list");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [announcementForm, setAnnouncementForm] = useState<AnnouncementFormState>(EMPTY_ANNOUNCEMENT);
   const [templateForm, setTemplateForm] = useState<CreateCommunicationTemplateRequest>(EMPTY_TEMPLATE);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [announcementFeedback, setAnnouncementFeedback] = useState<FeedbackState | null>(null);
   const [templateFeedback, setTemplateFeedback] = useState<FeedbackState | null>(null);
@@ -207,19 +218,36 @@ export function ChatbotPage() {
     .join(", ");
 
   const tabs = useMemo(() => {
-    const items: Array<{ id: CommsTab; label: string }> = [{ id: "list", label: "Anunțuri" }];
+    const items: Array<{ id: CommsTab; label: string }> = [
+      { id: "list", label: t("comms.tabs.announcements") }
+    ];
     if (canEditAnnouncements) {
-      items.push({ id: "compose", label: editingAnnouncementId ? "Editează anunț" : "Anunț nou" });
+      items.push({
+        id: "compose",
+        label: editingAnnouncementId ? t("comms.tabs.editCompose") : t("comms.tabs.compose")
+      });
     }
-    if (canEditTemplates) items.push({ id: "templates", label: "Șabloane" });
-    if (canViewDashboard) items.push({ id: "calendar", label: "Calendar" });
-    if (canViewUsage) items.push({ id: "usage", label: "Rapoarte" });
-    if (canManagePublishRights) items.push({ id: "rights", label: "Drepturi" });
+    if (canEditTemplates) items.push({ id: "templates", label: t("comms.tabs.templates") });
+    if (canViewDashboard) items.push({ id: "calendar", label: t("comms.tabs.calendar") });
+    if (canViewUsage) items.push({ id: "usage", label: t("comms.tabs.usage") });
+    if (canManagePublishRights) items.push({ id: "rights", label: t("comms.tabs.rights") });
     if (canEditAnnouncements || reminders.length > 0) {
-      items.push({ id: "reminders", label: `Mementouri${reminders.length ? ` (${reminders.length})` : ""}` });
+      items.push({
+        id: "reminders",
+        label: `${t("comms.tabs.reminders")}${reminders.length ? ` (${reminders.length})` : ""}`
+      });
     }
     return items;
-  }, [canEditAnnouncements, canEditTemplates, canManagePublishRights, canViewDashboard, canViewUsage, editingAnnouncementId, reminders.length]);
+  }, [
+    canEditAnnouncements,
+    canEditTemplates,
+    canManagePublishRights,
+    canViewDashboard,
+    canViewUsage,
+    editingAnnouncementId,
+    reminders.length,
+    t
+  ]);
 
   const resetCompose = () => {
     setAnnouncementForm(EMPTY_ANNOUNCEMENT);
@@ -227,6 +255,12 @@ export function ChatbotPage() {
     setEditingAnnouncementId("");
     setAnnouncementFeedback(null);
     setTab("list");
+  };
+
+  const resetTemplateForm = () => {
+    setTemplateForm(EMPTY_TEMPLATE);
+    setEditingTemplateId(null);
+    setTemplateFeedback(null);
   };
 
   const selectTemplate = (templateId: string) => {
@@ -301,26 +335,74 @@ export function ChatbotPage() {
     });
   };
 
+  const onEditTemplate = (template: CommunicationTemplateItem) => {
+    setEditingTemplateId(template.id);
+    setTemplateForm({
+      name: template.name,
+      title: template.title,
+      body: template.body,
+      category: template.category,
+      contentType: template.contentType,
+      contentUrl: template.contentUrl ?? "",
+      audienceType: template.audienceType,
+      audienceRefId: template.audienceRefId ?? "",
+      audienceLabel: template.audienceLabel ?? "",
+      active: template.active
+    });
+    setTemplateFeedback(null);
+  };
+
   const onTemplateSubmit = (event: FormEvent) => {
     event.preventDefault();
     setTemplateFeedback(null);
-    createTemplate.mutate(
-      {
-        ...templateForm,
-        contentUrl: templateForm.contentUrl || undefined,
-        audienceRefId: templateForm.audienceRefId || undefined,
-        audienceLabel: templateForm.audienceLabel || undefined
-      },
-      {
-        onSuccess: () => {
-          setTemplateForm(EMPTY_TEMPLATE);
-          setTemplateFeedback({ type: "success", message: "Șablon salvat." });
-        },
-        onError: (error) => {
-          setTemplateFeedback({ type: "error", message: mutationErrorMessage(error) });
+    const payload = {
+      ...templateForm,
+      contentUrl: templateForm.contentUrl || undefined,
+      audienceRefId: templateForm.audienceRefId || undefined,
+      audienceLabel: templateForm.audienceLabel || undefined
+    };
+    const onError = (error: unknown) => {
+      setTemplateFeedback({ type: "error", message: mutationErrorMessage(error) });
+    };
+
+    if (editingTemplateId) {
+      updateTemplate.mutate(
+        { id: editingTemplateId, payload },
+        {
+          onSuccess: () => {
+            setTemplateForm(EMPTY_TEMPLATE);
+            setEditingTemplateId(null);
+            setTemplateFeedback({ type: "success", message: "Șablon actualizat." });
+          },
+          onError
         }
+      );
+      return;
+    }
+
+    createTemplate.mutate(payload, {
+      onSuccess: () => {
+        setTemplateForm(EMPTY_TEMPLATE);
+        setTemplateFeedback({ type: "success", message: "Șablon salvat." });
+      },
+      onError
+    });
+  };
+
+  const onDeleteTemplate = (id: string) => {
+    if (!window.confirm("Sigur vrei să ștergi acest șablon?")) return;
+    setTemplateFeedback(null);
+    deleteTemplate.mutate(id, {
+      onSuccess: () => {
+        if (editingTemplateId === id) {
+          resetTemplateForm();
+        }
+        setTemplateFeedback({ type: "success", message: "Șablon șters." });
+      },
+      onError: (error: unknown) => {
+        setTemplateFeedback({ type: "error", message: mutationErrorMessage(error) });
       }
-    );
+    });
   };
 
   const runDelete = (announcementId: string) => {
@@ -361,8 +443,8 @@ export function ChatbotPage() {
     <div className="comms-page">
       <header className="comms-header">
         <div>
-          <h1 className="page-title">Comunicări</h1>
-          <p className="page-lead">Publică mesaje, programează mementouri și urmărește rata de citire.</p>
+          <h1 className="page-title">{t("comms.title")}</h1>
+          <p className="page-lead">{t("comms.lead")}</p>
         </div>
       </header>
 
@@ -443,7 +525,7 @@ export function ChatbotPage() {
         <CommsAnnouncementForm
           mode={editingAnnouncementId ? "edit" : "create"}
           form={announcementForm}
-          templates={templates.map((t) => ({ id: t.id, name: t.name }))}
+          templates={templates.map((tmpl) => ({ id: tmpl.id, name: tmpl.name }))}
           audienceTypes={audienceTypesForForm}
           audienceOptions={audienceOptions}
           employeeNameHint={employeeNameHint}
@@ -463,12 +545,16 @@ export function ChatbotPage() {
 
       {tab === "templates" && canEditTemplates ? (
         <CommsTemplatesPanel
+          templates={templates}
           form={templateForm}
-          templateCount={templates.length}
-          isPending={createTemplate.isPending}
+          isPending={createTemplate.isPending || updateTemplate.isPending || deleteTemplate.isPending}
           feedback={templateFeedback}
           onChange={(patch) => setTemplateForm((prev) => ({ ...prev, ...patch }))}
           onSubmit={onTemplateSubmit}
+          editingId={editingTemplateId}
+          onEdit={onEditTemplate}
+          onCancelEdit={resetTemplateForm}
+          onDelete={onDeleteTemplate}
         />
       ) : null}
 

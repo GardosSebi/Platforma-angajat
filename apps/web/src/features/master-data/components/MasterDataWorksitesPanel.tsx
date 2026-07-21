@@ -3,7 +3,8 @@ import type { CreateWorksitePayload, WorksiteItem } from "../api/master-data.api
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { useCreateWorksite, useWorksites } from "../hooks/useMasterData";
-import { MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MASTER_DATA_ADD_LABELS, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateWorksitePayload = {
   code: "",
@@ -60,10 +61,10 @@ export function MasterDataWorksitesPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
-              setShowForm((prev) => !prev);
+              setShowForm(true);
             }}
           >
-            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.worksites}
+            {MASTER_DATA_ADD_LABELS.worksites}
           </button>
         </div>
 
@@ -142,53 +143,58 @@ export function MasterDataWorksitesPanel() {
       </section>
 
       {showForm ? (
-        <form className="card form-stack comms-panel md-create-form" onSubmit={onSubmit}>
-          <h3 className="card-title">Punct de lucru nou</h3>
-          <div className="comms-form-row">
-            <div className="field">
-              <label htmlFor="md-worksite-code">Cod *</label>
-              <input
-                id="md-worksite-code"
-                value={form.code}
-                onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
-                placeholder="Ex: HQ"
-                required
-              />
+        <MasterDataCreateModal
+          title="Punct de lucru nou"
+          titleId="md-worksite-create-title"
+          onClose={() => setShowForm(false)}
+        >
+          <form className="form-stack" onSubmit={onSubmit}>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-worksite-code">Cod *</label>
+                <input
+                  id="md-worksite-code"
+                  value={form.code}
+                  onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
+                  placeholder="Ex: HQ"
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-worksite-name">Denumire *</label>
+                <input
+                  id="md-worksite-name"
+                  value={form.name}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Ex: Sediu central"
+                  required
+                />
+              </div>
             </div>
             <div className="field">
-              <label htmlFor="md-worksite-name">Denumire *</label>
+              <label htmlFor="md-worksite-address">Adresă</label>
               <input
-                id="md-worksite-name"
-                value={form.name}
-                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Ex: Sediu central"
-                required
+                id="md-worksite-address"
+                value={form.address ?? ""}
+                onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+                placeholder="Strada, oraș..."
               />
             </div>
-          </div>
-          <div className="field">
-            <label htmlFor="md-worksite-address">Adresă</label>
-            <input
-              id="md-worksite-address"
-              value={form.address ?? ""}
-              onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
-              placeholder="Strada, oraș..."
-            />
-          </div>
-          <div className="comms-compose-actions">
-            <button className="btn-primary" type="submit" disabled={createWorksite.isPending}>
-              {createWorksite.isPending ? "Se salvează..." : "Salvează"}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-              Anulează
-            </button>
-          </div>
-          {feedback ? (
-            <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
-              {feedback.message}
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={createWorksite.isPending}>
+                {createWorksite.isPending ? "Se salvează..." : "Salvează"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
             </div>
-          ) : null}
-        </form>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
     </>
   );

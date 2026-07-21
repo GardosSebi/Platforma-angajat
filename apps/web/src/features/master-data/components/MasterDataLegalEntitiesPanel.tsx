@@ -6,7 +6,8 @@ import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { useCreateLegalEntity, useLegalEntities, useWorksitesLookup } from "../hooks/useMasterData";
 import type { LegalEntityItem } from "../master-data-shared";
-import { MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MASTER_DATA_ADD_LABELS, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateLegalEntityPayload = {
   code: "",
@@ -130,10 +131,10 @@ export function MasterDataLegalEntitiesPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
-              setShowForm((prev) => !prev);
+              setShowForm(true);
             }}
           >
-            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS["legal-entities"]}
+            {MASTER_DATA_ADD_LABELS["legal-entities"]}
           </button>
         </div>
 
@@ -218,113 +219,117 @@ export function MasterDataLegalEntitiesPanel() {
       </section>
 
       {showForm ? (
-        <form className="card form-stack comms-panel md-create-form" onSubmit={onSubmit}>
-          <h3 className="card-title">Entitate juridică nouă</h3>
-          <p className="comms-toolbar-hint">Asociază entitatea cu unul sau mai multe puncte de lucru existente.</p>
+        <MasterDataCreateModal
+          title="Entitate juridică nouă"
+          titleId="md-legal-entity-create-title"
+          description="Asociază entitatea cu unul sau mai multe puncte de lucru existente."
+          onClose={() => setShowForm(false)}
+        >
+          <form className="form-stack" onSubmit={onSubmit}>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-legal-entity-code">Cod entitate *</label>
+                <input
+                  id="md-legal-entity-code"
+                  value={form.code}
+                  onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
+                  placeholder="Ex: E01"
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-legal-entity-name">Denumire *</label>
+                <input
+                  id="md-legal-entity-name"
+                  value={form.name}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Ex: Firma SRL"
+                  required
+                />
+              </div>
+            </div>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-legal-entity-cui">CUI</label>
+                <input
+                  id="md-legal-entity-cui"
+                  value={form.cui ?? ""}
+                  onChange={(event) => setForm((prev) => ({ ...prev, cui: event.target.value }))}
+                  placeholder="Ex: RO12345678"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-legal-entity-headquarters">Sediu social</label>
+                <input
+                  id="md-legal-entity-headquarters"
+                  value={form.headquarters ?? ""}
+                  onChange={(event) => setForm((prev) => ({ ...prev, headquarters: event.target.value }))}
+                  placeholder="Oraș, adresă..."
+                />
+              </div>
+            </div>
 
-          <div className="comms-form-row">
-            <div className="field">
-              <label htmlFor="md-legal-entity-code">Cod entitate *</label>
-              <input
-                id="md-legal-entity-code"
-                value={form.code}
-                onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
-                placeholder="Ex: E01"
-                required
+            <div className="comms-form-row">
+              <FieldSelect
+                id="md-legal-entity-worksite"
+                label="Punct de lucru *"
+                value={selectedWorksiteId}
+                onChange={setSelectedWorksiteId}
+                allowEmpty
+                emptyLabel="Selectează punct de lucru"
+                options={availableWorksiteOptions}
+                hint={
+                  worksitesLookup.isLoading
+                    ? "Se încarcă punctele de lucru..."
+                    : availableWorksiteOptions.length
+                      ? "Alege un punct de lucru și apasă Adaugă."
+                      : "Nu există puncte de lucru disponibile. Creează-le din tab-ul Puncte de lucru."
+                }
               />
+              <div className="field">
+                <label htmlFor="md-legal-entity-add-worksite">&nbsp;</label>
+                <button
+                  id="md-legal-entity-add-worksite"
+                  type="button"
+                  className="btn-secondary"
+                  onClick={addWorksite}
+                  disabled={!selectedWorksiteId}
+                >
+                  Adaugă
+                </button>
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="md-legal-entity-name">Denumire *</label>
-              <input
-                id="md-legal-entity-name"
-                value={form.name}
-                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Ex: Firma SRL"
-                required
-              />
-            </div>
-          </div>
-          <div className="comms-form-row">
-            <div className="field">
-              <label htmlFor="md-legal-entity-cui">CUI</label>
-              <input
-                id="md-legal-entity-cui"
-                value={form.cui ?? ""}
-                onChange={(event) => setForm((prev) => ({ ...prev, cui: event.target.value }))}
-                placeholder="Ex: RO12345678"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="md-legal-entity-headquarters">Sediu social</label>
-              <input
-                id="md-legal-entity-headquarters"
-                value={form.headquarters ?? ""}
-                onChange={(event) => setForm((prev) => ({ ...prev, headquarters: event.target.value }))}
-                placeholder="Oraș, adresă..."
-              />
-            </div>
-          </div>
 
-          <div className="comms-form-row">
-            <FieldSelect
-              id="md-legal-entity-worksite"
-              label="Punct de lucru *"
-              value={selectedWorksiteId}
-              onChange={setSelectedWorksiteId}
-              allowEmpty
-              emptyLabel="Selectează punct de lucru"
-              options={availableWorksiteOptions}
-              hint={
-                worksitesLookup.isLoading
-                  ? "Se încarcă punctele de lucru..."
-                  : availableWorksiteOptions.length
-                    ? "Alege un punct de lucru și apasă Adaugă."
-                    : "Nu există puncte de lucru disponibile. Creează-le din tab-ul Puncte de lucru."
-              }
-            />
-            <div className="field">
-              <label htmlFor="md-legal-entity-add-worksite">&nbsp;</label>
-              <button
-                id="md-legal-entity-add-worksite"
-                type="button"
-                className="btn-secondary"
-                onClick={addWorksite}
-                disabled={!selectedWorksiteId}
-              >
-                Adaugă
+            {selectedWorksites.length ? (
+              <ul className="data-list">
+                {selectedWorksites.map((worksite) => (
+                  <li key={worksite.id}>
+                    <strong>{worksite.code}</strong> — {worksite.name}
+                    <button type="button" className="btn-text" onClick={() => removeWorksite(worksite.id)}>
+                      Elimină
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="field-hint">Niciun punct de lucru selectat încă.</p>
+            )}
+
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={createLegalEntity.isPending}>
+                {createLegalEntity.isPending ? "Se salvează..." : "Salvează"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
               </button>
             </div>
-          </div>
-
-          {selectedWorksites.length ? (
-            <ul className="data-list">
-              {selectedWorksites.map((worksite) => (
-                <li key={worksite.id}>
-                  <strong>{worksite.code}</strong> — {worksite.name}
-                  <button type="button" className="btn-text" onClick={() => removeWorksite(worksite.id)}>
-                    Elimină
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="field-hint">Niciun punct de lucru selectat încă.</p>
-          )}
-
-          <div className="comms-compose-actions">
-            <button className="btn-primary" type="submit" disabled={createLegalEntity.isPending}>
-              {createLegalEntity.isPending ? "Se salvează..." : "Salvează"}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-              Anulează
-            </button>
-          </div>
-          {feedback ? (
-            <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
-              {feedback.message}
-            </div>
-          ) : null}
-        </form>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
     </>
   );

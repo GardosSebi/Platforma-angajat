@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { PermissionsGuard } from "../../common/guards/permissions.guard";
+import { MailModule } from "../../infrastructure/mail/mail.module";
 import { NotificationsModule } from "../../infrastructure/notifications/notifications.module";
 import { CommunicationsController } from "./api/communications.controller";
 import { CommunicationRightsController } from "./api/communication-rights.controller";
@@ -7,7 +8,7 @@ import { CommunicationsService } from "./application/services/communications.ser
 import { CommunicationRightsService } from "./application/services/communication-rights.service";
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, MailModule],
   controllers: [CommunicationsController, CommunicationRightsController],
   providers: [PermissionsGuard, CommunicationsService, CommunicationRightsService],
   exports: [CommunicationsService, CommunicationRightsService]

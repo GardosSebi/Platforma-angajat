@@ -12,6 +12,7 @@ import {
   AddTicketCommentDto,
   AssignTicketDto,
   CreateTicketDto,
+  CreateTicketFromEmailDto,
   ListTicketsDto,
   MoveTicketDto,
   UpdateTicketDto
@@ -49,6 +50,16 @@ export class TicketingController {
   @RequirePermissions(Permission.TICKETS_EDIT)
   createTicketFromSurvey(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateTicketDto) {
     return this.ticketing.createTicket(tenantId, user.sub, { ...dto, source: "SURVEY" }, user);
+  }
+
+  @Post("tickets/from-email")
+  @RequirePermissions(Permission.TICKETS_EDIT)
+  createTicketFromEmail(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateTicketFromEmailDto
+  ) {
+    return this.ticketing.createTicketFromEmail(tenantId, user.sub, dto, user);
   }
 
   @Patch("tickets/:id")

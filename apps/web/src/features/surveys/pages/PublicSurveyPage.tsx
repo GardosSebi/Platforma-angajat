@@ -1,6 +1,6 @@
 import type { SurveyAnswerValue } from "@repo/shared-types/surveys";
 import { Link, useParams } from "react-router-dom";
-import { submitPublicSurveyResponse } from "../api/surveys.api";
+import { submitPublicSurveyResponse, uploadPublicAnswerFile } from "../api/surveys.api";
 import { SurveyFormFiller } from "../components/SurveyFormFiller";
 import { usePublicSurveyQuery } from "../hooks/useSurveys";
 
@@ -67,6 +67,10 @@ export function PublicSurveyPage() {
           questions={survey.questionSchema}
           conditionalLogic={survey.conditionalLogic}
           onSubmit={handleSubmit}
+          onUploadFile={async (file) => {
+            const uploaded = await uploadPublicAnswerFile(token, file);
+            return uploaded.answerValue;
+          }}
         />
       </div>
     </div>

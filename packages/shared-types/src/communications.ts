@@ -223,6 +223,19 @@ export interface CreateCommunicationTemplateRequest {
   active?: boolean;
 }
 
+export interface UpdateCommunicationTemplateRequest {
+  name?: string;
+  title?: string;
+  body?: string;
+  category?: CommunicationCategory;
+  contentType?: CommunicationContentType;
+  contentUrl?: string | null;
+  audienceType?: CommunicationAudienceType;
+  audienceRefId?: string | null;
+  audienceLabel?: string | null;
+  active?: boolean;
+}
+
 export interface MarkCommunicationReadRequest {
   employeeId: string;
 }

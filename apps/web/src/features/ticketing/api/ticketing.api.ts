@@ -1,5 +1,6 @@
 import type {
   CreateHelpdeskTicketCommentRequest,
+  CreateHelpdeskTicketFromEmailRequest,
   CreateHelpdeskTicketRequest,
   HelpdeskKanbanResponse,
   HelpdeskStatsResponse,
@@ -50,6 +51,12 @@ export const ticketingApi = {
   },
   createTicketFromSurvey(payload: CreateHelpdeskTicketRequest) {
     return httpClient<HelpdeskTicketItem>("/ticketing/tickets/from-survey-response", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  createTicketFromEmail(payload: CreateHelpdeskTicketFromEmailRequest) {
+    return httpClient<HelpdeskTicketItem>("/ticketing/tickets/from-email", {
       method: "POST",
       body: JSON.stringify(payload)
     });

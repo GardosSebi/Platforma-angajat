@@ -5,7 +5,8 @@ import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { useCreateJobPosition, useDepartmentsLookup, useJobPositions, useLegalEntitiesLookup, useWorksitesLookup } from "../hooks/useMasterData";
-import { MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MASTER_DATA_ADD_LABELS, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateJobPositionPayload = {
   code: "",
@@ -91,10 +92,10 @@ export function MasterDataPositionsPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
-              setShowForm((prev) => !prev);
+              setShowForm(true);
             }}
           >
-            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.positions}
+            {MASTER_DATA_ADD_LABELS.positions}
           </button>
         </div>
 
@@ -179,106 +180,107 @@ export function MasterDataPositionsPanel() {
       </section>
 
       {showForm ? (
-        <form className="card form-stack comms-panel md-create-form" onSubmit={onSubmit}>
-          <h3 className="card-title">Post nou</h3>
-          <div className="comms-form-row">
-            <div className="field">
-              <label htmlFor="md-job-code">Cod *</label>
-              <input
-                id="md-job-code"
-                value={form.code}
-                onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
-                placeholder="Ex: DEV01"
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="md-job-name">Denumire *</label>
-              <input
-                id="md-job-name"
-                value={form.name}
-                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Ex: Dezvoltator software"
-                required
-              />
-            </div>
-          </div>
-          <FieldSelect
-            id="md-job-entity"
-            label="Entitate juridică"
-            value={form.legalEntityId ?? ""}
-            onChange={(legalEntityId) => setForm((prev) => ({ ...prev, legalEntityId }))}
-            allowEmpty
-            emptyLabel="Neselectată"
-            options={mapToOptions(
-              legalEntitiesLookup.data?.items ?? [],
-              (entity) => entity.id,
-              (entity) => `${entity.code} - ${entity.name}`
-            )}
-          />
-          <FieldSelect
-            id="md-job-worksite"
-            label="Punct de lucru"
-            value={form.worksiteId ?? ""}
-            onChange={(worksiteId) => setForm((prev) => ({ ...prev, worksiteId }))}
-            allowEmpty
-            emptyLabel="Neselectat"
-            options={mapToOptions(
-              worksitesLookup.data?.items ?? [],
-              (worksite) => worksite.id,
-              (worksite) => `${worksite.code} - ${worksite.name}`
-            )}
-          />
-          <FieldSelect
-            id="md-job-department"
-            label="Departament (opțional)"
-            value={form.departmentId ?? ""}
-            onChange={(departmentId) => setForm((prev) => ({ ...prev, departmentId }))}
-            allowEmpty
-            emptyLabel="Neselectat"
-            options={mapToOptions(
-              departmentsLookup.data?.items ?? [],
-              (department) => department.id,
-              (department) => `${department.code} - ${department.name}`
-            )}
-          />
-          <details className="comms-advanced">
-            <summary>Câmpuri opționale</summary>
+        <MasterDataCreateModal title="Post nou" titleId="md-position-create-title" onClose={() => setShowForm(false)}>
+          <form className="form-stack" onSubmit={onSubmit}>
             <div className="comms-form-row">
               <div className="field">
-                <label htmlFor="md-job-cor">Cod COR</label>
+                <label htmlFor="md-job-code">Cod *</label>
                 <input
-                  id="md-job-cor"
-                  value={form.corCode ?? ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, corCode: event.target.value }))}
-                  placeholder="Ex: 251201"
+                  id="md-job-code"
+                  value={form.code}
+                  onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
+                  placeholder="Ex: DEV01"
+                  required
                 />
               </div>
               <div className="field">
-                <label htmlFor="md-job-description">Descriere</label>
+                <label htmlFor="md-job-name">Denumire *</label>
                 <input
-                  id="md-job-description"
-                  value={form.description ?? ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-                  placeholder="Scurtă descriere..."
+                  id="md-job-name"
+                  value={form.name}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Ex: Dezvoltator software"
+                  required
                 />
               </div>
             </div>
-          </details>
-          <div className="comms-compose-actions">
-            <button className="btn-primary" type="submit" disabled={createJobPosition.isPending}>
-              {createJobPosition.isPending ? "Se salvează..." : "Salvează"}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-              Anulează
-            </button>
-          </div>
-          {feedback ? (
-            <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
-              {feedback.message}
+            <FieldSelect
+              id="md-job-entity"
+              label="Entitate juridică"
+              value={form.legalEntityId ?? ""}
+              onChange={(legalEntityId) => setForm((prev) => ({ ...prev, legalEntityId }))}
+              allowEmpty
+              emptyLabel="Neselectată"
+              options={mapToOptions(
+                legalEntitiesLookup.data?.items ?? [],
+                (entity) => entity.id,
+                (entity) => `${entity.code} - ${entity.name}`
+              )}
+            />
+            <FieldSelect
+              id="md-job-worksite"
+              label="Punct de lucru"
+              value={form.worksiteId ?? ""}
+              onChange={(worksiteId) => setForm((prev) => ({ ...prev, worksiteId }))}
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={mapToOptions(
+                worksitesLookup.data?.items ?? [],
+                (worksite) => worksite.id,
+                (worksite) => `${worksite.code} - ${worksite.name}`
+              )}
+            />
+            <FieldSelect
+              id="md-job-department"
+              label="Departament (opțional)"
+              value={form.departmentId ?? ""}
+              onChange={(departmentId) => setForm((prev) => ({ ...prev, departmentId }))}
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={mapToOptions(
+                departmentsLookup.data?.items ?? [],
+                (department) => department.id,
+                (department) => `${department.code} - ${department.name}`
+              )}
+            />
+            <details className="comms-advanced">
+              <summary>Câmpuri opționale</summary>
+              <div className="comms-form-row">
+                <div className="field">
+                  <label htmlFor="md-job-cor">Cod COR</label>
+                  <input
+                    id="md-job-cor"
+                    value={form.corCode ?? ""}
+                    onChange={(event) => setForm((prev) => ({ ...prev, corCode: event.target.value }))}
+                    placeholder="Ex: 251201"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="md-job-description">Descriere</label>
+                  <input
+                    id="md-job-description"
+                    value={form.description ?? ""}
+                    onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                    placeholder="Scurtă descriere..."
+                  />
+                </div>
+              </div>
+            </details>
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={createJobPosition.isPending}>
+                {createJobPosition.isPending ? "Se salvează..." : "Salvează"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
             </div>
-          ) : null}
-        </form>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
     </>
   );

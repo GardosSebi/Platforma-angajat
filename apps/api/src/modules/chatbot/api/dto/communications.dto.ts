@@ -285,3 +285,54 @@ export class CreateTemplateDto {
   @IsBoolean()
   active?: boolean;
 }
+
+export class UpdateTemplateDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(180)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(8000)
+  body?: string;
+
+  @IsOptional()
+  @IsIn(CATEGORIES)
+  category?: CategoryCode;
+
+  @IsOptional()
+  @IsIn(CONTENT_TYPES)
+  contentType?: ContentTypeCode;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  contentUrl?: string;
+
+  @IsOptional()
+  @IsIn(AUDIENCE_TYPES)
+  audienceType?: AudienceTypeCode;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  audienceRefId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  audienceLabel?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+}

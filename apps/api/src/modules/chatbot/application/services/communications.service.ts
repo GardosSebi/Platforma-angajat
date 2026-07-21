@@ -18,7 +18,8 @@ import {
   CreateTemplateDto,
   MarkAnnouncementReadDto,
   SetAnnouncementReactionDto,
-  UpdateAnnouncementDto
+  UpdateAnnouncementDto,
+  UpdateTemplateDto
 } from "../../api/dto/communications.dto";
 import { JwtPayload } from "../../../../auth/jwt.strategy";
 import {
@@ -30,6 +31,7 @@ import {
   type WorksiteViewerScope
 } from "../../../../common/worksite-viewer-scope";
 import { CommunicationRightsService } from "./communication-rights.service";
+import { MailService } from "../../../../infrastructure/mail/mail.service";
 
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
@@ -83,7 +85,8 @@ export class CommunicationsService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly notifications: NotificationsService,
-    private readonly publishRights: CommunicationRightsService
+    private readonly publishRights: CommunicationRightsService,
+    private readonly mail: MailService
   ) {}
 
   private async scopeFor(viewer?: JwtPayload, tenantId?: string): Promise<WorksiteViewerScope> {
@@ -628,6 +631,64 @@ export class CommunicationsService {
     return created;
   }
 
+  async updateTemplate(tenantId: string, actorId: string, id: string, dto: UpdateTemplateDto, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    if (viewer) {
+      await this.publishRights.assertCanManageTemplates(tenantId, viewer.sub, viewer.roles ?? []);
+    }
+    const current = await this.prisma.communicationTemplate.findFirst({ where: { id, tenantId } });
+    if (!current) {
+      throw new NotFoundException("Template not found for tenant.");
+    }
+    const audienceType = dto.audienceType ?? current.audienceType;
+    const audienceRefId = dto.audienceRefId !== undefined ? clean(dto.audienceRefId) : current.audienceRefId;
+    await this.assertAudience(tenantId, audienceType, audienceRefId ?? undefined, undefined, scope);
+    const updated = await this.prisma.communicationTemplate.update({
+      where: { id },
+      data: {
+        name: dto.name?.trim(),
+        title: dto.title?.trim(),
+        body: dto.body?.trim(),
+        category: dto.category,
+        contentType: dto.contentType,
+        contentUrl: dto.contentUrl !== undefined ? clean(dto.contentUrl) : undefined,
+        audienceType: dto.audienceType,
+        audienceRefId: dto.audienceRefId !== undefined ? clean(dto.audienceRefId) : undefined,
+        audienceLabel: dto.audienceLabel !== undefined ? clean(dto.audienceLabel) : undefined,
+        active: dto.active
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "COMMUNICATIONS",
+      action: "TEMPLATE_UPDATED",
+      entityType: "CommunicationTemplate",
+      entityId: updated.id
+    });
+    return updated;
+  }
+
+  async deleteTemplate(tenantId: string, actorId: string, id: string, viewer?: JwtPayload) {
+    if (viewer) {
+      await this.publishRights.assertCanManageTemplates(tenantId, viewer.sub, viewer.roles ?? []);
+    }
+    const current = await this.prisma.communicationTemplate.findFirst({ where: { id, tenantId } });
+    if (!current) {
+      throw new NotFoundException("Template not found for tenant.");
+    }
+    await this.prisma.communicationTemplate.delete({ where: { id } });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "COMMUNICATIONS",
+      action: "TEMPLATE_DELETED",
+      entityType: "CommunicationTemplate",
+      entityId: id
+    });
+    return { ok: true as const };
+  }
+
   private async resolveAudienceEmployeeIds(tenantId: string, row: CommunicationAnnouncement): Promise<string[]> {
     if (row.audienceType === CommunicationAudienceType.ALL) {
       const rows = await this.prisma.employee.findMany({
@@ -672,16 +733,38 @@ export class CommunicationsService {
 
   private async notifyAnnouncementAudience(tenantId: string, row: CommunicationAnnouncement) {
     const employeeIds = await this.resolveAudienceEmployeeIds(tenantId, row);
-    for (const employeeId of employeeIds) {
+    if (!employeeIds.length) return;
+
+    const employees = await this.prisma.employee.findMany({
+      where: { tenantId, id: { in: employeeIds }, active: true },
+      select: { id: true, email: true }
+    });
+
+    const title = `Anunț: ${row.title}`;
+    const bodyPreview = row.body.length > 240 ? `${row.body.slice(0, 240)}…` : row.body;
+    const appBase = process.env.APP_PUBLIC_URL?.replace(/\/$/, "") ?? "";
+    const linkPath = "/chatbot";
+    const linkUrl = appBase ? `${appBase}${linkPath}` : linkPath;
+
+    for (const employee of employees) {
       await this.notifications.notifyEmployee({
         tenantId,
-        employeeId,
+        employeeId: employee.id,
         category: "COMMUNICATION",
-        title: `Anunț: ${row.title}`,
-        body: row.body.length > 240 ? `${row.body.slice(0, 240)}…` : row.body,
-        linkPath: "/chatbot",
+        title,
+        body: bodyPreview,
+        linkPath,
         entityType: "CommunicationAnnouncement",
         entityId: row.id
+      });
+
+      const email = employee.email?.trim();
+      if (!email) continue;
+      await this.mail.sendMail({
+        to: email,
+        subject: title,
+        text: `${row.body}\n\nDeschide anunțul: ${linkUrl}`,
+        html: `<p>${row.body.replace(/\n/g, "<br/>")}</p><p><a href="${linkUrl}">Deschide anunțul</a></p>`
       });
     }
   }

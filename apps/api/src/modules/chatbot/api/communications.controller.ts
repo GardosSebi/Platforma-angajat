@@ -14,7 +14,8 @@ import {
   CreateTemplateDto,
   MarkAnnouncementReadDto,
   SetAnnouncementReactionDto,
-  UpdateAnnouncementDto
+  UpdateAnnouncementDto,
+  UpdateTemplateDto
 } from "./dto/communications.dto";
 
 @Controller("chatbot")
@@ -144,5 +145,22 @@ export class CommunicationsController {
   @RequirePermissions(Permission.COMMUNICATIONS_TEMPLATES_EDIT)
   createTemplate(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateTemplateDto) {
     return this.communications.createTemplate(tenantId, user.sub, dto, user);
+  }
+
+  @Patch("templates/:id")
+  @RequirePermissions(Permission.COMMUNICATIONS_TEMPLATES_EDIT)
+  updateTemplate(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: UpdateTemplateDto
+  ) {
+    return this.communications.updateTemplate(tenantId, user.sub, id, dto, user);
+  }
+
+  @Delete("templates/:id")
+  @RequirePermissions(Permission.COMMUNICATIONS_TEMPLATES_EDIT)
+  deleteTemplate(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.communications.deleteTemplate(tenantId, user.sub, id, user);
   }
 }

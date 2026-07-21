@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateSurveyPublicLinkRequest, CreateSurveyRequest } from "@repo/shared-types/surveys";
+import type { CreateSurveyPublicLinkRequest, CreateSurveyRequest, UpdateSurveyRequest } from "@repo/shared-types/surveys";
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { fetchPublicSurvey, surveysApi } from "../api/surveys.api";
@@ -41,6 +41,14 @@ export function useCreateSurvey() {
   const refresh = useRefreshSurveys();
   return useMutation({
     mutationFn: (payload: CreateSurveyRequest) => surveysApi.createSurvey(payload),
+    onSuccess: refresh
+  });
+}
+
+export function useUpdateSurvey() {
+  const refresh = useRefreshSurveys();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateSurveyRequest }) => surveysApi.updateSurvey(id, payload),
     onSuccess: refresh
   });
 }

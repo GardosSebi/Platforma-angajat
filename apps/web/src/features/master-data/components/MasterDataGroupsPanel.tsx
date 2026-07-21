@@ -14,7 +14,8 @@ import {
   useRemoveGroupMember,
   useUpdateGroup
 } from "../hooks/useMasterData";
-import { ACTIVE_STATUS_CARD_OPTIONS, MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { ACTIVE_STATUS_CARD_OPTIONS, MASTER_DATA_ADD_LABELS, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateEmployeeGroupPayload = {
   name: "",
@@ -127,10 +128,10 @@ export function MasterDataGroupsPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
-              setShowForm((prev) => !prev);
+              setShowForm(true);
             }}
           >
-            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.groups}
+            {MASTER_DATA_ADD_LABELS.groups}
           </button>
         </div>
 
@@ -194,35 +195,36 @@ export function MasterDataGroupsPanel() {
       </section>
 
       {showForm ? (
-        <form className="card form-stack comms-panel md-create-form" onSubmit={onCreate}>
-          <h3 className="card-title">Grup nou</h3>
-          <div className="field">
-            <label htmlFor="md-grp-name">Denumire *</label>
-            <input
-              id="md-grp-name"
-              value={form.name}
-              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="Ex: Personal depozit"
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="md-grp-desc">Descriere</label>
-            <input
-              id="md-grp-desc"
-              value={form.description ?? ""}
-              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-            />
-          </div>
-          <div className="comms-compose-actions">
-            <button className="btn-primary" type="submit" disabled={createGroup.isPending}>
-              Salvează
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-              Anulează
-            </button>
-          </div>
-        </form>
+        <MasterDataCreateModal title="Grup nou" titleId="md-group-create-title" onClose={() => setShowForm(false)}>
+          <form className="form-stack" onSubmit={onCreate}>
+            <div className="field">
+              <label htmlFor="md-grp-name">Denumire *</label>
+              <input
+                id="md-grp-name"
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Ex: Personal depozit"
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="md-grp-desc">Descriere</label>
+              <input
+                id="md-grp-desc"
+                value={form.description ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              />
+            </div>
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={createGroup.isPending}>
+                Salvează
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
+            </div>
+          </form>
+        </MasterDataCreateModal>
       ) : null}
 
       {selectedId ? (

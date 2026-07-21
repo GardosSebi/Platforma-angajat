@@ -2,6 +2,7 @@ import { FormEvent } from "react";
 import type {
   CreateSurveyRequest,
   SurveyAudienceType,
+  SurveyConditionalRule,
   SurveyQuestion,
   SurveyQuestionOption,
   SurveyQuestionType,
@@ -33,14 +34,25 @@ export type QuestionFormState = {
   options: SurveyQuestionOption[];
   min: number;
   max: number;
+  multiTextCount: number;
 };
+
+const CONDITIONAL_OPERATORS: Array<{ value: SurveyConditionalRule["operator"]; label: string }> = [
+  { value: "EQUALS", label: "Egal cu" },
+  { value: "NOT_EQUALS", label: "Diferit de" },
+  { value: "INCLUDES", label: "Include" },
+  { value: "GREATER_THAN", label: "Mai mare decât" },
+  { value: "LESS_THAN", label: "Mai mic decât" }
+];
 
 type AudienceOption = { id: string; label: string };
 
 type Props = {
+  mode?: "create" | "edit";
   surveyForm: SurveyFormState;
   questionForm: QuestionFormState;
   questions: SurveyQuestion[];
+  conditionalLogic: SurveyConditionalRule[];
   audienceOptions: AudienceOption[];
   canSave: boolean;
   isPending: boolean;
@@ -50,16 +62,39 @@ type Props = {
   onAudienceRefChange: (value: string) => void;
   onAddQuestion: () => void;
   onUpdateOption: (index: number, label: string) => void;
+  onUpdateOptionImageUrl: (index: number, imageUrl: string) => void;
   onAddOption: () => void;
   onRemoveOption: (index: number) => void;
+  onConditionalLogicChange: (rules: SurveyConditionalRule[]) => void;
   onSubmit: (event: FormEvent) => void;
   onCancel: () => void;
 };
 
+function emptyRule(): SurveyConditionalRule {
+  return {
+    questionId: "",
+    operator: "EQUALS",
+    value: "",
+    showQuestionId: ""
+  };
+}
+
+function parseRuleValue(operator: SurveyConditionalRule["operator"], raw: string): SurveyConditionalRule["value"] {
+  if (operator === "GREATER_THAN" || operator === "LESS_THAN") {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : raw;
+  }
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  return raw;
+}
+
 export function SurveyCreateForm({
+  mode = "create",
   surveyForm,
   questionForm,
   questions,
+  conditionalLogic,
   audienceOptions,
   canSave,
   isPending,
@@ -69,19 +104,36 @@ export function SurveyCreateForm({
   onAudienceRefChange,
   onAddQuestion,
   onUpdateOption,
+  onUpdateOptionImageUrl,
   onAddOption,
   onRemoveOption,
+  onConditionalLogicChange,
   onSubmit,
   onCancel
 }: Props) {
   const needsOptions = surveyQuestionNeedsOptions(questionForm.type);
+  const isEdit = mode === "edit";
+  const questionChoices = questions.map((question) => ({
+    value: question.id,
+    label: `${question.id} — ${question.title}`
+  }));
+
+  const updateRule = (index: number, patch: Partial<SurveyConditionalRule>) => {
+    onConditionalLogicChange(
+      conditionalLogic.map((rule, ruleIndex) => (ruleIndex === index ? { ...rule, ...patch } : rule))
+    );
+  };
 
   return (
     <form className="card form-stack comms-panel survey-create-form" onSubmit={onSubmit}>
       <div className="comms-compose-head">
         <div>
-          <h2 className="card-title">Sondaj nou</h2>
-          <p className="comms-toolbar-hint">Completează datele, adaugă întrebări, apoi salvează ca ciornă.</p>
+          <h2 className="card-title">{isEdit ? "Editează sondaj" : "Sondaj nou"}</h2>
+          <p className="comms-toolbar-hint">
+            {isEdit
+              ? "Actualizează datele, întrebările și logica condițională, apoi salvează."
+              : "Completează datele, adaugă întrebări, apoi salvează ca ciornă."}
+          </p>
         </div>
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Înapoi la listă
@@ -201,18 +253,43 @@ export function SurveyCreateForm({
             />
           </div>
         </div>
+        {questionForm.type === "MULTI_TEXT" ? (
+          <div className="field">
+            <label htmlFor="question-multi-text-count">Număr casete text</label>
+            <input
+              id="question-multi-text-count"
+              type="number"
+              min={1}
+              max={20}
+              value={questionForm.multiTextCount}
+              onChange={(event) =>
+                onQuestionChange({ multiTextCount: Math.max(1, Number(event.target.value) || 1) })
+              }
+            />
+          </div>
+        ) : null}
         {needsOptions ? (
           <div className="field">
             <span className="field-label">Opțiuni de răspuns</span>
             <div className="survey-option-list">
               {questionForm.options.map((option, index) => (
                 <div className="survey-option-row" key={`option-${index}`}>
-                  <input
-                    aria-label={`Opțiunea ${index + 1}`}
-                    value={option.label}
-                    onChange={(event) => onUpdateOption(index, event.target.value)}
-                    placeholder={`Opțiunea ${index + 1}`}
-                  />
+                  <div className="survey-option-fields">
+                    <input
+                      aria-label={`Opțiunea ${index + 1}`}
+                      value={option.label}
+                      onChange={(event) => onUpdateOption(index, event.target.value)}
+                      placeholder={`Opțiunea ${index + 1}`}
+                    />
+                    {questionForm.type === "IMAGE_SELECT" ? (
+                      <input
+                        aria-label={`URL imagine opțiunea ${index + 1}`}
+                        value={option.imageUrl ?? ""}
+                        onChange={(event) => onUpdateOptionImageUrl(index, event.target.value)}
+                        placeholder="URL imagine"
+                      />
+                    ) : null}
+                  </div>
                   <button type="button" className="btn-secondary btn-sm" onClick={() => onRemoveOption(index)}>
                     Șterge
                   </button>
@@ -231,7 +308,9 @@ export function SurveyCreateForm({
           <ul className="survey-question-preview">
             {questions.map((question, index) => (
               <li key={question.id}>
-                <strong>{index + 1}. {question.title}</strong>
+                <strong>
+                  {index + 1}. {question.title}
+                </strong>
                 <span>{SURVEY_QUESTION_TYPE_LABELS[question.type]}</span>
               </li>
             ))}
@@ -242,7 +321,85 @@ export function SurveyCreateForm({
       </fieldset>
 
       <fieldset className="comms-fieldset survey-section">
-        <legend>3. Setări sondaj</legend>
+        <legend>3. Logică condițională</legend>
+        <p className="field-hint">
+          Afișează o întrebare doar când răspunsul la alta îndeplinește o condiție. Adaugă întâi întrebările în listă.
+        </p>
+        {conditionalLogic.length === 0 ? (
+          <p className="field-hint">Nicio regulă încă.</p>
+        ) : (
+          <div className="survey-option-list">
+            {conditionalLogic.map((rule, index) => (
+              <div className="survey-conditional-rule" key={`rule-${index}`}>
+                <div className="comms-form-row">
+                  <FieldSelect
+                    id={`rule-question-${index}`}
+                    label="Dacă răspunsul la"
+                    value={rule.questionId}
+                    onChange={(questionId) => updateRule(index, { questionId })}
+                    allowEmpty
+                    emptyLabel="Selectează întrebarea"
+                    options={questionChoices}
+                  />
+                  <FieldSelect
+                    id={`rule-operator-${index}`}
+                    label="Operator"
+                    value={rule.operator}
+                    onChange={(operator) => {
+                      const nextOperator = operator as SurveyConditionalRule["operator"];
+                      updateRule(index, {
+                        operator: nextOperator,
+                        value: parseRuleValue(nextOperator, String(rule.value ?? ""))
+                      });
+                    }}
+                    options={CONDITIONAL_OPERATORS}
+                  />
+                </div>
+                <div className="comms-form-row">
+                  <div className="field">
+                    <label htmlFor={`rule-value-${index}`}>Valoare</label>
+                    <input
+                      id={`rule-value-${index}`}
+                      value={rule.value === null || rule.value === undefined ? "" : String(rule.value)}
+                      onChange={(event) =>
+                        updateRule(index, { value: parseRuleValue(rule.operator, event.target.value) })
+                      }
+                      placeholder="Valoare de comparat"
+                    />
+                  </div>
+                  <FieldSelect
+                    id={`rule-show-${index}`}
+                    label="Afișează întrebarea"
+                    value={rule.showQuestionId}
+                    onChange={(showQuestionId) => updateRule(index, { showQuestionId })}
+                    allowEmpty
+                    emptyLabel="Selectează întrebarea"
+                    options={questionChoices}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => onConditionalLogicChange(conditionalLogic.filter((_, i) => i !== index))}
+                >
+                  Șterge regula
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          className="btn-secondary survey-add-option"
+          onClick={() => onConditionalLogicChange([...conditionalLogic, emptyRule()])}
+          disabled={questions.length < 2}
+        >
+          + Regulă condițională
+        </button>
+      </fieldset>
+
+      <fieldset className="comms-fieldset survey-section">
+        <legend>4. Setări sondaj</legend>
         <div className="checkbox-grid">
           <label className="checkbox-label">
             <input
@@ -319,7 +476,7 @@ export function SurveyCreateForm({
 
       <div className="comms-compose-actions">
         <button className="btn-primary" type="submit" disabled={isPending || !canSave}>
-          {isPending ? "Se salvează..." : "Salvează sondaj"}
+          {isPending ? "Se salvează..." : isEdit ? "Actualizează sondaj" : "Salvează sondaj"}
         </button>
       </div>
 

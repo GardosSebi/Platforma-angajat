@@ -13,7 +13,8 @@ import type {
   CreateCommunicationTemplateRequest,
   MarkCommunicationReadRequest,
   SetCommunicationReactionRequest,
-  UpdateCommunicationAnnouncementRequest
+  UpdateCommunicationAnnouncementRequest,
+  UpdateCommunicationTemplateRequest
 } from "@repo/shared-types/communications";
 import type { UsageSummaryResponse } from "@repo/shared-types/platform-admin";
 import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
@@ -101,6 +102,17 @@ export const chatbotApi = {
     return httpClient<CommunicationTemplateItem>("/chatbot/templates", {
       method: "POST",
       body: JSON.stringify(payload)
+    });
+  },
+  updateTemplate(id: string, payload: UpdateCommunicationTemplateRequest) {
+    return httpClient<CommunicationTemplateItem>(`/chatbot/templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  deleteTemplate(id: string) {
+    return httpClient<{ ok: true }>(`/chatbot/templates/${id}`, {
+      method: "DELETE"
     });
   },
   listPublishRights() {

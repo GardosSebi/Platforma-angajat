@@ -5,6 +5,7 @@ import PDFDocument from "pdfkit";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
+import { LocalFileStorageService } from "../../../../infrastructure/files/local-file-storage.service";
 import { PaginationQueryDto, resolvePagination } from "../../../../common/dto/pagination-query.dto";
 import { paginatedResult } from "../../../../common/pagination";
 import {
@@ -85,8 +86,41 @@ export class SurveysService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly mail: MailService
+    private readonly mail: MailService,
+    private readonly files: LocalFileStorageService
   ) {}
+
+  async saveAnswerFile(
+    tenantId: string,
+    surveyId: string,
+    file: { originalName: string; buffer: Buffer; mimeType?: string }
+  ) {
+    await this.assertSurvey(tenantId, surveyId);
+    if (!file.buffer?.length) {
+      throw new BadRequestException("Missing file content");
+    }
+    const saved = await this.files.saveUploadedFile({
+      tenantId,
+      originalName: file.originalName,
+      buffer: file.buffer,
+      mimeType: file.mimeType
+    });
+    return {
+      fileId: saved.id,
+      path: saved.relativePath,
+      fileName: file.originalName,
+      size: saved.size,
+      answerValue: `${saved.relativePath}|${file.originalName}`
+    };
+  }
+
+  async savePublicAnswerFile(
+    token: string,
+    file: { originalName: string; buffer: Buffer; mimeType?: string }
+  ) {
+    const survey = await this.assertPublicSurvey(token);
+    return this.saveAnswerFile(survey.tenantId, survey.id, file);
+  }
 
   async overview(tenantId: string) {
     const [surveys, responses] = await Promise.all([

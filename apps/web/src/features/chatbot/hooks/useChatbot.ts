@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateCommunicationAnnouncementRequest,
   CreateCommunicationTemplateRequest,
-  UpdateCommunicationAnnouncementRequest
+  UpdateCommunicationAnnouncementRequest,
+  UpdateCommunicationTemplateRequest
 } from "@repo/shared-types/communications";
 import type { CreateCommunicationPublishRightRequest } from "@repo/shared-types/communication-rights";
 import type { PaginationParams } from "@repo/shared-types/pagination";
@@ -135,6 +136,23 @@ export function useCreateCommunicationTemplate() {
   const refresh = useRefreshChatbot();
   return useMutation({
     mutationFn: (payload: CreateCommunicationTemplateRequest) => chatbotApi.createTemplate(payload),
+    onSuccess: refresh
+  });
+}
+
+export function useUpdateCommunicationTemplate() {
+  const refresh = useRefreshChatbot();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateCommunicationTemplateRequest }) =>
+      chatbotApi.updateTemplate(id, payload),
+    onSuccess: refresh
+  });
+}
+
+export function useDeleteCommunicationTemplate() {
+  const refresh = useRefreshChatbot();
+  return useMutation({
+    mutationFn: (id: string) => chatbotApi.deleteTemplate(id),
     onSuccess: refresh
   });
 }

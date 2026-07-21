@@ -15,11 +15,11 @@ import {
 import {
   ACTIVE_STATUS_CARD_OPTIONS,
   MASTER_DATA_ADD_LABELS,
-  MASTER_DATA_CLOSE_FORM_CTA,
   activeLabel,
   activeTone,
   mutationErrorMessage
 } from "../master-data-shared";
+import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const TYPE_OPTIONS = [
   { value: "DESIGNATED_WORKER", label: "Lucrător desemnat" },
@@ -92,77 +92,22 @@ export function MasterDataSsmResponsiblesPanel() {
             <h2 className="card-title">Responsabili SSM</h2>
             <p className="comms-toolbar-hint">{paged.total} în total</p>
           </div>
-          <button type="button" className="btn-primary" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : "Adaugă responsabil SSM"}
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              setFeedback(null);
+              setShowForm(true);
+            }}
+          >
+            {MASTER_DATA_ADD_LABELS["ssm-responsibles"]}
           </button>
         </div>
 
-        {feedback ? (
+        {feedback && !showForm ? (
           <p className={`feedback ${feedback.type}`} role="status">
             {feedback.message}
           </p>
-        ) : null}
-
-        {showForm ? (
-          <form className="master-data-form-grid" onSubmit={onCreate}>
-            <FieldSelect
-              id="ssm-responsible-type"
-              label="Tip responsabil"
-              value={form.type}
-              onChange={(value) => setForm((f) => ({ ...f, type: value as CreateSsmResponsiblePayload["type"] }))}
-              options={TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-            />
-            <label>
-              Nume persoană / firmă
-              <input
-                required
-                value={form.personName}
-                onChange={(e) => setForm((f) => ({ ...f, personName: e.target.value }))}
-              />
-            </label>
-            <label>
-              Email
-              <input type="email" value={form.email ?? ""} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-            </label>
-            <label>
-              Telefon
-              <input value={form.phone ?? ""} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
-            </label>
-            <FieldSelect
-              id="ssm-responsible-entity"
-              label="Entitate juridică (opțional)"
-              value={form.legalEntityId ?? ""}
-              onChange={(value) => setForm((f) => ({ ...f, legalEntityId: value || undefined }))}
-              options={mapToOptions(legalEntities.data?.items ?? [], (e) => e.id, (e) => `${e.code} — ${e.name}`)}
-              allowEmpty
-              emptyLabel="—"
-            />
-            <FieldSelect
-              id="ssm-responsible-worksite"
-              label="Punct de lucru (opțional)"
-              value={form.worksiteId ?? ""}
-              onChange={(value) => setForm((f) => ({ ...f, worksiteId: value || undefined }))}
-              options={mapToOptions(worksites.data?.items ?? [], (w) => w.id, (w) => `${w.code} — ${w.name}`)}
-              allowEmpty
-              emptyLabel="—"
-            />
-            <label className="span-2">
-              Note
-              <textarea value={form.notes ?? ""} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} />
-            </label>
-            <OptionCardRadioGroup
-              name="ssm-responsible-active"
-              legend="Status"
-              value={form.active ? "true" : "false"}
-              onChange={(value) => setForm((f) => ({ ...f, active: value === "true" }))}
-              options={[...ACTIVE_STATUS_CARD_OPTIONS]}
-            />
-            <div className="master-data-form-actions span-2">
-              <button type="submit" className="btn-primary" disabled={createResponsible.isPending}>
-                {createResponsible.isPending ? "Se salvează…" : MASTER_DATA_ADD_LABELS["ssm-responsibles"]}
-              </button>
-            </div>
-          </form>
         ) : null}
 
         <div className="data-list-wrap">
@@ -190,6 +135,85 @@ export function MasterDataSsmResponsiblesPanel() {
           onPageChange={pagination.setPage}
         />
       </section>
+
+      {showForm ? (
+        <MasterDataCreateModal
+          title="Responsabil SSM nou"
+          titleId="md-ssm-responsible-create-title"
+          onClose={() => setShowForm(false)}
+          size="wide"
+        >
+          <form className="form-stack" onSubmit={onCreate}>
+            <div className="master-data-form-grid">
+              <FieldSelect
+                id="ssm-responsible-type"
+                label="Tip responsabil"
+                value={form.type}
+                onChange={(value) => setForm((f) => ({ ...f, type: value as CreateSsmResponsiblePayload["type"] }))}
+                options={TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              />
+              <label>
+                Nume persoană / firmă
+                <input
+                  required
+                  value={form.personName}
+                  onChange={(e) => setForm((f) => ({ ...f, personName: e.target.value }))}
+                />
+              </label>
+              <label>
+                Email
+                <input type="email" value={form.email ?? ""} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+              </label>
+              <label>
+                Telefon
+                <input value={form.phone ?? ""} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+              </label>
+              <FieldSelect
+                id="ssm-responsible-entity"
+                label="Entitate juridică (opțional)"
+                value={form.legalEntityId ?? ""}
+                onChange={(value) => setForm((f) => ({ ...f, legalEntityId: value || undefined }))}
+                options={mapToOptions(legalEntities.data?.items ?? [], (e) => e.id, (e) => `${e.code} — ${e.name}`)}
+                allowEmpty
+                emptyLabel="—"
+              />
+              <FieldSelect
+                id="ssm-responsible-worksite"
+                label="Punct de lucru (opțional)"
+                value={form.worksiteId ?? ""}
+                onChange={(value) => setForm((f) => ({ ...f, worksiteId: value || undefined }))}
+                options={mapToOptions(worksites.data?.items ?? [], (w) => w.id, (w) => `${w.code} — ${w.name}`)}
+                allowEmpty
+                emptyLabel="—"
+              />
+              <label className="span-2">
+                Note
+                <textarea value={form.notes ?? ""} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} />
+              </label>
+              <OptionCardRadioGroup
+                name="ssm-responsible-active"
+                legend="Status"
+                value={form.active ? "true" : "false"}
+                onChange={(value) => setForm((f) => ({ ...f, active: value === "true" }))}
+                options={[...ACTIVE_STATUS_CARD_OPTIONS]}
+              />
+            </div>
+            <div className="comms-compose-actions">
+              <button type="submit" className="btn-primary" disabled={createResponsible.isPending}>
+                {createResponsible.isPending ? "Se salvează…" : "Salvează"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
+            </div>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
+      ) : null}
 
       {selected ? (
         <section className="card comms-panel">

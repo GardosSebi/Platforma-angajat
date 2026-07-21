@@ -5,7 +5,8 @@ import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import { useCreateDepartment, useDepartments, useWorksitesLookup } from "../hooks/useMasterData";
-import { MASTER_DATA_ADD_LABELS, MASTER_DATA_CLOSE_FORM_CTA, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MASTER_DATA_ADD_LABELS, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateDepartmentPayload = {
   code: "",
@@ -76,10 +77,10 @@ export function MasterDataDepartmentsPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
-              setShowForm((prev) => !prev);
+              setShowForm(true);
             }}
           >
-            {showForm ? MASTER_DATA_CLOSE_FORM_CTA : MASTER_DATA_ADD_LABELS.departments}
+            {MASTER_DATA_ADD_LABELS.departments}
           </button>
         </div>
 
@@ -158,57 +159,62 @@ export function MasterDataDepartmentsPanel() {
       </section>
 
       {showForm ? (
-        <form className="card form-stack comms-panel md-create-form" onSubmit={onSubmit}>
-          <h3 className="card-title">Departament nou</h3>
-          <div className="comms-form-row">
-            <div className="field">
-              <label htmlFor="md-department-code">Cod *</label>
-              <input
-                id="md-department-code"
-                value={form.code}
-                onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
-                placeholder="Ex: HR"
-                required
-              />
+        <MasterDataCreateModal
+          title="Departament nou"
+          titleId="md-department-create-title"
+          onClose={() => setShowForm(false)}
+        >
+          <form className="form-stack" onSubmit={onSubmit}>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-department-code">Cod *</label>
+                <input
+                  id="md-department-code"
+                  value={form.code}
+                  onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
+                  placeholder="Ex: HR"
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-department-name">Denumire *</label>
+                <input
+                  id="md-department-name"
+                  value={form.name}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Ex: Resurse umane"
+                  required
+                />
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="md-department-name">Denumire *</label>
-              <input
-                id="md-department-name"
-                value={form.name}
-                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Ex: Resurse umane"
-                required
-              />
+            <FieldSelect
+              id="md-department-worksite"
+              label="Punct de lucru (opțional)"
+              value={form.worksiteId ?? ""}
+              onChange={(worksiteId) => setForm((prev) => ({ ...prev, worksiteId }))}
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={mapToOptions(
+                worksitesLookup.data?.items ?? [],
+                (worksite) => worksite.id,
+                (worksite) => `${worksite.code} - ${worksite.name}`
+              )}
+            />
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={createDepartment.isPending}>
+                {createDepartment.isPending ? "Se salvează..." : "Salvează"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
             </div>
-          </div>
-          <FieldSelect
-            id="md-department-worksite"
-            label="Punct de lucru (opțional)"
-            value={form.worksiteId ?? ""}
-            onChange={(worksiteId) => setForm((prev) => ({ ...prev, worksiteId }))}
-            allowEmpty
-            emptyLabel="Neselectat"
-            options={mapToOptions(
-              worksitesLookup.data?.items ?? [],
-              (worksite) => worksite.id,
-              (worksite) => `${worksite.code} - ${worksite.name}`
-            )}
-          />
-          <div className="comms-compose-actions">
-            <button className="btn-primary" type="submit" disabled={createDepartment.isPending}>
-              {createDepartment.isPending ? "Se salvează..." : "Salvează"}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-              Anulează
-            </button>
-          </div>
-          {feedback ? (
-            <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
-              {feedback.message}
-            </div>
-          ) : null}
-        </form>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
     </>
   );

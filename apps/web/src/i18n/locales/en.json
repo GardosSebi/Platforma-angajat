@@ -2,6 +2,7 @@
   "nav": {
     "home": "My space",
     "ssm": "H&S",
+    "ssmOverview": "Overview",
     "masterData": "Master Data",
     "admin": "Administration",
     "communications": "Communications",
@@ -69,5 +70,19 @@
   },
   "locale": {
     "label": "Language"
+  },
+  "comms": {
+    "title": "Communications",
+    "lead": "Publish messages, schedule reminders, and track read rates.",
+    "tabs": {
+      "announcements": "Announcements",
+      "compose": "New announcement",
+      "editCompose": "Edit announcement",
+      "templates": "Templates",
+      "calendar": "Calendar",
+      "usage": "Reports",
+      "rights": "Rights",
+      "reminders": "Reminders"
+    }
   }
 }

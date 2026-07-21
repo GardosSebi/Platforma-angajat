@@ -2,6 +2,7 @@
   "nav": {
     "home": "Spațiul meu",
     "ssm": "SSM",
+    "ssmOverview": "Prezentare generală",
     "masterData": "Master Data",
     "admin": "Administrare",
     "communications": "Comunicări",
@@ -69,5 +70,19 @@
   },
   "locale": {
     "label": "Limbă"
+  },
+  "comms": {
+    "title": "Comunicări",
+    "lead": "Publică mesaje, programează mementouri și urmărește rata de citire.",
+    "tabs": {
+      "announcements": "Anunțuri",
+      "compose": "Anunț nou",
+      "editCompose": "Editează anunț",
+      "templates": "Șabloane",
+      "calendar": "Calendar",
+      "usage": "Rapoarte",
+      "rights": "Drepturi",
+      "reminders": "Mementouri"
+    }
   }
 }

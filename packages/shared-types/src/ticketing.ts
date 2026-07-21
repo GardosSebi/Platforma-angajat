@@ -28,6 +28,16 @@ export interface CreateHelpdeskTicketRequest {
   dueAt?: string;
 }
 
+export interface CreateHelpdeskTicketFromEmailRequest {
+  fromEmail: string;
+  fromName?: string;
+  subject: string;
+  body: string;
+  category?: string;
+  priority?: HelpdeskTicketPriority;
+  messageId?: string;
+}
+
 export interface UpdateHelpdeskTicketRequest {
   title?: string;
   description?: string;
