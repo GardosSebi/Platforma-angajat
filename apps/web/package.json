@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "tsc -p tsconfig.json && vite build",
     "dev": "node scripts/ensure-dev-port.mjs 5173 && vite --force",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
