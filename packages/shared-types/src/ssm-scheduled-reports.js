@@ -1,2 +1,0 @@
-export const SSM_REPORT_CADENCES = ["DAILY", "WEEKLY", "MONTHLY"];
-export const SSM_REPORT_DELIVERY_FORMATS = ["PDF", "XLSX", "BOTH"];
