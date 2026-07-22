@@ -8,6 +8,10 @@ apps/web/src/**/*.js
 apps/web/src/**/*.js.map
 apps/web/vite.config.js
 apps/web/vite.config.js.map
+packages/shared-types/src/**/*.js
+packages/shared-types/src/**/*.js.map
+packages/validation/src/**/*.js
+packages/validation/src/**/*.js.map
 .next/
 out/
 *.tsbuildinfo
