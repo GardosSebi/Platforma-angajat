@@ -106,7 +106,7 @@ export function SignatureCanvas({
         <button type="button" className="btn-text" onClick={clear}>
           Șterge semnătura
         </button>
-        {empty ? <span className="field-hint">Desenează cu mouse sau deget.</span> : null}
+        {empty ? <span className="field-hint"></span> : null}
       </div>
     </div>
   );

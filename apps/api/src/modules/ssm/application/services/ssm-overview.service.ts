@@ -216,11 +216,11 @@ export class SsmOverviewService {
       ...eipMovements.map((movement) => ({
         id: movement.id,
         source: "EIP",
-        title: `Înlocuire ${movement.eipType.name} - ${movement.employee.fullName}`,
+        title: `Înlocuire ${movement.eipType.name} - ${movement.employee?.fullName ?? "—"}`,
         startAt: movement.movementDate,
         dueAt: movement.replacementDueAt,
         status: "REPLACEMENT_DUE",
-        ownerLabel: movement.employee.fullName
+        ownerLabel: movement.employee?.fullName ?? "—"
       })),
       ...psiEquipment.map((equipment) => ({
         id: equipment.id,
@@ -423,7 +423,7 @@ export class SsmOverviewService {
         id: item.id,
         module: "EIP",
         title: item.eipType.name,
-        subject: item.employee.fullName,
+        subject: item.employee?.fullName ?? "—",
         dueAt: item.replacementDueAt,
         daysOverdue: item.replacementDueAt ? daysDiff(item.replacementDueAt, now) : 0,
         severity: "REPLACEMENT_OVERDUE"
@@ -513,7 +513,7 @@ export class SsmOverviewService {
         take: 1000
       });
       return rows.map((row) => ({
-        employee: row.employee.fullName,
+        employee: row.employee?.fullName ?? "—",
         eipCode: row.eipType.code,
         eipName: row.eipType.name,
         movementType: row.movementType,

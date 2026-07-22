@@ -67,6 +67,7 @@ enum SsmEipMovementType {
   DISTRIBUTION
   RETURN
   SCRAP
+  INTAKE
 }
 
 enum SsmAccidentType {
@@ -288,6 +289,7 @@ model Tenant {
   ssmEipNorms                SsmEipNorm[]
   ssmEipStocks               SsmEipStock[]
   ssmEipMovements            SsmEipMovement[]
+  ssmEipReminderDispatches   SsmEipReminderDispatch[]
   ssmAccidentCases           SsmAccidentCase[]
   ssmAccidentTasks           SsmAccidentTask[]
   ssmMedicalControlTypes     SsmMedicalControlType[]
@@ -398,6 +400,8 @@ model Worksite {
   userScopedRoles            UserScopedRole[]
   jobPositions               JobPosition[]
   communicationPublishRights CommunicationPublishRight[]
+  ssmEipStocks               SsmEipStock[]
+  ssmEipMovements            SsmEipMovement[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -421,6 +425,8 @@ model Department {
   employeePlacementHistories EmployeePlacementHistory[]
   ssmRiskAssessments         SsmRiskAssessment[]
   ssmPreventionPlans         SsmPreventionPlan[]
+  ssmEipStocks               SsmEipStock[]
+  ssmEipMovements            SsmEipMovement[]
 
   @@unique([tenantId, code])
   @@index([tenantId, worksiteId])
@@ -798,22 +804,47 @@ model SsmEipStock {
   id               String   @id @default(cuid())
   tenantId         String
   eipTypeId        String
+  worksiteId       String?
+  departmentId     String?
+  /** Deterministic key for uniqueness with nullable location dims: global | w:ID | d:ID | w:ID|d:ID */
+  scopeKey         String   @default("global")
   quantityOnHand   Int      @default(0)
   minimumThreshold Int      @default(0)
   updatedAt        DateTime @updatedAt
 
-  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  eipType SsmEipType @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eipType    SsmEipType  @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+  worksite   Worksite?   @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  @@unique([tenantId, eipTypeId])
+  @@unique([tenantId, eipTypeId, scopeKey])
   @@index([tenantId, quantityOnHand])
+  @@index([tenantId, worksiteId])
+  @@index([tenantId, departmentId])
+}
+
+model SsmEipReminderDispatch {
+  id            String   @id @default(cuid())
+  tenantId      String
+  eipMovementId String
+  daysUntilDue  Int
+  channel       String
+  sentAt        DateTime @default(now())
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eipMovement SsmEipMovement @relation(fields: [eipMovementId], references: [id], onDelete: Cascade)
+
+  @@unique([eipMovementId, daysUntilDue, channel])
+  @@index([tenantId, sentAt])
 }
 
 model SsmEipMovement {
   id                String             @id @default(cuid())
   tenantId          String
-  employeeId        String
+  employeeId        String?
   eipTypeId         String
+  worksiteId        String?
+  departmentId      String?
   movementType      SsmEipMovementType
   quantity          Int
   movementDate      DateTime           @default(now())
@@ -824,13 +855,18 @@ model SsmEipMovement {
   createdBy         String
   createdAt         DateTime           @default(now())
 
-  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  employee Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  eipType  SsmEipType @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee           Employee?                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  eipType            SsmEipType               @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+  worksite           Worksite?                @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department         Department?              @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  reminderDispatches SsmEipReminderDispatch[]
 
   @@index([tenantId, employeeId, movementDate])
   @@index([tenantId, replacementDueAt])
   @@index([tenantId, movementType])
+  @@index([tenantId, worksiteId])
+  @@index([tenantId, departmentId])
 }
 
 model SsmAccidentCase {

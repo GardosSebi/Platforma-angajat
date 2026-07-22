@@ -51,13 +51,24 @@ export class CreateEipNormDto {
 }
 
 export class CreateEipMovementDto {
+  @IsOptional()
   @IsString()
   @MinLength(2)
-  employeeId!: string;
+  employeeId?: string;
 
   @IsString()
   @MinLength(2)
   eipTypeId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  worksiteId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  departmentId?: string;
 
   @IsEnum(SsmEipMovementType)
   movementType!: SsmEipMovementType;

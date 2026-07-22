@@ -30,6 +30,16 @@ export function useEipNotifications() {
   });
 }
 
+export function useDispatchEipNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ssmApi.dispatchEipNotifications(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "notifications"] });
+    }
+  });
+}
+
 export function useEipStockGap() {
   return useQuery({
     queryKey: ["ssm", "eip", "stock-gap"],

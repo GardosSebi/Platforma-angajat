@@ -181,11 +181,6 @@ export function MasterDataLegalEntitiesPanel() {
                 <tr>
                   <td colSpan={6} className="comms-empty-cell">
                     <p>Nu am găsit entități juridice{search ? " pentru căutare" : ""}.</p>
-                    {!search ? (
-                      <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
-                        Adaugă prima entitate juridică
-                      </button>
-                    ) : null}
                   </td>
                 </tr>
               ) : null}

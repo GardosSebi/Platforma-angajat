@@ -283,7 +283,7 @@ export interface SsmComplianceEmployee {
   blockedAdmission: boolean;
 }
 
-export type SsmEipMovementType = "DISTRIBUTION" | "RETURN" | "SCRAP";
+export type SsmEipMovementType = "INTAKE" | "DISTRIBUTION" | "RETURN" | "SCRAP";
 
 export interface CreateSsmEipTypeRequest {
   code: string;
@@ -300,8 +300,10 @@ export interface CreateSsmEipNormRequest {
 }
 
 export interface CreateSsmEipMovementRequest {
-  employeeId: string;
+  employeeId?: string;
   eipTypeId: string;
+  worksiteId?: string;
+  departmentId?: string;
   movementType: SsmEipMovementType;
   quantity: number;
   replacementDueAt?: string;
@@ -330,10 +332,14 @@ export interface SsmEipNormItem {
 
 export interface SsmEipMovementItem {
   id: string;
-  employeeId: string;
-  employeeName: string;
+  employeeId?: string | null;
+  employeeName?: string | null;
   eipTypeId: string;
   eipTypeName: string;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
   movementType: SsmEipMovementType;
   quantity: number;
   movementDate: string;
@@ -348,11 +354,17 @@ export interface SsmEipDueNotification {
   eipTypeName: string;
   replacementDueAt: string;
   daysUntilDue: number;
+  worksiteName?: string | null;
 }
 
 export interface SsmEipStockGapItem {
   eipTypeId: string;
   eipTypeName: string;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  scopeKey: string;
   required: number;
   distributedActive: number;
   stockOnHand: number;

@@ -263,8 +263,20 @@ export const ssmApi = {
   eipNotifications() {
     return httpClient<{ reminders: SsmEipDueNotification[] }>("/ssm/eip/notifications");
   },
+  dispatchEipNotifications() {
+    return httpClient<{
+      candidates: number;
+      sent: number;
+      sentEmail: number;
+      sentInApp: number;
+      sentResponsible: number;
+    }>("/ssm/eip/notifications/dispatch", { method: "POST" });
+  },
   eipStockGapReport() {
     return httpClient<{ items: SsmEipStockGapItem[] }>("/ssm/eip/reports/stock-gap");
+  },
+  getEipRegisterPdfUrl() {
+    return "/ssm/eip/register.pdf";
   },
   listAccidentCases(params?: PaginationParams) {
     return httpClient<PaginatedResult<SsmAccidentCaseItem>>(`/ssm/accidents${buildPaginationQuery(params)}`);

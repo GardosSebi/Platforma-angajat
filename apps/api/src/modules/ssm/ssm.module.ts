@@ -68,6 +68,7 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
   exports: [
     SsmTrainingSuiteService,
     SsmMedicalService,
+    SsmEipService,
     SsmTrainingAutomationService,
     ItmAccessService,
     SsmScheduledReportsService

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Post, StreamableFile, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -50,10 +50,26 @@ export class SsmEipController {
     return this.eipService.movementRegister(tenantId);
   }
 
+  @Get("register.pdf")
+  @RequirePermissions(Permission.SSM_EIP_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async registerPdf(@TenantId() tenantId: string) {
+    const buffer = await this.eipService.registerPdf(tenantId);
+    return new StreamableFile(buffer, {
+      disposition: 'attachment; filename="registru-eip.pdf"'
+    });
+  }
+
   @Get("notifications")
   @RequirePermissions(Permission.SSM_EIP_VIEW)
   notifications(@TenantId() tenantId: string) {
     return this.eipService.dueNotifications(tenantId);
+  }
+
+  @Post("notifications/dispatch")
+  @RequirePermissions(Permission.SSM_EIP_EDIT)
+  dispatchNotifications(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
+    return this.eipService.dispatchReminders(tenantId, user.sub);
   }
 
   @Get("reports/stock-gap")
