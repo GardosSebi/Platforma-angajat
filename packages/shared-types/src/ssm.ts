@@ -377,6 +377,8 @@ export type SsmAccidentCaseStatus = "OPEN" | "IN_RESEARCH" | "MEASURES_DEFINED" 
 
 export interface CreateSsmAccidentCaseRequest {
   employeeId?: string;
+  worksiteId?: string;
+  departmentId?: string;
   type: SsmAccidentType;
   severity: SsmAccidentSeverity;
   title: string;
@@ -384,9 +386,16 @@ export interface CreateSsmAccidentCaseRequest {
   location?: string;
   description: string;
   witnesses?: string[];
+  contributingFactors?: string;
+  immediateMeasures?: string;
   itmDaysOff?: number;
   hasPermanentDisability?: boolean;
   isFatality?: boolean;
+  diseaseConfirmed?: boolean;
+  diseaseConfirmedAt?: string;
+  diseaseConfirmedBy?: string;
+  diseaseDocumentRef?: string;
+  researchResponsible?: string;
   legalDaysDeadline?: number;
 }
 
@@ -398,9 +407,16 @@ export interface CreateSsmAccidentTaskRequest {
   notes?: string;
 }
 
+export interface CreateSsmAccidentCorrectiveMeasureRequest {
+  accidentCaseId: string;
+  description: string;
+  assignedTo?: string;
+  dueAt: string;
+}
+
 export interface CloseSsmAccidentCaseRequest {
   conclusions: string;
-  correctiveMeasures: string;
+  correctiveMeasures?: string;
 }
 
 export interface SsmAccidentTaskItem {
@@ -412,10 +428,22 @@ export interface SsmAccidentTaskItem {
   notes?: string | null;
 }
 
+export interface SsmAccidentCorrectiveMeasureItem {
+  id: string;
+  description: string;
+  assignedTo?: string | null;
+  dueAt: string;
+  completedAt?: string | null;
+}
+
 export interface SsmAccidentCaseItem {
   id: string;
   employeeId?: string | null;
   employeeName?: string | null;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
   type: SsmAccidentType;
   severity: SsmAccidentSeverity;
   status: SsmAccidentCaseStatus;
@@ -423,29 +451,58 @@ export interface SsmAccidentCaseItem {
   occurredAt: string;
   dueAt: string;
   location?: string | null;
+  description?: string;
   witnesses?: string[];
+  contributingFactors?: string | null;
+  immediateMeasures?: string | null;
   itmDaysOff?: number | null;
   hasPermanentDisability?: boolean;
   isFatality?: boolean;
+  diseaseConfirmed?: boolean;
+  diseaseConfirmedAt?: string | null;
+  diseaseConfirmedBy?: string | null;
+  diseaseDocumentRef?: string | null;
+  researchResponsible?: string | null;
   conclusions?: string | null;
   correctiveMeasures?: string | null;
   tasks: SsmAccidentTaskItem[];
+  correctiveMeasureItems: SsmAccidentCorrectiveMeasureItem[];
+}
+
+export interface SsmAccidentStatsBucket {
+  key: string;
+  label: string;
+  count: number;
 }
 
 export interface SsmAccidentStats {
   byType: Record<SsmAccidentType, number>;
   bySeverity: Record<SsmAccidentSeverity, number>;
+  byDepartment: SsmAccidentStatsBucket[];
+  byWorksite: SsmAccidentStatsBucket[];
   openCases: number;
   overdueTasks: number;
+  overdueMeasures: number;
   totalCases: number;
+  accidentCount: number;
+  totalItmDaysOff: number;
+  activeEmployees: number;
+  /** Indice frecvență simplificat: accidente × 1000 / angajați activi */
+  frequencyRate: number | null;
+  /** Indice gravitate simplificat: zile ITM / accidente de muncă */
+  severityRate: number | null;
+  periodFrom?: string | null;
+  periodTo?: string | null;
 }
 
 export type SsmMedicalControlResult = "FIT" | "FIT_CONDITIONAL" | "TEMPORARY_UNFIT" | "UNFIT";
+export type SsmMedicalControlCategory = "HIRE" | "PERIODIC" | "RESUME" | "JOB_CHANGE";
 
 export interface CreateSsmMedicalControlTypeRequest {
   code: string;
   name: string;
-  jobPositionId?: string;
+  jobPositionId: string;
+  category: SsmMedicalControlCategory;
   recurrenceDays?: number;
   reminderDays?: number[];
 }
@@ -454,7 +511,8 @@ export interface SsmMedicalControlTypeItem {
   id: string;
   code: string;
   name: string;
-  jobPositionId?: string | null;
+  category: SsmMedicalControlCategory;
+  jobPositionId: string;
   jobPositionName?: string | null;
   recurrenceDays?: number | null;
   reminderDays: number[];
@@ -471,6 +529,13 @@ export interface CreateSsmMedicalControlRequest {
   validityUntil?: string;
 }
 
+export interface UpdateSsmMedicalControlRequest {
+  performedAt?: string;
+  result?: SsmMedicalControlResult;
+  recommendations?: string;
+  validityUntil?: string;
+}
+
 export interface SsmMedicalControlItem {
   id: string;
   employeeId: string;
@@ -478,6 +543,7 @@ export interface SsmMedicalControlItem {
   controlTypeId: string;
   controlTypeCode: string;
   controlTypeName: string;
+  controlTypeCategory?: SsmMedicalControlCategory;
   scheduledAt: string;
   performedAt?: string | null;
   result?: SsmMedicalControlResult | null;
@@ -485,6 +551,7 @@ export interface SsmMedicalControlItem {
   validityUntil?: string | null;
   nextDueAt?: string | null;
   aptitudeSheetName?: string | null;
+  hasAptitudeSheet?: boolean;
 }
 
 export interface SsmMedicalReminderItem {

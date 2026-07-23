@@ -496,12 +496,21 @@ async function main() {
   const medicalControlTypes = [
     await prisma.ssmMedicalControlType.upsert({
       where: { tenantId_code: { tenantId: TENANT_ID, code: "MED-HIRE" } },
-      update: { name: "Control la angajare", jobPositionId: null, recurrenceDays: null, reminderDays: [30, 15, 7], active: true, createdBy: CREATED_BY },
+      update: {
+        name: "Control la angajare",
+        jobPositionId: jobOperator.id,
+        category: "HIRE",
+        recurrenceDays: null,
+        reminderDays: [30, 15, 7],
+        active: true,
+        createdBy: CREATED_BY
+      },
       create: {
         tenantId: TENANT_ID,
         code: "MED-HIRE",
         name: "Control la angajare",
-        jobPositionId: null,
+        jobPositionId: jobOperator.id,
+        category: "HIRE",
         recurrenceDays: null,
         reminderDays: [30, 15, 7],
         active: true,
@@ -510,12 +519,21 @@ async function main() {
     }),
     await prisma.ssmMedicalControlType.upsert({
       where: { tenantId_code: { tenantId: TENANT_ID, code: "MED-PERIODIC-OP" } },
-      update: { name: "Control periodic operator", jobPositionId: jobOperator.id, recurrenceDays: 365, reminderDays: [30, 15, 7], active: true, createdBy: CREATED_BY },
+      update: {
+        name: "Control periodic operator",
+        jobPositionId: jobOperator.id,
+        category: "PERIODIC",
+        recurrenceDays: 365,
+        reminderDays: [30, 15, 7],
+        active: true,
+        createdBy: CREATED_BY
+      },
       create: {
         tenantId: TENANT_ID,
         code: "MED-PERIODIC-OP",
         name: "Control periodic operator",
         jobPositionId: jobOperator.id,
+        category: "PERIODIC",
         recurrenceDays: 365,
         reminderDays: [30, 15, 7],
         active: true,
@@ -524,12 +542,21 @@ async function main() {
     }),
     await prisma.ssmMedicalControlType.upsert({
       where: { tenantId_code: { tenantId: TENANT_ID, code: "MED-RETURN" } },
-      update: { name: "Control reluare activitate", jobPositionId: null, recurrenceDays: 180, reminderDays: [30, 15, 7], active: true, createdBy: CREATED_BY },
+      update: {
+        name: "Control reluare activitate",
+        jobPositionId: jobOperator.id,
+        category: "RESUME",
+        recurrenceDays: 180,
+        reminderDays: [30, 15, 7],
+        active: true,
+        createdBy: CREATED_BY
+      },
       create: {
         tenantId: TENANT_ID,
         code: "MED-RETURN",
         name: "Control reluare activitate",
-        jobPositionId: null,
+        jobPositionId: jobOperator.id,
+        category: "RESUME",
         recurrenceDays: 180,
         reminderDays: [30, 15, 7],
         active: true,

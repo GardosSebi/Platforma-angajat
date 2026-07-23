@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateSsmMedicalControlRequest, CreateSsmMedicalControlTypeRequest } from "@repo/shared-types/ssm";
+import type {
+  CreateSsmMedicalControlRequest,
+  CreateSsmMedicalControlTypeRequest,
+  UpdateSsmMedicalControlRequest
+} from "@repo/shared-types/ssm";
 import { ssmApi } from "../api/ssm.api";
 
 export function useMedicalControlTypes() {
@@ -23,6 +27,15 @@ export function useMedicalReminders() {
   });
 }
 
+function invalidateMedical(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "controls"] }),
+    queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "reminders"] }),
+    queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "control-types"] }),
+    queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "compliance"] })
+  ]);
+}
+
 export function useCreateMedicalControlType() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -39,11 +52,25 @@ export function useCreateMedicalControl() {
     mutationFn: ({ payload, aptitudeSheet }: { payload: CreateSsmMedicalControlRequest; aptitudeSheet?: File }) =>
       ssmApi.createMedicalControl(payload, aptitudeSheet),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "controls"] }),
-        queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "reminders"] }),
-        queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "compliance"] })
-      ]);
+      await invalidateMedical(queryClient);
+    }
+  });
+}
+
+export function useUpdateMedicalControl() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      controlId,
+      payload,
+      aptitudeSheet
+    }: {
+      controlId: string;
+      payload: UpdateSsmMedicalControlRequest;
+      aptitudeSheet?: File;
+    }) => ssmApi.updateMedicalControl(controlId, payload, aptitudeSheet),
+    onSuccess: async () => {
+      await invalidateMedical(queryClient);
     }
   });
 }

@@ -547,7 +547,11 @@ export class SsmOverviewService {
     if (type === "accidents") {
       const rows = await this.prisma.ssmAccidentCase.findMany({
         where: { tenantId },
-        include: { employee: { select: { fullName: true } } },
+        include: {
+          employee: { select: { fullName: true } },
+          worksite: { select: { name: true } },
+          department: { select: { name: true } }
+        },
         orderBy: { occurredAt: "desc" },
         take: 1000
       });
@@ -559,8 +563,11 @@ export class SsmOverviewService {
         employee: row.employee?.fullName ?? null,
         occurredAt: row.occurredAt.toISOString(),
         location: row.location,
+        worksite: row.worksite?.name ?? null,
+        department: row.department?.name ?? null,
         itmDaysOff: row.itmDaysOff,
-        isFatality: row.isFatality
+        isFatality: row.isFatality,
+        diseaseConfirmed: row.diseaseConfirmed
       }));
     }
     if (type === "psi") {

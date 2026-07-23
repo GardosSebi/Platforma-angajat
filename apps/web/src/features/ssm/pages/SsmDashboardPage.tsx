@@ -49,14 +49,14 @@ const SSM_SECTIONS: Array<{
   {
     id: "accidents",
     title: "Accidente și incidente",
-    caption: "Cazuri, task-uri, statistici",
-    description: "Înregistrează cazuri și urmărește fluxul de cercetare până la închidere."
+    caption: "Registru, cercetare, măsuri",
+    description: "Lucrează pe secțiuni: registru cazuri, cercetare, măsuri corective și statistici."
   },
   {
     id: "medical",
     title: "Medicina muncii",
-    caption: "Aptitudini, fișe, reminder",
-    description: "Configurează tipuri de controale medicale, rezultate și următoarele scadențe."
+    caption: "Tipuri, registru, reminder",
+    description: "Lucrează pe secțiuni: tipuri pe post, registru controale, actualizare rezultat/fișă și reminder-uri."
   },
   {
     id: "risk",
@@ -142,10 +142,6 @@ export function SsmDashboardPage() {
   return (
     <>
       <h1 className="page-title">SSM</h1>
-      <p className="page-lead">
-        Centru operațional SSM: drepturile urmează matricea 3.12 (administrator SSM, responsabil pe entitate, manager
-        departament, angajat).
-      </p>
       {!session ? (
         <div className="callout-warn" role="status">
           You are not signed in. SSM actions need a JWT and tenant.{" "}

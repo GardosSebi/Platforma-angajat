@@ -25,7 +25,7 @@ const REPORT_PREVIEW_FIELDS: Record<SsmReportType, string[]> = {
   eip: ["employee", "eipCode", "eipName", "movementType", "movementDate", "replacementDueAt"],
   medical: ["employee", "controlCode", "controlName", "result", "nextDueAt", "validityUntil"],
   documents: ["title", "type", "status", "versionNumber", "activeVersionNumber", "fileName", "changeNote", "versionCreatedAt"],
-  accidents: ["title", "type", "severity", "status", "employee", "occurredAt"],
+  accidents: ["title", "type", "severity", "status", "employee", "occurredAt", "location", "worksite", "department"],
   psi: ["category", "name", "worksite", "nextDueAt", "validUntil", "employee"],
   compliance: ["globalScore", "trafficLight", "module", "total", "noncompliant", "score"]
 };

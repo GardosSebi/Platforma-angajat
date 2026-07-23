@@ -97,6 +97,13 @@ enum SsmMedicalControlResult {
   UNFIT
 }
 
+enum SsmMedicalControlCategory {
+  HIRE
+  PERIODIC
+  RESUME
+  JOB_CHANGE
+}
+
 enum SsmRiskAssessmentStatus {
   ACTIVE
   ARCHIVED
@@ -292,6 +299,7 @@ model Tenant {
   ssmEipReminderDispatches   SsmEipReminderDispatch[]
   ssmAccidentCases           SsmAccidentCase[]
   ssmAccidentTasks           SsmAccidentTask[]
+  ssmAccidentCorrectiveMeasures SsmAccidentCorrectiveMeasure[]
   ssmMedicalControlTypes     SsmMedicalControlType[]
   ssmMedicalControls         SsmMedicalControl[]
   ssmRiskAssessments         SsmRiskAssessment[]
@@ -397,6 +405,7 @@ model Worksite {
   ssmPsiResponsibles         SsmPsiResponsible[]
   ssmEvacuationDrills        SsmEvacuationDrill[]
   ssmPreventionPlans         SsmPreventionPlan[]
+  ssmAccidentCases           SsmAccidentCase[]
   userScopedRoles            UserScopedRole[]
   jobPositions               JobPosition[]
   communicationPublishRights CommunicationPublishRight[]
@@ -425,6 +434,7 @@ model Department {
   employeePlacementHistories EmployeePlacementHistory[]
   ssmRiskAssessments         SsmRiskAssessment[]
   ssmPreventionPlans         SsmPreventionPlan[]
+  ssmAccidentCases           SsmAccidentCase[]
   ssmEipStocks               SsmEipStock[]
   ssmEipMovements            SsmEipMovement[]
 
@@ -870,20 +880,29 @@ model SsmEipMovement {
 }
 
 model SsmAccidentCase {
-  id                 String                @id @default(cuid())
-  tenantId           String
-  employeeId         String?
-  type               SsmAccidentType
-  severity           SsmAccidentSeverity
-  status             SsmAccidentCaseStatus @default(OPEN)
-  title              String
-  occurredAt         DateTime
-  location           String?
+  id                       String                @id @default(cuid())
+  tenantId                 String
+  employeeId               String?
+  worksiteId               String?
+  departmentId             String?
+  type                     SsmAccidentType
+  severity                 SsmAccidentSeverity
+  status                   SsmAccidentCaseStatus @default(OPEN)
+  title                    String
+  occurredAt               DateTime
+  location                 String?
   description              String
   witnesses                String[]              @default([])
+  contributingFactors      String?
+  immediateMeasures        String?
   itmDaysOff               Int?
   hasPermanentDisability   Boolean               @default(false)
   isFatality               Boolean               @default(false)
+  diseaseConfirmed         Boolean               @default(false)
+  diseaseConfirmedAt       DateTime?
+  diseaseConfirmedBy       String?
+  diseaseDocumentRef       String?
+  researchResponsible      String?
   conclusions              String?
   correctiveMeasures       String?
   legalDaysDeadline        Int                   @default(30)
@@ -893,12 +912,17 @@ model SsmAccidentCase {
   createdAt                DateTime              @default(now())
   updatedAt                DateTime              @updatedAt
 
-  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  employee Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  tasks    SsmAccidentTask[]
+  tenant              Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee            Employee?                      @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  worksite            Worksite?                      @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department          Department?                    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  tasks               SsmAccidentTask[]
+  correctiveMeasureItems SsmAccidentCorrectiveMeasure[]
 
   @@index([tenantId, status, dueAt])
   @@index([tenantId, type, occurredAt])
+  @@index([tenantId, worksiteId])
+  @@index([tenantId, departmentId])
 }
 
 model SsmAccidentTask {
@@ -921,26 +945,47 @@ model SsmAccidentTask {
   @@index([tenantId, accidentCaseId])
 }
 
-model SsmMedicalControlType {
-  id             String   @id @default(cuid())
+model SsmAccidentCorrectiveMeasure {
+  id             String    @id @default(cuid())
   tenantId       String
-  jobPositionId  String?
+  accidentCaseId String
+  description    String
+  assignedTo     String?
+  dueAt          DateTime
+  completedAt    DateTime?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accidentCase SsmAccidentCase @relation(fields: [accidentCaseId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, dueAt, completedAt])
+  @@index([tenantId, accidentCaseId])
+}
+
+model SsmMedicalControlType {
+  id             String                     @id @default(cuid())
+  tenantId       String
+  jobPositionId  String
+  category       SsmMedicalControlCategory  @default(PERIODIC)
   code           String
   name           String
   recurrenceDays Int?
-  reminderDays   Int[]    @default([30, 15, 7])
-  active         Boolean  @default(true)
+  reminderDays   Int[]                      @default([30, 15, 7])
+  active         Boolean                    @default(true)
   createdBy      String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
 
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  jobPosition JobPosition?   @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobPosition JobPosition         @relation(fields: [jobPositionId], references: [id], onDelete: Cascade)
   controls    SsmMedicalControl[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
   @@index([tenantId, jobPositionId])
+  @@index([tenantId, category, jobPositionId])
 }
 
 model SsmMedicalControl {

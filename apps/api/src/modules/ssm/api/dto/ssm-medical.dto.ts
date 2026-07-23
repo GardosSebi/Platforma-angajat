@@ -10,8 +10,7 @@ import {
   Min,
   MinLength
 } from "class-validator";
-import { Transform } from "class-transformer";
-import { SsmMedicalControlResult } from "@prisma/client";
+import { SsmMedicalControlCategory, SsmMedicalControlResult } from "@prisma/client";
 
 export class CreateMedicalControlTypeDto {
   @IsString()
@@ -24,10 +23,12 @@ export class CreateMedicalControlTypeDto {
   @MaxLength(160)
   name!: string;
 
-  @IsOptional()
-  @Transform(({ value }) => (typeof value === "string" && value.trim() === "" ? undefined : value))
   @IsString()
-  jobPositionId?: string;
+  @MinLength(2)
+  jobPositionId!: string;
+
+  @IsEnum(SsmMedicalControlCategory)
+  category!: SsmMedicalControlCategory;
 
   @IsOptional()
   @IsInt()
@@ -54,6 +55,25 @@ export class CreateMedicalControlDto {
   @IsDateString()
   scheduledAt!: string;
 
+  @IsOptional()
+  @IsDateString()
+  performedAt?: string;
+
+  @IsOptional()
+  @IsEnum(SsmMedicalControlResult)
+  result?: SsmMedicalControlResult;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  recommendations?: string;
+
+  @IsOptional()
+  @IsDateString()
+  validityUntil?: string;
+}
+
+export class UpdateMedicalControlDto {
   @IsOptional()
   @IsDateString()
   performedAt?: string;

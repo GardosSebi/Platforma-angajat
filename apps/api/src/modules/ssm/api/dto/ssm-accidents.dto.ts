@@ -18,6 +18,16 @@ export class CreateAccidentCaseDto {
   @MinLength(2)
   employeeId?: string;
 
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  worksiteId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  departmentId?: string;
+
   @IsEnum(SsmAccidentType)
   type!: SsmAccidentType;
 
@@ -48,6 +58,16 @@ export class CreateAccidentCaseDto {
   witnesses?: string[];
 
   @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  contributingFactors?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  immediateMeasures?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   itmDaysOff?: number;
@@ -59,6 +79,29 @@ export class CreateAccidentCaseDto {
   @IsOptional()
   @IsBoolean()
   isFatality?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  diseaseConfirmed?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  diseaseConfirmedAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  diseaseConfirmedBy?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  diseaseDocumentRef?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  researchResponsible?: string;
 
   @IsOptional()
   @IsInt()
@@ -90,14 +133,33 @@ export class CreateAccidentTaskDto {
   notes?: string;
 }
 
+export class CreateAccidentCorrectiveMeasureDto {
+  @IsString()
+  @MinLength(2)
+  accidentCaseId!: string;
+
+  @IsString()
+  @MinLength(5)
+  @MaxLength(2000)
+  description!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  assignedTo?: string;
+
+  @IsDateString()
+  dueAt!: string;
+}
+
 export class CloseAccidentCaseDto {
   @IsString()
   @MinLength(5)
   @MaxLength(5000)
   conclusions!: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(5)
   @MaxLength(5000)
-  correctiveMeasures!: string;
+  correctiveMeasures?: string;
 }

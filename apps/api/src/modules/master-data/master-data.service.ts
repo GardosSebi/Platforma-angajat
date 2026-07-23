@@ -32,6 +32,7 @@ import {
 import { EmployeeEmploymentType } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { SsmTrainingAutomationService } from "../ssm/application/services/ssm-training-automation.service";
+import { SsmMedicalService } from "../ssm/application/services/ssm-medical.service";
 import { CreateLegalEntityDto } from "./dto/create-legal-entity.dto";
 import { UpdateLegalEntityDto } from "./dto/update-legal-entity.dto";
 import { ListEmployeesQueryDto } from "./dto/list-employees-query.dto";
@@ -89,7 +90,8 @@ export class MasterDataService {
     private readonly encryption: DataEncryptionService,
     private readonly auditLog: AuditLogService,
     private readonly notifications: NotificationsService,
-    private readonly trainingAutomation: SsmTrainingAutomationService
+    private readonly trainingAutomation: SsmTrainingAutomationService,
+    private readonly medicalService: SsmMedicalService
   ) {}
 
   private maskCnp(stored: string | null, reveal: boolean): string | null {
@@ -655,6 +657,7 @@ export class MasterDataService {
         created.id,
         dto.employmentType ?? EmployeeEmploymentType.OWN
       );
+      await this.medicalService.scheduleOnHire(tenantId, actorUserId, created.id);
       return created;
     } catch {
       throw new ConflictException("Adresa de e-mail a angajatului există deja pentru acest tenant.");
@@ -728,8 +731,17 @@ export class MasterDataService {
       return row;
     });
 
+    const absenceCleared =
+      dto.absenceStartedAt !== undefined &&
+      existing.absenceStartedAt != null &&
+      (dto.absenceStartedAt === null || dto.absenceStartedAt === "");
+
     if (placementChanged) {
       await this.trainingAutomation.assignOnPlacementChange(tenantId, actorUserId, updated.id);
+      await this.medicalService.scheduleOnJobChange(tenantId, actorUserId, updated.id);
+    }
+    if (absenceCleared) {
+      await this.medicalService.scheduleOnResume(tenantId, actorUserId, updated.id);
     }
 
     return updated;
@@ -782,6 +794,7 @@ export class MasterDataService {
       return row;
     });
     await this.trainingAutomation.assignOnPlacementChange(tenantId, actorUserId, employeeId);
+    await this.medicalService.scheduleOnJobChange(tenantId, actorUserId, employeeId);
 
     return updated;
   }
@@ -1128,6 +1141,7 @@ export class MasterDataService {
             }
           });
           await this.trainingAutomation.assignOnHire(tenantId, actorUserId, emp.id, employmentType);
+          await this.medicalService.scheduleOnHire(tenantId, actorUserId, emp.id);
           created += 1;
         }
       } catch (e) {

@@ -1,16 +1,38 @@
+import { createReadStream } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import { extname, resolve } from "path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { SsmMedicalControlResult } from "@prisma/client";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  StreamableFile
+} from "@nestjs/common";
+import { SsmMedicalControlCategory, SsmMedicalControlResult } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
-import { CreateMedicalControlDto, CreateMedicalControlTypeDto } from "../../api/dto/ssm-medical.dto";
+import {
+  CreateMedicalControlDto,
+  CreateMedicalControlTypeDto,
+  UpdateMedicalControlDto
+} from "../../api/dto/ssm-medical.dto";
+import { findEmployeeIdForUserEmail } from "../../api/ssm-viewer-scope";
 import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
 
 const MEDICAL_ALLOWED_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg"]);
 const MEDICAL_ALLOWED_MIME_PREFIXES = ["application/pdf", "image/"];
 const MEDICAL_MAX_FILE_BYTES = 25 * 1024 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const CATEGORY_DEFAULTS: Record<
+  SsmMedicalControlCategory,
+  { codePrefix: string; name: string; recurrenceDays?: number }
+> = {
+  HIRE: { codePrefix: "MED-HIRE", name: "Control medical la angajare" },
+  PERIODIC: { codePrefix: "MED-PERIODIC", name: "Control medical periodic", recurrenceDays: 365 },
+  RESUME: { codePrefix: "MED-RESUME", name: "Control medical la reluare activitate" },
+  JOB_CHANGE: { codePrefix: "MED-JOBCHG", name: "Control medical la schimbare post" }
+};
 
 function parseDate(value: string, fieldName: string): Date {
   const d = new Date(value);
@@ -73,12 +95,13 @@ export class SsmMedicalService {
       include: {
         jobPosition: { select: { id: true, name: true } }
       },
-      orderBy: [{ active: "desc" }, { code: "asc" }]
+      orderBy: [{ active: "desc" }, { category: "asc" }, { code: "asc" }]
     });
     return rows.map((row) => ({
       id: row.id,
       code: row.code,
       name: row.name,
+      category: row.category,
       jobPositionId: row.jobPositionId,
       jobPositionName: row.jobPosition?.name ?? null,
       recurrenceDays: row.recurrenceDays,
@@ -88,17 +111,15 @@ export class SsmMedicalService {
   }
 
   async createControlType(tenantId: string, actorId: string, dto: CreateMedicalControlTypeDto) {
-    if (dto.jobPositionId) {
-      const position = await this.prisma.jobPosition.findFirst({
-        where: {
-          id: dto.jobPositionId,
-          tenantId,
-          active: true
-        }
-      });
-      if (!position) {
-        throw new NotFoundException("Job position not found for tenant.");
+    const position = await this.prisma.jobPosition.findFirst({
+      where: {
+        id: dto.jobPositionId,
+        tenantId,
+        active: true
       }
+    });
+    if (!position) {
+      throw new NotFoundException("Job position not found for tenant.");
     }
 
     const created = await this.prisma.ssmMedicalControlType.create({
@@ -106,7 +127,8 @@ export class SsmMedicalService {
         tenantId,
         code: dto.code.trim().toUpperCase(),
         name: dto.name.trim(),
-        jobPositionId: dto.jobPositionId?.trim(),
+        jobPositionId: dto.jobPositionId.trim(),
+        category: dto.category,
         recurrenceDays: dto.recurrenceDays,
         reminderDays: dto.reminderDays ?? [30, 15, 7],
         createdBy: actorId
@@ -120,10 +142,133 @@ export class SsmMedicalService {
       action: "MEDICAL_CONTROL_TYPE_CREATED",
       entityType: "SsmMedicalControlType",
       entityId: created.id,
-      payload: { code: created.code }
+      payload: { code: created.code, category: created.category }
     });
 
     return created;
+  }
+
+  async ensureControlType(
+    tenantId: string,
+    actorId: string,
+    category: SsmMedicalControlCategory,
+    jobPositionId: string
+  ) {
+    const existing = await this.prisma.ssmMedicalControlType.findFirst({
+      where: { tenantId, category, jobPositionId, active: true }
+    });
+    if (existing) return existing;
+
+    const def = CATEGORY_DEFAULTS[category];
+    const code = `${def.codePrefix}-${jobPositionId.slice(-6).toUpperCase()}`;
+    return this.prisma.ssmMedicalControlType.create({
+      data: {
+        tenantId,
+        jobPositionId,
+        category,
+        code,
+        name: def.name,
+        recurrenceDays: def.recurrenceDays,
+        reminderDays: [30, 15, 7],
+        createdBy: actorId
+      }
+    });
+  }
+
+  async scheduleControlForCategory(
+    tenantId: string,
+    actorId: string,
+    employeeId: string,
+    category: SsmMedicalControlCategory,
+    reason: string
+  ) {
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, tenantId, active: true },
+      select: { id: true, jobPositionId: true, fullName: true }
+    });
+    if (!employee?.jobPositionId) {
+      return null;
+    }
+
+    const controlType = await this.ensureControlType(tenantId, actorId, category, employee.jobPositionId);
+
+    const openExisting = await this.prisma.ssmMedicalControl.findFirst({
+      where: {
+        tenantId,
+        employeeId,
+        controlTypeId: controlType.id,
+        OR: [{ result: null }, { performedAt: null }]
+      }
+    });
+    if (openExisting) {
+      return openExisting;
+    }
+
+    const now = new Date();
+    const created = await this.prisma.ssmMedicalControl.create({
+      data: {
+        tenantId,
+        employeeId,
+        controlTypeId: controlType.id,
+        scheduledAt: now,
+        nextDueAt: now,
+        createdBy: actorId,
+        recommendations: reason
+      }
+    });
+
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "MEDICAL_CONTROL_AUTO_SCHEDULED",
+      entityType: "SsmMedicalControl",
+      entityId: created.id,
+      payload: { employeeId, category, reason }
+    });
+
+    await this.notifications.notifyEmployee({
+      tenantId,
+      employeeId,
+      category: "SSM_MEDICAL",
+      title: `Control medical programat: ${controlType.name}`,
+      body: reason,
+      linkPath: "/portal?tab=medical",
+      entityType: "SsmMedicalControl",
+      entityId: created.id
+    });
+
+    return created;
+  }
+
+  async scheduleOnHire(tenantId: string, actorId: string, employeeId: string) {
+    return this.scheduleControlForCategory(
+      tenantId,
+      actorId,
+      employeeId,
+      SsmMedicalControlCategory.HIRE,
+      "Flux automat: control medical la angajare"
+    );
+  }
+
+  async scheduleOnJobChange(tenantId: string, actorId: string, employeeId: string) {
+    return this.scheduleControlForCategory(
+      tenantId,
+      actorId,
+      employeeId,
+      SsmMedicalControlCategory.JOB_CHANGE,
+      "Flux automat: control medical la schimbare post / loc de muncă"
+    );
+  }
+
+  async scheduleOnResume(tenantId: string, actorId: string, employeeId: string) {
+    return this.scheduleControlForCategory(
+      tenantId,
+      actorId,
+      employeeId,
+      SsmMedicalControlCategory.RESUME,
+      "Flux automat: control medical la reluare activitate"
+    );
   }
 
   async createControl(
@@ -167,7 +312,7 @@ export class SsmMedicalService {
     const baseDate = validityUntil ?? performedAt ?? scheduledAt;
     const nextDueAt =
       controlType.recurrenceDays && controlType.recurrenceDays > 0
-        ? new Date(baseDate.getTime() + controlType.recurrenceDays * 24 * 60 * 60 * 1000)
+        ? new Date(baseDate.getTime() + controlType.recurrenceDays * DAY_MS)
         : undefined;
 
     const previousControl = await this.prisma.ssmMedicalControl.findFirst({
@@ -226,12 +371,129 @@ export class SsmMedicalService {
     return created;
   }
 
+  async updateControl(
+    tenantId: string,
+    actorId: string,
+    controlId: string,
+    dto: UpdateMedicalControlDto,
+    aptitudeSheet?: Express.Multer.File
+  ) {
+    this.assertAptitudeSheet(aptitudeSheet);
+
+    const existing = await this.prisma.ssmMedicalControl.findFirst({
+      where: { id: controlId, tenantId },
+      include: { controlType: true }
+    });
+    if (!existing) {
+      throw new NotFoundException("Medical control not found.");
+    }
+
+    const performedAt = dto.performedAt
+      ? parseDate(dto.performedAt, "performedAt")
+      : existing.performedAt ?? undefined;
+    const validityUntil =
+      dto.validityUntil !== undefined ? parseDate(dto.validityUntil, "validityUntil") : existing.validityUntil;
+    const result = dto.result !== undefined ? dto.result : existing.result;
+
+    if (performedAt && performedAt < existing.scheduledAt) {
+      throw new BadRequestException("performedAt must be after scheduledAt.");
+    }
+
+    const baseDate = (validityUntil ?? performedAt ?? existing.scheduledAt) as Date;
+    const nextDueAt =
+      existing.controlType.recurrenceDays && existing.controlType.recurrenceDays > 0
+        ? new Date(baseDate.getTime() + existing.controlType.recurrenceDays * DAY_MS)
+        : existing.nextDueAt;
+
+    const data: {
+      performedAt?: Date | null;
+      result?: SsmMedicalControlResult | null;
+      recommendations?: string | null;
+      validityUntil?: Date | null;
+      nextDueAt?: Date | null;
+      aptitudeSheetPath?: string;
+      aptitudeSheetName?: string;
+      aptitudeSheetMime?: string;
+      aptitudeSheetSize?: number;
+    } = {
+      performedAt: performedAt ?? null,
+      result: result ?? null,
+      recommendations:
+        dto.recommendations !== undefined ? dto.recommendations.trim() || null : existing.recommendations,
+      validityUntil: validityUntil ?? null,
+      nextDueAt: nextDueAt ?? null
+    };
+
+    if (aptitudeSheet) {
+      const storagePath = await this.persistAptitudeSheet(tenantId, existing.id, aptitudeSheet);
+      data.aptitudeSheetPath = storagePath;
+      data.aptitudeSheetName = aptitudeSheet.originalname;
+      data.aptitudeSheetMime = aptitudeSheet.mimetype;
+      data.aptitudeSheetSize = aptitudeSheet.size;
+    }
+
+    const updated = await this.prisma.ssmMedicalControl.update({
+      where: { id: existing.id },
+      data
+    });
+
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "MEDICAL_CONTROL_UPDATED",
+      entityType: "SsmMedicalControl",
+      entityId: updated.id,
+      payload: {
+        result: updated.result,
+        aptitudeReplaced: Boolean(aptitudeSheet)
+      }
+    });
+
+    if (
+      result === SsmMedicalControlResult.FIT &&
+      existing.result === SsmMedicalControlResult.TEMPORARY_UNFIT
+    ) {
+      await this.trainingAutomation.assignOnMedicalResume(tenantId, actorId, existing.employeeId);
+    }
+
+    return updated;
+  }
+
+  async canEmployeeDownloadAptitudeSheet(tenantId: string, controlId: string, userEmail: string) {
+    const selfEmployeeId = await findEmployeeIdForUserEmail(this.prisma, tenantId, userEmail);
+    if (!selfEmployeeId) return false;
+    const control = await this.prisma.ssmMedicalControl.findFirst({
+      where: { id: controlId, tenantId, employeeId: selfEmployeeId },
+      select: { id: true }
+    });
+    return Boolean(control);
+  }
+
+  async downloadAptitudeSheet(tenantId: string, controlId: string) {
+    const control = await this.prisma.ssmMedicalControl.findFirst({
+      where: { id: controlId, tenantId }
+    });
+    if (!control) {
+      throw new NotFoundException("Medical control not found.");
+    }
+    if (!control.aptitudeSheetPath) {
+      throw new NotFoundException("Aptitude sheet not attached.");
+    }
+
+    const stream = createReadStream(control.aptitudeSheetPath);
+    return new StreamableFile(stream, {
+      type: control.aptitudeSheetMime ?? "application/octet-stream",
+      disposition: `attachment; filename="${sanitizeFilename(control.aptitudeSheetName ?? `aptitudini-${controlId}.pdf`)}"`
+    });
+  }
+
   async listControls(tenantId: string) {
     const rows = await this.prisma.ssmMedicalControl.findMany({
       where: { tenantId },
       include: {
         employee: { select: { id: true, fullName: true } },
-        controlType: { select: { id: true, code: true, name: true } }
+        controlType: { select: { id: true, code: true, name: true, category: true } }
       },
       orderBy: [{ nextDueAt: "asc" }, { scheduledAt: "desc" }]
     });
@@ -244,13 +506,15 @@ export class SsmMedicalService {
         controlTypeId: row.controlTypeId,
         controlTypeCode: row.controlType.code,
         controlTypeName: row.controlType.name,
+        controlTypeCategory: row.controlType.category,
         scheduledAt: row.scheduledAt,
         performedAt: row.performedAt,
         result: row.result as SsmMedicalControlResult | null,
         recommendations: row.recommendations,
         validityUntil: row.validityUntil,
         nextDueAt: row.nextDueAt,
-        aptitudeSheetName: row.aptitudeSheetName
+        aptitudeSheetName: row.aptitudeSheetName,
+        hasAptitudeSheet: Boolean(row.aptitudeSheetPath)
       }))
     };
   }

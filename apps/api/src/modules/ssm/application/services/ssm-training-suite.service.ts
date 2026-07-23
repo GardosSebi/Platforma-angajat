@@ -60,6 +60,7 @@ type MedicalControlForDossier = {
   nextDueAt: Date | null;
   result: string | null;
   aptitudeSheetName: string | null;
+  aptitudeSheetPath: string | null;
   controlType: {
     name: string;
   };
@@ -1279,7 +1280,8 @@ export class SsmTrainingSuiteService {
         performedAt: control.performedAt,
         nextDueAt: control.nextDueAt,
         result: control.result,
-        aptitudeSheetName: control.aptitudeSheetName
+        aptitudeSheetName: control.aptitudeSheetName,
+        hasAptitudeSheet: Boolean(control.aptitudeSheetPath)
       })),
       eipRecords: eipMovements.map((movement) => ({
         id: movement.id,

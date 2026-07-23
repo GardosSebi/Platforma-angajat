@@ -98,9 +98,32 @@ export function EmployeeDossierPanel() {
               <li key={c.id}>
                 <strong>{c.controlType}</strong>
                 <span>
-                  {c.result ?? "—"}
+                  {c.result === "FIT"
+                    ? "Apt"
+                    : c.result === "FIT_CONDITIONAL"
+                      ? "Apt condiționat"
+                      : c.result === "TEMPORARY_UNFIT"
+                        ? "Inapt temporar"
+                        : c.result === "UNFIT"
+                          ? "Inapt permanent"
+                          : (c.result ?? "—")}
                   {c.nextDueAt ? ` · următor control ${formatRoDate(c.nextDueAt)}` : ""}
                 </span>
+                {c.hasAptitudeSheet || c.aptitudeSheetName ? (
+                  <button
+                    type="button"
+                    className="btn-text"
+                    onClick={() => {
+                      setDownloadError(null);
+                      void downloadWithAuth(
+                        ssmApi.getMedicalAptitudeSheetUrl(c.id),
+                        c.aptitudeSheetName ?? `fisa-aptitudini-${c.id}.pdf`
+                      ).catch((err: unknown) => setDownloadError(mutationErrorMessage(err)));
+                    }}
+                  >
+                    Descarcă fișa de aptitudini
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

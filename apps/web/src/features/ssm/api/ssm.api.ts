@@ -4,12 +4,14 @@ import type {
   CompleteSsmTestRequest,
   CloseSsmAccidentCaseRequest,
   CreateSsmAccidentCaseRequest,
+  CreateSsmAccidentCorrectiveMeasureRequest,
   CreateSsmAccidentTaskRequest,
   CreateSsmEipMovementRequest,
   CreateSsmEipNormRequest,
   CreateSsmEipTypeRequest,
   CreateSsmMedicalControlRequest,
   CreateSsmMedicalControlTypeRequest,
+  UpdateSsmMedicalControlRequest,
   CreateSsmPsiEquipmentRequest,
   CreateSsmPsiResponsibleRequest,
   CreateSsmPsiTrainingRecordRequest,
@@ -221,8 +223,12 @@ export const ssmApi = {
         nextDueAt?: string | null;
         result?: string | null;
         aptitudeSheetName?: string | null;
+        hasAptitudeSheet?: boolean;
       }>;
     }>(`/ssm/training-suite/employees/${employeeId}/digital-file`);
+  },
+  getMedicalAptitudeSheetUrl(controlId: string) {
+    return `/ssm/medical/controls/${controlId}/aptitude-sheet`;
   },
   getIndividualSheetUrl(trainingPlanId: string) {
     return `/ssm/training-suite/plans/${trainingPlanId}/individual-sheet.pdf`;
@@ -298,14 +304,29 @@ export const ssmApi = {
       method: "PATCH"
     });
   },
+  addAccidentCorrectiveMeasure(payload: CreateSsmAccidentCorrectiveMeasureRequest) {
+    return httpClient<{ id: string }>("/ssm/accidents/measures", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  completeAccidentCorrectiveMeasure(measureId: string) {
+    return httpClient<{ completed: boolean }>(`/ssm/accidents/measures/${measureId}/complete`, {
+      method: "PATCH"
+    });
+  },
   closeAccidentCase(caseId: string, payload: CloseSsmAccidentCaseRequest) {
     return httpClient<{ id: string }>(`/ssm/accidents/${caseId}/close`, {
       method: "PATCH",
       body: JSON.stringify(payload)
     });
   },
-  accidentStats() {
-    return httpClient<SsmAccidentStats>("/ssm/accidents/stats/overview");
+  accidentStats(params?: { from?: string; to?: string }) {
+    const query = new URLSearchParams();
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    const qs = query.toString();
+    return httpClient<SsmAccidentStats>(`/ssm/accidents/stats/overview${qs ? `?${qs}` : ""}`);
   },
   getAccidentReportUrl(caseId: string) {
     return `/ssm/accidents/${caseId}/report.pdf`;
@@ -335,6 +356,22 @@ export const ssmApi = {
     }
     return httpClient<{ id: string }>("/ssm/medical/controls", {
       method: "POST",
+      body
+    });
+  },
+  updateMedicalControl(controlId: string, payload: UpdateSsmMedicalControlRequest, aptitudeSheet?: File) {
+    const body = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") {
+        return;
+      }
+      body.append(key, String(value));
+    });
+    if (aptitudeSheet) {
+      body.append("aptitudeSheet", aptitudeSheet);
+    }
+    return httpClient<{ id: string }>(`/ssm/medical/controls/${controlId}`, {
+      method: "PATCH",
       body
     });
   },

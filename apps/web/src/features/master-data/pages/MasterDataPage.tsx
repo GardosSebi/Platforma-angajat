@@ -35,7 +35,7 @@ export function MasterDataPage() {
     <div className="comms-page master-data-page">
       <header className="comms-header">
         <div>
-          <h1 className="page-title">Date master SSM</h1>
+          <h1 className="page-title">Master Data SSM</h1>
           <p className="page-lead">
             Configurează structura organizațională: angajați, posturi, puncte de lucru și grupuri de instruire.
           </p>
