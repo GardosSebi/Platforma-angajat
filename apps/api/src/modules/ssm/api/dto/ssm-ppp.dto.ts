@@ -32,6 +32,10 @@ export class CreateSsmPreventionPlanDto {
   departmentId?: string;
 
   @IsOptional()
+  @IsString()
+  riskAssessmentId?: string;
+
+  @IsOptional()
   @IsDateString()
   reviewDate?: string;
 
@@ -100,6 +104,10 @@ export class ListSsmPreventionPlansDto {
   @IsOptional()
   @IsEnum(SsmPreventionPlanStatus)
   status?: SsmPreventionPlanStatus;
+
+  @IsOptional()
+  @IsString()
+  riskAssessmentId?: string;
 }
 
 export class CreateSsmEvacuationDrillDto {

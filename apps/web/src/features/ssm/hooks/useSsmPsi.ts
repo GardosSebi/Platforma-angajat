@@ -3,7 +3,8 @@ import type {
   CreateSsmPsiEquipmentRequest,
   CreateSsmPsiResponsibleRequest,
   CreateSsmPsiTrainingRecordRequest,
-  RegisterSsmPsiEquipmentVerificationRequest
+  RegisterSsmPsiEquipmentVerificationRequest,
+  UpdateSsmPsiEquipmentRequest
 } from "@repo/shared-types/ssm";
 import { ssmApi } from "../api/ssm.api";
 
@@ -25,6 +26,14 @@ export function usePsiEquipmentNotifications() {
   return useQuery({
     queryKey: ["ssm", "psi", "equipment-notifications"],
     queryFn: ssmApi.psiEquipmentNotifications
+  });
+}
+
+export function usePsiEquipmentVerifications(equipmentId?: string) {
+  return useQuery({
+    queryKey: ["ssm", "psi", "equipment", equipmentId, "verifications"],
+    queryFn: () => ssmApi.psiEquipmentVerifications(equipmentId as string),
+    enabled: Boolean(equipmentId)
   });
 }
 
@@ -55,15 +64,52 @@ export function useCreatePsiEquipment() {
   });
 }
 
-export function useRegisterPsiEquipmentVerification() {
+export function useUpdatePsiEquipment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: RegisterSsmPsiEquipmentVerificationRequest) => ssmApi.registerPsiEquipmentVerification(payload),
+    mutationFn: ({ equipmentId, payload }: { equipmentId: string; payload: UpdateSsmPsiEquipmentRequest }) =>
+      ssmApi.updatePsiEquipment(equipmentId, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "psi", "equipment"] });
+    }
+  });
+}
+
+export function useRetirePsiEquipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (equipmentId: string) => ssmApi.retirePsiEquipment(equipmentId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["ssm", "psi", "equipment"] }),
         queryClient.invalidateQueries({ queryKey: ["ssm", "psi", "equipment-notifications"] })
       ]);
+    }
+  });
+}
+
+export function useRegisterPsiEquipmentVerification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: RegisterSsmPsiEquipmentVerificationRequest) => ssmApi.registerPsiEquipmentVerification(payload),
+    onSuccess: async (_result, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "psi", "equipment"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "psi", "equipment-notifications"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["ssm", "psi", "equipment", variables.equipmentId, "verifications"]
+        })
+      ]);
+    }
+  });
+}
+
+export function useDispatchPsiReminders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ssmApi.dispatchPsiEquipmentNotifications(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "psi", "equipment-notifications"] });
     }
   });
 }

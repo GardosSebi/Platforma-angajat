@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { PermissionsGuard } from "../../common/guards/permissions.guard";
 import { NotificationsModule } from "../../infrastructure/notifications/notifications.module";
+import { MailModule } from "../../infrastructure/mail/mail.module";
 import { AssignTrainingUseCase } from "./application/use-cases/assign-training.use-case";
 import { SsmDocumentsService } from "./application/services/ssm-documents.service";
 import { SsmTrainingSuiteService } from "./application/services/ssm-training-suite.service";
@@ -30,7 +31,7 @@ import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-
 import { SsmScheduledReportsService } from "./application/services/ssm-scheduled-reports.service";
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, MailModule],
   controllers: [
     SsmController,
     SsmDocumentsController,
@@ -69,6 +70,7 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmTrainingSuiteService,
     SsmMedicalService,
     SsmEipService,
+    SsmPsiService,
     SsmTrainingAutomationService,
     ItmAccessService,
     SsmScheduledReportsService

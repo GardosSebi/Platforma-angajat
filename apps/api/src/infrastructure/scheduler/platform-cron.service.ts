@@ -5,6 +5,7 @@ import { RetentionService } from "../retention/retention.service";
 import { SsmTrainingSuiteService } from "../../modules/ssm/application/services/ssm-training-suite.service";
 import { SsmMedicalService } from "../../modules/ssm/application/services/ssm-medical.service";
 import { SsmEipService } from "../../modules/ssm/application/services/ssm-eip.service";
+import { SsmPsiService } from "../../modules/ssm/application/services/ssm-psi.service";
 import { SsmTrainingAutomationService } from "../../modules/ssm/application/services/ssm-training-automation.service";
 import { CommunicationsService } from "../../modules/chatbot/application/services/communications.service";
 import { SurveysService } from "../../modules/surveys/application/services/surveys.service";
@@ -21,6 +22,7 @@ export class PlatformCronService {
     private readonly trainingSuite: SsmTrainingSuiteService,
     private readonly medicalService: SsmMedicalService,
     private readonly eipService: SsmEipService,
+    private readonly psiService: SsmPsiService,
     private readonly trainingAutomation: SsmTrainingAutomationService,
     private readonly communications: CommunicationsService,
     private readonly surveys: SurveysService,
@@ -55,6 +57,7 @@ export class PlatformCronService {
     const training = await this.trainingSuite.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
     const medical = await this.medicalService.dispatchMedicalReminders(tenantId, SYSTEM_CRON_ACTOR);
     const eip = await this.eipService.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
+    const psi = await this.psiService.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
     const published = await this.communications.publishDueScheduled(tenantId, SYSTEM_CRON_ACTOR);
     const archivedAnnouncements = await this.communications.archiveExpiredAnnouncements(
       tenantId,
@@ -66,13 +69,14 @@ export class PlatformCronService {
     const absence = await this.trainingAutomation.processAbsenceTriggers(tenantId, SYSTEM_CRON_ACTOR);
     const scheduledReports = await this.scheduledReports.dispatchDueForTenant(tenantId);
     this.logger.log(
-      `Tenant ${tenantId}: trainingOverdue=${overdue.marked}, trainingReminders=${training.sent}, medicalReminders=${medical.sent}, eipReminders=${eip.sent}, absenceTriggers=${absence.assigned}, announcementsPublished=${published.published}, announcementsArchived=${archivedAnnouncements.archived}, commReminders=${commReminders.sent}, surveysClosed=${closedSurveys.closed}, retentionArchived=${retention.archived}, scheduledReports=${scheduledReports.sent}`
+      `Tenant ${tenantId}: trainingOverdue=${overdue.marked}, trainingReminders=${training.sent}, medicalReminders=${medical.sent}, eipReminders=${eip.sent}, psiReminders=${psi.sent}, absenceTriggers=${absence.assigned}, announcementsPublished=${published.published}, announcementsArchived=${archivedAnnouncements.archived}, commReminders=${commReminders.sent}, surveysClosed=${closedSurveys.closed}, retentionArchived=${retention.archived}, scheduledReports=${scheduledReports.sent}`
     );
     return {
       overdue,
       training,
       medical,
       eip,
+      psi,
       absence,
       published,
       archivedAnnouncements,

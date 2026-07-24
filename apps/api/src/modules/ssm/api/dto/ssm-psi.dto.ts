@@ -11,7 +11,7 @@ import {
   Min,
   MinLength
 } from "class-validator";
-import { SsmPsiResponsibleRole } from "@prisma/client";
+import { SsmPsiEquipmentCategory, SsmPsiEquipmentStatus, SsmPsiResponsibleRole } from "@prisma/client";
 
 export class CreateSsmPsiEquipmentDto {
   @IsString()
@@ -28,10 +28,8 @@ export class CreateSsmPsiEquipmentDto {
   @MaxLength(160)
   name!: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  category?: string;
+  @IsEnum(SsmPsiEquipmentCategory)
+  category!: SsmPsiEquipmentCategory;
 
   @IsOptional()
   @IsString()
@@ -65,6 +63,48 @@ export class CreateSsmPsiEquipmentDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+}
+
+export class UpdateSsmPsiEquipmentDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  name?: string;
+
+  @IsOptional()
+  @IsEnum(SsmPsiEquipmentCategory)
+  category?: SsmPsiEquipmentCategory;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  serialNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  location?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  verificationIntervalDays?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  reminderDays?: number[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+
+  @IsOptional()
+  @IsEnum(SsmPsiEquipmentStatus)
+  status?: SsmPsiEquipmentStatus;
 }
 
 export class RegisterSsmPsiEquipmentVerificationDto {

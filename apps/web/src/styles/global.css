@@ -937,6 +937,10 @@ button {
   margin-bottom: 0.25rem;
 }
 
+.ssm-panel-tabs--5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .ssm-panel-header .field-hint {
   margin: 0;
 }
@@ -948,8 +952,54 @@ button {
   align-items: start;
 }
 
+.ssm-panel-layout--single {
+  grid-template-columns: minmax(0, 40rem);
+}
+
 .ssm-panel-layout--movement {
   grid-template-columns: minmax(320px, 1.1fr) minmax(260px, 0.9fr);
+}
+
+.ssm-risk-part-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ssm-risk-part-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.ssm-risk-part-row--measure {
+  grid-template-columns: minmax(0, 1.2fr) minmax(6rem, 0.8fr) minmax(7rem, 0.7fr) auto;
+}
+
+.ssm-risk-part-row input {
+  min-width: 0;
+  width: 100%;
+}
+
+.ssm-risk-part-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.ssm-risk-part-row label input {
+  width: 3rem;
+  text-align: center;
+}
+
+.ssm-check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
 }
 
 .ssm-panel-fields-row {
@@ -1755,6 +1805,77 @@ button {
 .ssm-risk-version-history .ssm-doc-item span {
   font-size: 0.74rem;
   margin-top: 0.1rem;
+}
+
+.ssm-risk-linked-plans {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.45rem 0 0.2rem;
+}
+
+.ssm-risk-editor {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ssm-risk-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ssm-risk-editor-head h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.ssm-risk-rows {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ssm-risk-row {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 1.4fr) minmax(5rem, 0.8fr) 4rem 4rem 3rem auto;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.ssm-risk-row.selected {
+  border-color: #94a3b8;
+  background: #eef2f7;
+}
+
+.ssm-risk-rows--measures .ssm-risk-row {
+  grid-template-columns: minmax(8rem, 1.5fr) minmax(6rem, 1fr) minmax(7rem, 0.9fr) auto;
+}
+
+.ssm-risk-row input {
+  min-width: 0;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.ssm-risk-row-select {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0.2rem 0.3rem;
+  text-decoration: underline;
+}
+
+.ssm-risk-row-score {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .ssm-empty-inline {
@@ -3019,6 +3140,9 @@ button.ssm-doc-item:hover {
 
   .ssm-panel-layout,
   .ssm-panel-layout--movement,
+  .ssm-panel-layout--single,
+  .ssm-risk-part-row,
+  .ssm-risk-part-row--measure,
   .ssm-panel-fields-row {
     grid-template-columns: 1fr;
   }
@@ -3053,6 +3177,11 @@ button.ssm-doc-item:hover {
   }
 
   .ssm-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ssm-risk-row,
+  .ssm-risk-rows--measures .ssm-risk-row {
     grid-template-columns: 1fr;
   }
 

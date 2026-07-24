@@ -11,6 +11,7 @@ import {
   usePreventionPlans,
   useUpdatePreventionMeasure
 } from "../hooks/useSsmPpp";
+import { useRiskAssessments } from "../hooks/useSsmRisk";
 
 const TARGET_TYPE_OPTIONS = [
   { value: "JOB_POSITION", label: "Post de lucru" },
@@ -28,7 +29,8 @@ const EMPTY_PLAN: CreateSsmPreventionPlanRequest = {
   title: "",
   targetType: "JOB_POSITION",
   reviewDate: "",
-  notes: ""
+  notes: "",
+  riskAssessmentId: undefined
 };
 
 function mutationErrorMessage(error: unknown): string {
@@ -51,6 +53,7 @@ function formatRoDate(value?: string | null): string {
 
 export function SsmPppManager() {
   const plansQuery = usePreventionPlans();
+  const riskAssessmentsQuery = useRiskAssessments({ status: "ACTIVE" });
   const worksites = useWorksitesLookup();
   const departments = useDepartmentsLookup();
   const positions = useJobPositionsLookup();
@@ -238,6 +241,23 @@ export function SsmPppManager() {
               hint={targetRefOptions.length === 0 ? "Nu există date master pentru ținta aleasă." : undefined}
             />
 
+            <FieldSelect
+              id="ppp-risk-assessment"
+              label="Evaluare risc legată (opțional)"
+              className="ssm-ppp-field ssm-ppp-field--full"
+              value={planForm.riskAssessmentId ?? ""}
+              onChange={(riskAssessmentId) =>
+                setPlanForm((prev) => ({ ...prev, riskAssessmentId: riskAssessmentId || undefined }))
+              }
+              options={mapToOptions(
+                riskAssessmentsQuery.data?.items ?? [],
+                (item) => item.id,
+                (item) => `${item.title} · risc ${item.riskLevel ?? "-"}`
+              )}
+              allowEmpty
+              emptyLabel="Fără legătură la evaluare"
+            />
+
             <details className="ssm-ppp-notes-details ssm-ppp-field--full">
               <summary>Note opționale</summary>
               <div className="field ssm-ppp-field ssm-ppp-field--full">
@@ -290,6 +310,7 @@ export function SsmPppManager() {
                 </div>
                 <p className="ssm-ppp-plan-meta">
                   {targetTypeLabel(plan.targetType)} · {planTargetLabel(plan)}
+                  {plan.riskAssessmentTitle ? ` · Eval: ${plan.riskAssessmentTitle}` : ""}
                 </p>
                 <div className="ssm-ppp-plan-stats">
                   <span className={`ssm-chip ${plan.openMeasures > 0 ? "warn" : "good"}`}>
@@ -323,6 +344,9 @@ export function SsmPppManager() {
                     <p className="ssm-ppp-detail-meta">
                       {targetTypeLabel(selectedPlan.targetType)} · {planTargetLabel(selectedPlan)}
                       {selectedPlan.reviewDate ? ` · revizie ${formatRoDate(selectedPlan.reviewDate)}` : ""}
+                      {selectedPlan.riskAssessmentTitle
+                        ? ` · evaluare: ${selectedPlan.riskAssessmentTitle}`
+                        : ""}
                     </p>
                   </div>
                   <div className="ssm-ppp-detail-actions">

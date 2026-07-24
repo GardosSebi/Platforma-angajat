@@ -30,7 +30,10 @@ export function useCreateRiskAssessment() {
   return useMutation({
     mutationFn: (payload: CreateSsmRiskAssessmentRequest) => ssmApi.createRiskAssessment(payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["ssm", "risk-assessments"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "risk-assessments"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans"] })
+      ]);
     }
   });
 }
@@ -55,6 +58,19 @@ export function useArchiveRiskAssessment() {
     mutationFn: (assessmentId: string) => ssmApi.archiveRiskAssessment(assessmentId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["ssm", "risk-assessments"] });
+    }
+  });
+}
+
+export function useCreatePreventionPlanFromRisk() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assessmentId: string) => ssmApi.createPreventionPlanFromRisk(assessmentId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "risk-assessments"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans"] })
+      ]);
     }
   });
 }

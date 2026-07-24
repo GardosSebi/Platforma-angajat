@@ -61,6 +61,16 @@ export class SsmRiskController {
     return this.riskService.addVersion(tenantId, user.sub, id, dto);
   }
 
+  @Post(":id/prevention-plan")
+  @RequirePermissions(Permission.SSM_RISK_EDIT)
+  createPreventionPlan(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("id") id: string
+  ) {
+    return this.riskService.createPreventionPlanFromAssessment(tenantId, user.sub, id);
+  }
+
   @Patch(":id/archive")
   @RequirePermissions(Permission.SSM_RISK_APPROVE)
   archive(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string) {

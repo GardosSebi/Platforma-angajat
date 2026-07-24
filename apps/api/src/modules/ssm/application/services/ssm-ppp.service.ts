@@ -65,12 +65,14 @@ export class SsmPppService {
       where: {
         tenantId,
         ...(query?.targetType ? { targetType: query.targetType } : {}),
-        ...(query?.status ? { status: query.status } : {})
+        ...(query?.status ? { status: query.status } : {}),
+        ...(query?.riskAssessmentId ? { riskAssessmentId: query.riskAssessmentId } : {})
       },
       include: {
         jobPosition: { select: { code: true, name: true } },
         worksite: { select: { code: true, name: true } },
         department: { select: { code: true, name: true } },
+        riskAssessment: { select: { id: true, title: true } },
         measures: {
           orderBy: [{ status: "asc" }, { dueDate: "asc" }]
         }
@@ -88,6 +90,8 @@ export class SsmPppService {
         jobPositionName: row.jobPosition?.name ?? null,
         worksiteName: row.worksite?.name ?? null,
         departmentName: row.department?.name ?? null,
+        riskAssessmentId: row.riskAssessmentId,
+        riskAssessmentTitle: row.riskAssessment?.title ?? null,
         status: row.status,
         reviewDate: row.reviewDate?.toISOString() ?? null,
         notes: row.notes,
@@ -128,6 +132,12 @@ export class SsmPppService {
 
   async createPlan(tenantId: string, actorId: string, dto: CreateSsmPreventionPlanDto) {
     await this.assertTarget(tenantId, dto.targetType, dto.jobPositionId, dto.worksiteId, dto.departmentId);
+    if (dto.riskAssessmentId) {
+      const assessment = await this.prisma.ssmRiskAssessment.findFirst({
+        where: { id: dto.riskAssessmentId, tenantId }
+      });
+      if (!assessment) throw new BadRequestException("riskAssessmentId nevalid.");
+    }
     const plan = await this.prisma.ssmPreventionPlan.create({
       data: {
         tenantId,
@@ -136,6 +146,7 @@ export class SsmPppService {
         jobPositionId: dto.jobPositionId,
         worksiteId: dto.worksiteId,
         departmentId: dto.departmentId,
+        riskAssessmentId: dto.riskAssessmentId,
         reviewDate: parseOptionalDate(dto.reviewDate),
         notes: dto.notes?.trim(),
         createdBy: actorId
@@ -147,7 +158,8 @@ export class SsmPppService {
       module: "SSM",
       action: "PPP_PLAN_CREATED",
       entityType: "SsmPreventionPlan",
-      entityId: plan.id
+      entityId: plan.id,
+      payload: { riskAssessmentId: dto.riskAssessmentId ?? null }
     });
     return { planId: plan.id };
   }

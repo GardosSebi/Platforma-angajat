@@ -19,7 +19,10 @@ export function useCreatePreventionPlan() {
   return useMutation({
     mutationFn: (payload: CreateSsmPreventionPlanRequest) => ssmApi.createPreventionPlan(payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "risk-assessments"] })
+      ]);
     }
   });
 }

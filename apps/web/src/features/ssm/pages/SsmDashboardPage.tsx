@@ -61,8 +61,8 @@ const SSM_SECTIONS: Array<{
   {
     id: "risk",
     title: "Evaluări risc",
-    caption: "Factori, nivel risc",
-    description: "Versionează evaluări pe post, loc de muncă sau departament și păstrează motivul actualizării."
+    caption: "Listă, creare, versionare",
+    description: "Lucrează pe secțiuni: listă evaluări, creare, versionare/PPP și fișă expunere PDF."
   },
   {
     id: "ppp",
@@ -73,8 +73,9 @@ const SSM_SECTIONS: Array<{
   {
     id: "psi",
     title: "PSI / urgențe",
-    caption: "Documentație, echipamente, instruiri",
-    description: "Urmărește documentația PSI pe punct de lucru, scadențele echipamentelor și responsabilii."
+    caption: "Documente, echipamente, instruiri",
+    description:
+      "Lucrează pe secțiuni: documentație structurată, echipamente/verificări/alerte, instruiri unificate, responsabili și exerciții."
   },
   {
     id: "compliance",

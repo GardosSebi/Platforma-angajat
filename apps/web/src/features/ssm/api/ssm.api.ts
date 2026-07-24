@@ -383,7 +383,12 @@ export const ssmApi = {
     return httpClient<{ items: SsmRiskAssessmentItem[] }>(`/ssm/risk-assessments${q ? `?${q}` : ""}`);
   },
   createRiskAssessment(payload: CreateSsmRiskAssessmentRequest) {
-    return httpClient<{ assessmentId: string; versionId: string; versionNumber: number }>("/ssm/risk-assessments", {
+    return httpClient<{
+      assessmentId: string;
+      versionId: string;
+      versionNumber: number;
+      preventionPlanId?: string;
+    }>("/ssm/risk-assessments", {
       method: "POST",
       body: JSON.stringify(payload)
     });
@@ -405,8 +410,19 @@ export const ssmApi = {
       method: "PATCH"
     });
   },
+  createPreventionPlanFromRisk(assessmentId: string) {
+    return httpClient<import("@repo/shared-types/ssm").CreateSsmPreventionPlanFromRiskResponse>(
+      `/ssm/risk-assessments/${assessmentId}/prevention-plan`,
+      { method: "POST" }
+    );
+  },
+  getExposureSheetPdfUrl(employeeId: string) {
+    return `/ssm/risk-assessments/employees/${employeeId}/exposure-sheet.pdf`;
+  },
   psiDocumentation() {
-    return httpClient<{ worksites: SsmPsiWorksiteDocumentation[] }>("/ssm/psi/documentation");
+    return httpClient<{ worksites: import("@repo/shared-types/ssm").SsmPsiWorksiteDocumentation[] }>(
+      "/ssm/psi/documentation"
+    );
   },
   psiEquipment() {
     return httpClient<{ items: SsmPsiEquipmentItem[] }>("/ssm/psi/equipment");
@@ -417,6 +433,22 @@ export const ssmApi = {
       body: JSON.stringify(payload)
     });
   },
+  updatePsiEquipment(equipmentId: string, payload: import("@repo/shared-types/ssm").UpdateSsmPsiEquipmentRequest) {
+    return httpClient<SsmPsiEquipmentItem>(`/ssm/psi/equipment/${equipmentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  retirePsiEquipment(equipmentId: string) {
+    return httpClient<SsmPsiEquipmentItem>(`/ssm/psi/equipment/${equipmentId}/retire`, {
+      method: "PATCH"
+    });
+  },
+  psiEquipmentVerifications(equipmentId: string) {
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmPsiEquipmentVerificationItem[] }>(
+      `/ssm/psi/equipment/${equipmentId}/verifications`
+    );
+  },
   registerPsiEquipmentVerification(payload: RegisterSsmPsiEquipmentVerificationRequest) {
     return httpClient("/ssm/psi/equipment/verifications", {
       method: "POST",
@@ -425,6 +457,12 @@ export const ssmApi = {
   },
   psiEquipmentNotifications() {
     return httpClient<{ reminders: SsmPsiEquipmentNotification[] }>("/ssm/psi/equipment/notifications");
+  },
+  dispatchPsiEquipmentNotifications() {
+    return httpClient<import("@repo/shared-types/ssm").DispatchSsmPsiRemindersResponse>(
+      "/ssm/psi/equipment/notifications/dispatch",
+      { method: "POST" }
+    );
   },
   psiTrainings() {
     return httpClient<{ items: SsmPsiTrainingRecordItem[] }>("/ssm/psi/trainings");

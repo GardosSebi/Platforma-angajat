@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -11,7 +11,8 @@ import {
   CreateSsmPsiEquipmentDto,
   CreateSsmPsiResponsibleDto,
   CreateSsmPsiTrainingRecordDto,
-  RegisterSsmPsiEquipmentVerificationDto
+  RegisterSsmPsiEquipmentVerificationDto,
+  UpdateSsmPsiEquipmentDto
 } from "./dto/ssm-psi.dto";
 
 @Controller("ssm/psi")
@@ -41,6 +42,18 @@ export class SsmPsiController {
     return this.psiService.createEquipment(tenantId, user.sub, dto);
   }
 
+  @Get("equipment/notifications")
+  @RequirePermissions(Permission.SSM_PSI_VIEW)
+  equipmentNotifications(@TenantId() tenantId: string) {
+    return this.psiService.equipmentNotifications(tenantId);
+  }
+
+  @Post("equipment/notifications/dispatch")
+  @RequirePermissions(Permission.SSM_PSI_EDIT)
+  dispatchNotifications(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
+    return this.psiService.dispatchReminders(tenantId, user.sub);
+  }
+
   @Post("equipment/verifications")
   @RequirePermissions(Permission.SSM_PSI_EDIT)
   registerVerification(
@@ -51,10 +64,31 @@ export class SsmPsiController {
     return this.psiService.registerVerification(tenantId, user.sub, dto);
   }
 
-  @Get("equipment/notifications")
+  @Get("equipment/:id/verifications")
   @RequirePermissions(Permission.SSM_PSI_VIEW)
-  equipmentNotifications(@TenantId() tenantId: string) {
-    return this.psiService.equipmentNotifications(tenantId);
+  verifications(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.psiService.listVerifications(tenantId, id);
+  }
+
+  @Patch("equipment/:id/retire")
+  @RequirePermissions(Permission.SSM_PSI_EDIT)
+  retireEquipment(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("id") id: string
+  ) {
+    return this.psiService.retireEquipment(tenantId, user.sub, id);
+  }
+
+  @Patch("equipment/:id")
+  @RequirePermissions(Permission.SSM_PSI_EDIT)
+  updateEquipment(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("id") id: string,
+    @Body() dto: UpdateSsmPsiEquipmentDto
+  ) {
+    return this.psiService.updateEquipment(tenantId, user.sub, id, dto);
   }
 
   @Get("trainings")

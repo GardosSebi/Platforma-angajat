@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -106,6 +107,10 @@ export class CreateSsmRiskAssessmentDto {
   @IsOptional()
   @IsDateString()
   effectiveFrom?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  createLinkedPreventionPlan?: boolean;
 }
 
 export class AddSsmRiskAssessmentVersionDto {

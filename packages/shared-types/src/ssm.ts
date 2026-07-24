@@ -564,6 +564,8 @@ export interface SsmMedicalReminderItem {
 
 export type SsmRiskTargetType = "JOB_POSITION" | "WORKSITE" | "DEPARTMENT";
 export type SsmRiskAssessmentStatus = "ACTIVE" | "ARCHIVED";
+export type SsmPreventionPlanStatus = "ACTIVE" | "ARCHIVED";
+export type SsmPreventionMeasureStatus = "OPEN" | "COMPLETED" | "OVERDUE";
 
 export interface SsmRiskFactor {
   name: string;
@@ -591,6 +593,8 @@ export interface CreateSsmRiskAssessmentRequest {
   factors: SsmRiskFactor[];
   measures: SsmRiskMeasure[];
   effectiveFrom?: string;
+  /** Dacă e true, creează automat un Plan PPP legat, din măsurile versiunii. */
+  createLinkedPreventionPlan?: boolean;
 }
 
 export interface AddSsmRiskAssessmentVersionRequest {
@@ -599,6 +603,14 @@ export interface AddSsmRiskAssessmentVersionRequest {
   factors: SsmRiskFactor[];
   measures: SsmRiskMeasure[];
   effectiveFrom?: string;
+}
+
+export interface SsmRiskLinkedPreventionPlan {
+  id: string;
+  title: string;
+  status: SsmPreventionPlanStatus;
+  measureCount: number;
+  openMeasures: number;
 }
 
 export interface SsmRiskAssessmentItem {
@@ -611,6 +623,7 @@ export interface SsmRiskAssessmentItem {
   riskLevel?: number | null;
   activeVersionNumber?: number | null;
   updateReason?: string | null;
+  preventionPlans: SsmRiskLinkedPreventionPlan[];
   updatedAt: string;
   createdAt: string;
 }
@@ -634,6 +647,11 @@ export interface SsmRiskAssessmentHistoryResponse {
   versions: SsmRiskAssessmentVersion[];
 }
 
+export interface CreateSsmPreventionPlanFromRiskResponse {
+  planId: string;
+  measureCount: number;
+}
+
 export type SsmPsiEquipmentStatus = "ACTIVE" | "RETIRED";
 export type SsmPsiResponsibleRole =
   | "PSI_RESPONSIBLE"
@@ -641,11 +659,27 @@ export type SsmPsiResponsibleRole =
   | "EVACUATION_RESPONSIBLE"
   | "FIRST_AID_RESPONSIBLE";
 
+export const SSM_PSI_EQUIPMENT_CATEGORIES = [
+  "EXTINGUISHER",
+  "HYDRANT",
+  "DETECTION_SYSTEM",
+  "OTHER"
+] as const;
+export type SsmPsiEquipmentCategory = (typeof SSM_PSI_EQUIPMENT_CATEGORIES)[number];
+
+export const SSM_PSI_DOC_KINDS = [
+  "INSTRUCTIONS",
+  "EVACUATION_PLAN",
+  "INTERVENTION",
+  "OTHER"
+] as const;
+export type SsmPsiDocKind = (typeof SSM_PSI_DOC_KINDS)[number];
+
 export interface CreateSsmPsiEquipmentRequest {
   worksiteId: string;
   code: string;
   name: string;
-  category?: string;
+  category: SsmPsiEquipmentCategory;
   serialNumber?: string;
   location?: string;
   verificationIntervalDays: number;
@@ -653,6 +687,17 @@ export interface CreateSsmPsiEquipmentRequest {
   lastVerifiedAt?: string;
   nextDueAt?: string;
   notes?: string;
+}
+
+export interface UpdateSsmPsiEquipmentRequest {
+  name?: string;
+  category?: SsmPsiEquipmentCategory;
+  serialNumber?: string;
+  location?: string;
+  verificationIntervalDays?: number;
+  reminderDays?: number[];
+  notes?: string;
+  status?: SsmPsiEquipmentStatus;
 }
 
 export interface RegisterSsmPsiEquipmentVerificationRequest {
@@ -670,7 +715,7 @@ export interface SsmPsiEquipmentItem {
   worksiteName: string;
   code: string;
   name: string;
-  category?: string | null;
+  category: SsmPsiEquipmentCategory;
   serialNumber?: string | null;
   location?: string | null;
   verificationIntervalDays: number;
@@ -679,6 +724,17 @@ export interface SsmPsiEquipmentItem {
   nextDueAt?: string | null;
   status: SsmPsiEquipmentStatus;
   notes?: string | null;
+}
+
+export interface SsmPsiEquipmentVerificationItem {
+  id: string;
+  equipmentId: string;
+  performedAt: string;
+  nextDueAt: string;
+  result: string;
+  notes?: string | null;
+  documentId?: string | null;
+  createdAt: string;
 }
 
 export interface SsmPsiEquipmentNotification {
@@ -690,19 +746,28 @@ export interface SsmPsiEquipmentNotification {
   daysUntilDue: number;
 }
 
+export interface SsmPsiDocumentItem {
+  id: string;
+  title: string;
+  type: SsmDocumentType;
+  kind: SsmPsiDocKind;
+  targetType: SsmDocumentTargetType;
+  targetLabel?: string | null;
+  activeVersionNumber?: number | null;
+  fileName?: string | null;
+  updatedAt: string;
+}
+
 export interface SsmPsiWorksiteDocumentation {
   id: string;
   code: string;
   name: string;
-  documents: Array<{
-    id: string;
-    title: string;
-    targetType: SsmDocumentTargetType;
-    targetLabel?: string | null;
-    activeVersionNumber?: number | null;
-    fileName?: string | null;
-    updatedAt: string;
-  }>;
+  documents: SsmPsiDocumentItem[];
+  coverage: {
+    instructions: boolean;
+    evacuationPlan: boolean;
+    intervention: boolean;
+  };
 }
 
 export interface CreateSsmPsiTrainingRecordRequest {
@@ -725,6 +790,8 @@ export interface SsmPsiTrainingRecordItem {
   employeeId?: string | null;
   employeeName?: string | null;
   trainingTypeId?: string | null;
+  trainingTypeName?: string | null;
+  trainingTypeCategory?: string | null;
   topic: string;
   conductedAt: string;
   validUntil?: string | null;
@@ -732,6 +799,7 @@ export interface SsmPsiTrainingRecordItem {
   responsibleName?: string | null;
   evidenceDocumentId?: string | null;
   notes?: string | null;
+  source: "PSI_REGISTER" | "TRAINING_SUITE";
 }
 
 export interface CreateSsmPsiResponsibleRequest {
@@ -757,6 +825,13 @@ export interface SsmPsiResponsibleItem {
   phone?: string | null;
   active: boolean;
   notes?: string | null;
+}
+
+export interface DispatchSsmPsiRemindersResponse {
+  sent: number;
+  sentEmail: number;
+  sentInApp: number;
+  candidates: number;
 }
 
 export type SsmCalendarSource = "TRAINING" | "MEDICAL" | "EIP" | "PSI" | "PSI_TRAINING";
@@ -821,9 +896,6 @@ export interface SsmReportResponse {
   rows: SsmReportRow[];
 }
 
-export type SsmPreventionPlanStatus = "ACTIVE" | "ARCHIVED";
-export type SsmPreventionMeasureStatus = "OPEN" | "COMPLETED" | "OVERDUE";
-
 export interface SsmPreventionMeasureItem {
   id: string;
   planId: string;
@@ -847,6 +919,8 @@ export interface SsmPreventionPlanItem {
   jobPositionName?: string | null;
   worksiteName?: string | null;
   departmentName?: string | null;
+  riskAssessmentId?: string | null;
+  riskAssessmentTitle?: string | null;
   status: SsmPreventionPlanStatus;
   reviewDate?: string | null;
   notes?: string | null;
@@ -863,6 +937,7 @@ export interface CreateSsmPreventionPlanRequest {
   jobPositionId?: string;
   worksiteId?: string;
   departmentId?: string;
+  riskAssessmentId?: string;
   reviewDate?: string;
   notes?: string;
 }
