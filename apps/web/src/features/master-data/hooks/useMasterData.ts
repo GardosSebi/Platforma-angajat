@@ -13,6 +13,7 @@ import type {
   UpdateEmployeeGroupPayload,
   UpdateEmployeePayload,
   UpdateJobPositionPayload,
+  UpdateLegalEntityPayload,
   UpdatePlacementPayload,
   UpdateSsmResponsiblePayload,
   UpdateWorksitePayload
@@ -114,6 +115,67 @@ export function useCreateLegalEntity() {
         queryClient.invalidateQueries({ queryKey: ["master-data", "legal-entities"] }),
         queryClient.invalidateQueries({ queryKey: ["master-data", "worksites"] })
       ]);
+    }
+  });
+}
+
+export function useUpdateLegalEntity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateLegalEntityPayload }) =>
+      masterDataApi.updateLegalEntity(id, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data", "legal-entities"] });
+    }
+  });
+}
+
+export function useDeleteLegalEntity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => masterDataApi.deleteLegalEntity(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data"] });
+    }
+  });
+}
+
+export function useDeleteWorksite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => masterDataApi.deleteWorksite(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data"] });
+    }
+  });
+}
+
+export function useDeleteDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => masterDataApi.deleteDepartment(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data"] });
+    }
+  });
+}
+
+export function useDeleteJobPosition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => masterDataApi.deleteJobPosition(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data"] });
+    }
+  });
+}
+
+export function useDeleteGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => masterDataApi.deleteGroup(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["master-data", "groups"] });
     }
   });
 }

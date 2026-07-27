@@ -1,12 +1,30 @@
-import { FormEvent, useMemo, useState } from "react";
-import type { CreateLegalEntityPayload } from "../api/master-data.api";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import type {
+  CreateLegalEntityPayload,
+  CreateWorksitePayload,
+  UpdateLegalEntityPayload
+} from "../api/master-data.api";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { OptionCardRadioGroup } from "../../../shared/components/OptionCardRadioGroup";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
-import { useCreateLegalEntity, useLegalEntities, useWorksitesLookup } from "../hooks/useMasterData";
+import {
+  useCreateLegalEntity,
+  useCreateWorksite,
+  useDeleteLegalEntity,
+  useLegalEntities,
+  useUpdateLegalEntity,
+  useWorksitesLookup
+} from "../hooks/useMasterData";
 import type { LegalEntityItem } from "../master-data-shared";
-import { MASTER_DATA_ADD_LABELS, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import {
+  ACTIVE_STATUS_CARD_OPTIONS,
+  MASTER_DATA_ADD_LABELS,
+  activeLabel,
+  activeTone,
+  mutationErrorMessage
+} from "../master-data-shared";
 import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateLegalEntityPayload = {
@@ -17,9 +35,26 @@ const EMPTY_FORM: CreateLegalEntityPayload = {
   worksiteIds: []
 };
 
+const EMPTY_WORKSITE_FORM: CreateWorksitePayload = {
+  code: "",
+  name: "",
+  address: "",
+  active: true
+};
+
 function formatWorksites(item: LegalEntityItem): string {
   if (!item.worksites?.length) return "—";
   return item.worksites.map((worksite) => `${worksite.code} — ${worksite.name}`).join(", ");
+}
+
+function toEditForm(item: LegalEntityItem): UpdateLegalEntityPayload {
+  return {
+    code: item.code,
+    name: item.name,
+    cui: item.cui ?? "",
+    headquarters: item.headquarters ?? "",
+    active: item.active
+  };
 }
 
 export function MasterDataLegalEntitiesPanel() {
@@ -27,42 +62,39 @@ export function MasterDataLegalEntitiesPanel() {
   const query = useLegalEntities(pagination.params);
   const worksitesLookup = useWorksitesLookup();
   const createLegalEntity = useCreateLegalEntity();
+  const createWorksite = useCreateWorksite();
+  const updateLegalEntity = useUpdateLegalEntity();
+  const deleteLegalEntity = useDeleteLegalEntity();
   const paged = paginationFromResult(query.data, pagination.page, pagination.pageSize);
 
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreateLegalEntityPayload>(EMPTY_FORM);
-  const [selectedWorksiteId, setSelectedWorksiteId] = useState("");
+  const [showNewWorksite, setShowNewWorksite] = useState(false);
+  const [worksiteForm, setWorksiteForm] = useState<CreateWorksitePayload>(EMPTY_WORKSITE_FORM);
+  const [pendingWorksite, setPendingWorksite] = useState<{ id: string; code: string; name: string } | null>(
+    null
+  );
+  const [editingItem, setEditingItem] = useState<LegalEntityItem | null>(null);
+  const [editForm, setEditForm] = useState<UpdateLegalEntityPayload | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  const worksiteOptions = useMemo(() => {
+  const worksiteSelectOptions = useMemo(() => {
     const items = worksitesLookup.data?.items ?? [];
-    return mapToOptions(
-      items,
+    const selectedIds = new Set(form.worksiteIds);
+    const options = mapToOptions(
+      items.filter((worksite) => !worksite.legalEntityId || selectedIds.has(worksite.id)),
       (worksite) => worksite.id,
-      (worksite) => {
-        const assigned = worksite.legalEntityId ? " (altă entitate)" : "";
-        return `${worksite.code} — ${worksite.name}${assigned}`;
-      }
+      (worksite) => `${worksite.code} — ${worksite.name}`
     );
-  }, [worksitesLookup.data?.items]);
-
-  const availableWorksiteOptions = useMemo(
-    () =>
-      worksiteOptions.filter(
-        (option) =>
-          !form.worksiteIds.includes(option.value) &&
-          !(worksitesLookup.data?.items ?? []).find((item) => item.id === option.value)?.legalEntityId
-      ),
-    [form.worksiteIds, worksiteOptions, worksitesLookup.data?.items]
-  );
-
-  const selectedWorksites = useMemo(() => {
-    const byId = new Map((worksitesLookup.data?.items ?? []).map((item) => [item.id, item]));
-    return form.worksiteIds
-      .map((id) => byId.get(id))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  }, [form.worksiteIds, worksitesLookup.data?.items]);
+    if (pendingWorksite && !options.some((option) => option.value === pendingWorksite.id)) {
+      return [
+        { value: pendingWorksite.id, label: `${pendingWorksite.code} — ${pendingWorksite.name}` },
+        ...options
+      ];
+    }
+    return options;
+  }, [form.worksiteIds, pendingWorksite, worksitesLookup.data?.items]);
 
   const items = useMemo(() => {
     const queryText = search.trim().toLowerCase();
@@ -81,14 +113,23 @@ export function MasterDataLegalEntitiesPanel() {
     });
   }, [paged.items, search]);
 
-  const addWorksite = () => {
-    if (!selectedWorksiteId || form.worksiteIds.includes(selectedWorksiteId)) return;
-    setForm((prev) => ({ ...prev, worksiteIds: [...prev.worksiteIds, selectedWorksiteId] }));
-    setSelectedWorksiteId("");
+  useEffect(() => {
+    if (!editingItem || query.isFetching) return;
+    if (!paged.items.some((entry) => entry.id === editingItem.id)) {
+      setEditingItem(null);
+      setEditForm(null);
+    }
+  }, [paged.items, editingItem, query.isFetching]);
+
+  const openEdit = (item: LegalEntityItem) => {
+    setFeedback(null);
+    setEditingItem(item);
+    setEditForm(toEditForm(item));
   };
 
-  const removeWorksite = (worksiteId: string) => {
-    setForm((prev) => ({ ...prev, worksiteIds: prev.worksiteIds.filter((id) => id !== worksiteId) }));
+  const closeEdit = () => {
+    setEditingItem(null);
+    setEditForm(null);
   };
 
   const onSubmit = (event: FormEvent) => {
@@ -109,7 +150,9 @@ export function MasterDataLegalEntitiesPanel() {
       {
         onSuccess: () => {
           setForm(EMPTY_FORM);
-          setSelectedWorksiteId("");
+          setWorksiteForm(EMPTY_WORKSITE_FORM);
+          setPendingWorksite(null);
+          setShowNewWorksite(false);
           setShowForm(false);
           setFeedback({ type: "success", message: "Entitatea juridică a fost adăugată." });
         },
@@ -117,6 +160,94 @@ export function MasterDataLegalEntitiesPanel() {
       }
     );
   };
+
+  const onCreateWorksite = () => {
+    setFeedback(null);
+    if (!worksiteForm.code.trim() || !worksiteForm.name.trim()) {
+      setFeedback({ type: "error", message: "Completează codul și denumirea punctului de lucru." });
+      return;
+    }
+    createWorksite.mutate(
+      {
+        code: worksiteForm.code.trim(),
+        name: worksiteForm.name.trim(),
+        address: worksiteForm.address?.trim() || undefined
+      },
+      {
+        onSuccess: (created) => {
+          setPendingWorksite({ id: created.id, code: created.code, name: created.name });
+          setForm((prev) => ({ ...prev, worksiteIds: [created.id] }));
+          setWorksiteForm(EMPTY_WORKSITE_FORM);
+          setShowNewWorksite(false);
+          setFeedback({ type: "success", message: "Punctul de lucru a fost creat și selectat." });
+        },
+        onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+      }
+    );
+  };
+
+  const onSaveEdit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingItem || !editForm) return;
+    setFeedback(null);
+    updateLegalEntity.mutate(
+      {
+        id: editingItem.id,
+        payload: {
+          code: editForm.code?.trim(),
+          name: editForm.name?.trim(),
+          cui: editForm.cui?.trim() || null,
+          headquarters: editForm.headquarters?.trim() || null,
+          active: editForm.active
+        }
+      },
+      {
+        onSuccess: () => {
+          closeEdit();
+          setFeedback({ type: "success", message: "Entitatea juridică a fost actualizată." });
+        },
+        onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+      }
+    );
+  };
+
+  const onToggleActive = () => {
+    if (!editingItem) return;
+    setFeedback(null);
+    const nextActive = !editingItem.active;
+    updateLegalEntity.mutate(
+      { id: editingItem.id, payload: { active: nextActive } },
+      {
+        onSuccess: () => {
+          setEditingItem((prev) => (prev ? { ...prev, active: nextActive } : prev));
+          setEditForm((prev) => (prev ? { ...prev, active: nextActive } : prev));
+          setFeedback({
+            type: "success",
+            message: nextActive ? "Entitatea a fost activată." : "Entitatea a fost dezactivată."
+          });
+        },
+        onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+      }
+    );
+  };
+
+  const onDelete = () => {
+    if (!editingItem) return;
+    const confirmed = window.confirm(
+      `Ștergi entitatea juridică „${editingItem.name}”? Această acțiune nu poate fi anulată.`
+    );
+    if (!confirmed) return;
+    setFeedback(null);
+    deleteLegalEntity.mutate(editingItem.id, {
+      onSuccess: () => {
+        closeEdit();
+        setFeedback({ type: "success", message: "Entitatea juridică a fost ștearsă." });
+      },
+      onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+    });
+  };
+
+  const mutationPending = updateLegalEntity.isPending || deleteLegalEntity.isPending;
 
   return (
     <>
@@ -131,6 +262,10 @@ export function MasterDataLegalEntitiesPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
+              setForm(EMPTY_FORM);
+              setWorksiteForm(EMPTY_WORKSITE_FORM);
+              setPendingWorksite(null);
+              setShowNewWorksite(false);
               setShowForm(true);
             }}
           >
@@ -151,7 +286,7 @@ export function MasterDataLegalEntitiesPanel() {
           </div>
         </div>
 
-        {feedback && !showForm ? (
+        {feedback && !showForm && !editingItem ? (
           <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
             {feedback.message}
           </div>
@@ -167,19 +302,20 @@ export function MasterDataLegalEntitiesPanel() {
                 <th>Sediu social</th>
                 <th>Puncte de lucru</th>
                 <th>Stare</th>
+                <th aria-label="Acțiuni" />
               </tr>
             </thead>
             <tbody>
               {query.isLoading ? (
                 <tr>
-                  <td colSpan={6} className="text-muted">
+                  <td colSpan={7} className="text-muted">
                     Se încarcă...
                   </td>
                 </tr>
               ) : null}
               {!query.isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="comms-empty-cell">
+                  <td colSpan={7} className="comms-empty-cell">
                     <p>Nu am găsit entități juridice{search ? " pentru căutare" : ""}.</p>
                   </td>
                 </tr>
@@ -195,6 +331,13 @@ export function MasterDataLegalEntitiesPanel() {
                     <span className={`comms-status comms-status--${activeTone(item.active)}`}>
                       {activeLabel(item.active)}
                     </span>
+                  </td>
+                  <td className="comms-actions-cell">
+                    <div className="comms-row-actions">
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => openEdit(item)}>
+                        Editează
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -217,7 +360,7 @@ export function MasterDataLegalEntitiesPanel() {
         <MasterDataCreateModal
           title="Entitate juridică nouă"
           titleId="md-legal-entity-create-title"
-          description="Asociază entitatea cu unul sau mai multe puncte de lucru existente."
+          description="Alege un punct de lucru existent sau creează unul nou, apoi salvează entitatea."
           onClose={() => setShowForm(false)}
         >
           <form className="form-stack" onSubmit={onSubmit}>
@@ -268,53 +411,183 @@ export function MasterDataLegalEntitiesPanel() {
               <FieldSelect
                 id="md-legal-entity-worksite"
                 label="Punct de lucru *"
-                value={selectedWorksiteId}
-                onChange={setSelectedWorksiteId}
+                value={form.worksiteIds[0] ?? ""}
+                onChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    worksiteIds: value.trim() ? [value.trim()] : []
+                  }))
+                }
                 allowEmpty
                 emptyLabel="Selectează punct de lucru"
-                options={availableWorksiteOptions}
+                options={worksiteSelectOptions}
                 hint={
                   worksitesLookup.isLoading
                     ? "Se încarcă punctele de lucru..."
-                    : availableWorksiteOptions.length
-                      ? "Alege un punct de lucru și apasă Adaugă."
-                      : "Nu există puncte de lucru disponibile. Creează-le din tab-ul Puncte de lucru."
+                    : worksiteSelectOptions.length
+                      ? "Alege din listă sau creează unul nou."
+                      : "Nu există puncte de lucru. Creează unul nou mai jos."
                 }
               />
               <div className="field">
-                <label htmlFor="md-legal-entity-add-worksite">&nbsp;</label>
+                <label htmlFor="md-legal-entity-new-worksite-toggle">&nbsp;</label>
                 <button
-                  id="md-legal-entity-add-worksite"
+                  id="md-legal-entity-new-worksite-toggle"
                   type="button"
                   className="btn-secondary"
-                  onClick={addWorksite}
-                  disabled={!selectedWorksiteId}
+                  onClick={() => {
+                    setFeedback(null);
+                    setShowNewWorksite((open) => !open);
+                  }}
                 >
-                  Adaugă
+                  {showNewWorksite ? "Ascunde" : " Adaugă Punct de lucru"}
                 </button>
               </div>
             </div>
 
-            {selectedWorksites.length ? (
-              <ul className="data-list">
-                {selectedWorksites.map((worksite) => (
-                  <li key={worksite.id}>
-                    <strong>{worksite.code}</strong> — {worksite.name}
-                    <button type="button" className="btn-text" onClick={() => removeWorksite(worksite.id)}>
-                      Elimină
+            {showNewWorksite ? (
+              <div className="form-stack" style={{ gap: "0.75rem" }}>
+                <div className="comms-form-row">
+                  <div className="field">
+                    <label htmlFor="md-legal-entity-worksite-code">Cod punct *</label>
+                    <input
+                      id="md-legal-entity-worksite-code"
+                      value={worksiteForm.code}
+                      onChange={(event) => setWorksiteForm((prev) => ({ ...prev, code: event.target.value }))}
+                      placeholder="Ex: HQ"
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="md-legal-entity-worksite-name">Denumire punct *</label>
+                    <input
+                      id="md-legal-entity-worksite-name"
+                      value={worksiteForm.name}
+                      onChange={(event) => setWorksiteForm((prev) => ({ ...prev, name: event.target.value }))}
+                      placeholder="Ex: Sediu central"
+                    />
+                  </div>
+                </div>
+                <div className="comms-form-row">
+                  <div className="field">
+                    <label htmlFor="md-legal-entity-worksite-address">Adresă</label>
+                    <input
+                      id="md-legal-entity-worksite-address"
+                      value={worksiteForm.address ?? ""}
+                      onChange={(event) => setWorksiteForm((prev) => ({ ...prev, address: event.target.value }))}
+                      placeholder="Strada, oraș..."
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="md-legal-entity-worksite-create">&nbsp;</label>
+                    <button
+                      id="md-legal-entity-worksite-create"
+                      type="button"
+                      className="btn-primary"
+                      disabled={
+                        createWorksite.isPending || !worksiteForm.code.trim() || !worksiteForm.name.trim()
+                      }
+                      onClick={onCreateWorksite}
+                    >
+                      {createWorksite.isPending ? "Se creează..." : "Adaugă punctul"}
                     </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="field-hint">Niciun punct de lucru selectat încă.</p>
-            )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="comms-compose-actions">
               <button className="btn-primary" type="submit" disabled={createLegalEntity.isPending}>
                 {createLegalEntity.isPending ? "Se salvează..." : "Salvează"}
               </button>
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
+            </div>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
+      ) : null}
+
+      {editingItem && editForm ? (
+        <MasterDataCreateModal
+          title={`Editează: ${editingItem.name}`}
+          titleId="md-legal-entity-edit-title"
+          description={`${editingItem.code}${editingItem.cui ? ` · ${editingItem.cui}` : ""}`}
+          onClose={closeEdit}
+        >
+          <form className="form-stack" onSubmit={onSaveEdit}>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-legal-entity-edit-code">Cod entitate *</label>
+                <input
+                  id="md-legal-entity-edit-code"
+                  required
+                  value={editForm.code ?? ""}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, code: event.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-legal-entity-edit-name">Denumire *</label>
+                <input
+                  id="md-legal-entity-edit-name"
+                  required
+                  value={editForm.name ?? ""}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-legal-entity-edit-cui">CUI</label>
+                <input
+                  id="md-legal-entity-edit-cui"
+                  value={editForm.cui ?? ""}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, cui: event.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-legal-entity-edit-headquarters">Sediu social</label>
+                <input
+                  id="md-legal-entity-edit-headquarters"
+                  value={editForm.headquarters ?? ""}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, headquarters: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <OptionCardRadioGroup
+              name="md-legal-entity-edit-active"
+              legend="Status"
+              value={editForm.active ? "true" : "false"}
+              onChange={(value) => setEditForm((prev) => ({ ...prev, active: value === "true" }))}
+              options={[...ACTIVE_STATUS_CARD_OPTIONS]}
+            />
+            <div className="comms-compose-actions">
+              <button type="submit" className="btn-primary" disabled={mutationPending}>
+                {updateLegalEntity.isPending ? "Se salvează…" : "Salvează modificările"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={mutationPending}
+                onClick={onToggleActive}
+              >
+                {editingItem.active ? "Dezactivează" : "Activează"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-danger"
+                disabled={mutationPending}
+                onClick={onDelete}
+              >
+                {deleteLegalEntity.isPending ? "Se șterge…" : "Șterge"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={closeEdit}>
                 Anulează
               </button>
             </div>

@@ -190,14 +190,18 @@ export class MasterDataService {
       throw new BadRequestException("Unul sau mai multe puncte de lucru selectate sunt nevalide.");
     }
 
+    const code = dto.code.trim();
+    const cui = this.normalizeLegalEntityCui(dto.cui);
+    await this.assertLegalEntityCodeAndCuiUnique(tenantId, code, cui);
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         const entity = await tx.legalEntity.create({
           data: {
             tenantId,
-            code: dto.code.trim(),
+            code,
             name: dto.name.trim(),
-            cui: dto.cui?.trim(),
+            cui,
             headquarters: dto.headquarters?.trim(),
             active: dto.active ?? true
           }
@@ -213,8 +217,8 @@ export class MasterDataService {
         });
         return { ...entity, worksites: linkedWorksites };
       });
-    } catch {
-      throw new ConflictException("Codul entității juridice există deja pentru acest tenant.");
+    } catch (error) {
+      this.rethrowLegalEntityUniqueConflict(error);
     }
   }
 
@@ -230,17 +234,112 @@ export class MasterDataService {
     } = {};
     if (dto.code !== undefined) data.code = dto.code.trim();
     if (dto.name !== undefined) data.name = dto.name.trim();
-    if (dto.cui !== undefined) data.cui = dto.cui.trim() ? dto.cui.trim() : null;
+    if (dto.cui !== undefined) data.cui = this.normalizeLegalEntityCui(dto.cui);
     if (dto.headquarters !== undefined) {
       data.headquarters = dto.headquarters.trim() ? dto.headquarters.trim() : null;
     }
     if (dto.active !== undefined) data.active = dto.active;
     if (!Object.keys(data).length) return existing;
+
+    await this.assertLegalEntityCodeAndCuiUnique(
+      tenantId,
+      data.code ?? existing.code,
+      data.cui !== undefined ? data.cui : existing.cui,
+      id
+    );
+
     try {
       return await this.prisma.legalEntity.update({ where: { id }, data });
-    } catch {
-      throw new ConflictException("Codul entității juridice există deja pentru acest tenant.");
+    } catch (error) {
+      this.rethrowLegalEntityUniqueConflict(error);
     }
+  }
+
+  async deleteLegalEntity(tenantId: string, id: string) {
+    const existing = await this.prisma.legalEntity.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Entitate juridică negăsită.");
+
+    const [worksiteCount, jobPositionCount, ssmResponsibleCount, ssmDocumentCount] = await Promise.all([
+      this.prisma.worksite.count({ where: { tenantId, legalEntityId: id } }),
+      this.prisma.jobPosition.count({ where: { tenantId, legalEntityId: id } }),
+      this.prisma.ssmResponsible.count({ where: { tenantId, legalEntityId: id } }),
+      this.prisma.ssmDocument.count({ where: { tenantId, legalEntityId: id } })
+    ]);
+
+    if (worksiteCount > 0) {
+      throw new BadRequestException(
+        `Entitatea juridică nu poate fi ștearsă: există ${worksiteCount} punct(e) de lucru asociate.`
+      );
+    }
+    if (jobPositionCount > 0) {
+      throw new BadRequestException(
+        `Entitatea juridică nu poate fi ștearsă: există ${jobPositionCount} post(uri) asociate.`
+      );
+    }
+    if (ssmResponsibleCount > 0) {
+      throw new BadRequestException(
+        `Entitatea juridică nu poate fi ștearsă: există ${ssmResponsibleCount} responsabil(i) SSM asociați.`
+      );
+    }
+    if (ssmDocumentCount > 0) {
+      throw new BadRequestException(
+        `Entitatea juridică nu poate fi ștearsă: există ${ssmDocumentCount} document(e) SSM asociate.`
+      );
+    }
+
+    await this.prisma.legalEntity.delete({ where: { id } });
+    return { deleted: true, id };
+  }
+
+  private normalizeLegalEntityCui(cui?: string | null): string | null {
+    const normalized = cui?.trim().toUpperCase() ?? "";
+    return normalized || null;
+  }
+
+  private async assertLegalEntityCodeAndCuiUnique(
+    tenantId: string,
+    code: string,
+    cui: string | null,
+    excludeId?: string
+  ) {
+    const codeConflict = await this.prisma.legalEntity.findFirst({
+      where: {
+        tenantId,
+        code,
+        ...(excludeId ? { NOT: { id: excludeId } } : {})
+      },
+      select: { id: true }
+    });
+    if (codeConflict) {
+      throw new ConflictException("Există deja o entitate juridică cu acest cod.");
+    }
+
+    if (!cui) return;
+
+    const cuiConflict = await this.prisma.legalEntity.findFirst({
+      where: {
+        tenantId,
+        cui,
+        ...(excludeId ? { NOT: { id: excludeId } } : {})
+      },
+      select: { id: true }
+    });
+    if (cuiConflict) {
+      throw new ConflictException("Există deja o entitate juridică cu acest CUI.");
+    }
+  }
+
+  private rethrowLegalEntityUniqueConflict(error: unknown): never {
+    const target = Array.isArray((error as { meta?: { target?: unknown } })?.meta?.target)
+      ? ((error as { meta: { target: string[] } }).meta.target as string[])
+      : [];
+    if (target.includes("cui")) {
+      throw new ConflictException("Există deja o entitate juridică cu acest CUI.");
+    }
+    if (target.includes("code")) {
+      throw new ConflictException("Există deja o entitate juridică cu acest cod.");
+    }
+    throw new ConflictException("Codul sau CUI-ul entității juridice există deja pentru acest tenant.");
   }
 
   // --- Puncte de lucru ---
@@ -319,6 +418,36 @@ export class MasterDataService {
     }
   }
 
+  async deleteWorksite(tenantId: string, id: string) {
+    const existing = await this.prisma.worksite.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Punct de lucru negăsit.");
+
+    const [employeeCount, departmentCount, jobPositionCount] = await Promise.all([
+      this.prisma.employee.count({ where: { tenantId, worksiteId: id } }),
+      this.prisma.department.count({ where: { tenantId, worksiteId: id } }),
+      this.prisma.jobPosition.count({ where: { tenantId, worksiteId: id } })
+    ]);
+
+    if (employeeCount > 0) {
+      throw new BadRequestException(
+        `Punctul de lucru nu poate fi șters: există ${employeeCount} angajat(ți) asociați.`
+      );
+    }
+    if (departmentCount > 0) {
+      throw new BadRequestException(
+        `Punctul de lucru nu poate fi șters: există ${departmentCount} departament(e) asociate.`
+      );
+    }
+    if (jobPositionCount > 0) {
+      throw new BadRequestException(
+        `Punctul de lucru nu poate fi șters: există ${jobPositionCount} post(uri) asociate.`
+      );
+    }
+
+    await this.prisma.worksite.delete({ where: { id } });
+    return { deleted: true, id };
+  }
+
   // --- Departamente ---
   async listDepartments(tenantId: string, query?: PaginationQueryDto, viewer?: JwtPayload) {
     const p = resolvePagination(query);
@@ -389,6 +518,21 @@ export class MasterDataService {
     } catch {
       throw new ConflictException("Codul departamentului există deja pentru acest tenant.");
     }
+  }
+
+  async deleteDepartment(tenantId: string, id: string) {
+    const existing = await this.prisma.department.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Departament negăsit.");
+
+    const employeeCount = await this.prisma.employee.count({ where: { tenantId, departmentId: id } });
+    if (employeeCount > 0) {
+      throw new BadRequestException(
+        `Departamentul nu poate fi șters: există ${employeeCount} angajat(ți) asociați.`
+      );
+    }
+
+    await this.prisma.department.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   // --- Posturi (funcții) ---
@@ -514,6 +658,21 @@ export class MasterDataService {
     } catch {
       throw new ConflictException("Codul postului există deja pentru acest tenant.");
     }
+  }
+
+  async deleteJobPosition(tenantId: string, id: string) {
+    const existing = await this.prisma.jobPosition.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Post negăsit.");
+
+    const employeeCount = await this.prisma.employee.count({ where: { tenantId, jobPositionId: id } });
+    if (employeeCount > 0) {
+      throw new BadRequestException(
+        `Postul nu poate fi șters: există ${employeeCount} angajat(ți) asociați.`
+      );
+    }
+
+    await this.prisma.jobPosition.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   // --- Angajați ---
@@ -889,6 +1048,15 @@ export class MasterDataService {
     }
   }
 
+  async deleteGroup(tenantId: string, id: string) {
+    const existing = await this.prisma.employeeGroup.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException("Grup negăsit.");
+
+    // EmployeeGroupMember, UserScopedRole, CommunicationPublishRight cascade on group delete
+    await this.prisma.employeeGroup.delete({ where: { id } });
+    return { deleted: true, id };
+  }
+
   async addGroupMember(tenantId: string, groupId: string, employeeId: string) {
     const g = await this.prisma.employeeGroup.findFirst({ where: { id: groupId, tenantId } });
     if (!g) throw new NotFoundException("Grup negăsit.");
@@ -989,7 +1157,14 @@ export class MasterDataService {
     if (dto.active !== undefined) data.active = dto.active;
     if (Object.keys(data).length === 0) return existing;
 
-    return this.prisma.ssmResponsible.update({ where: { id }, data });
+    return this.prisma.ssmResponsible.update({
+      where: { id },
+      data,
+      include: {
+        legalEntity: { select: { id: true, code: true, name: true } },
+        worksite: { select: { id: true, code: true, name: true } }
+      }
+    });
   }
 
   // --- Import CSV angajați ---

@@ -39,6 +39,12 @@ export class GroupsController {
     return this.masterData.updateGroup(tenantId, id, dto);
   }
 
+  @Delete(":id")
+  @RequirePermissions(Permission.MASTER_DATA_WRITE)
+  remove(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.masterData.deleteGroup(tenantId, id);
+  }
+
   @Post(":groupId/members/:employeeId")
   @RequirePermissions(Permission.MASTER_DATA_WRITE)
   addMember(

@@ -106,6 +106,10 @@ export function MasterDataEmployeesPanel() {
 
   const paged = paginationFromResult(query.data, pagination.page, pagination.pageSize);
 
+  const closeDetail = () => {
+    setSelectedId(null);
+  };
+
   const openDetail = (item: EmployeeItem) => {
     setFeedback(null);
     setSelectedId(item.id);
@@ -233,7 +237,7 @@ export function MasterDataEmployeesPanel() {
           </button>
         </div>
 
-        <div className="comms-filters">
+        <div className="comms-filters md-emp-filters">
           <div className="field comms-search-field">
             <label htmlFor="md-emp-search">Caută</label>
             <input
@@ -348,7 +352,7 @@ export function MasterDataEmployeesPanel() {
                 </tr>
               ) : null}
               {paged.items.map((item) => (
-                <tr key={item.id} className={selectedId === item.id ? "comms-row-selected" : undefined}>
+                <tr key={item.id}>
                   <td className="comms-title-cell">{item.fullName}</td>
                   <td>{item.email}</td>
                   <td>{item.jobPosition ? `${item.jobPosition.code} — ${item.jobPosition.name}` : "—"}</td>
@@ -512,14 +516,13 @@ export function MasterDataEmployeesPanel() {
       ) : null}
 
       {selectedId ? (
-        <section className="card comms-panel md-detail-panel">
-          <div className="comms-toolbar">
-            <h3 className="card-title">{detailQuery.data?.fullName ?? "Detalii angajat"}</h3>
-            <button type="button" className="btn-secondary" onClick={() => setSelectedId(null)}>
-              Închide
-            </button>
-          </div>
-
+        <MasterDataCreateModal
+          title={detailQuery.data?.fullName ?? "Detalii angajat"}
+          titleId="md-employee-detail-title"
+          description="Profil, plasament și istoric — modificările se salvează din secțiunile de mai jos."
+          onClose={closeDetail}
+          size="wide"
+        >
           {feedback ? (
             <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
               {feedback.message}
@@ -599,69 +602,80 @@ export function MasterDataEmployeesPanel() {
                 />
               </div>
             </div>
-            <button
-              className="btn-primary"
-              type="submit"
-              disabled={updateEmployee.isPending || patchUserRole.isPending}
-            >
-              Salvează profil
-            </button>
+            <div className="comms-compose-actions">
+              <button
+                className="btn-primary"
+                type="submit"
+                disabled={updateEmployee.isPending || patchUserRole.isPending}
+              >
+                Salvează profil
+              </button>
+            </div>
           </form>
 
           <form className="form-stack md-placement-form" onSubmit={onSavePlacement}>
             <h4>Schimbare plasament (post / punct de lucru)</h4>
-            <p className="text-muted">
+            <p className="field-hint">
               Modificările de plasament sunt înregistrate în istoric; datele anterioare nu se șterg.
             </p>
-            <FieldSelect
-              id="md-emp-place-worksite"
-              label="Punct de lucru"
-              value={placementForm.worksiteId ?? ""}
-              onChange={(worksiteId) => setPlacementForm((p) => ({ ...p, worksiteId }))}
-              allowEmpty
-              emptyLabel="Neselectat"
-              options={mapToOptions(
-                worksitesLookup.data?.items ?? [],
-                (w) => w.id,
-                (w) => `${w.code} — ${w.name}`
-              )}
-            />
-            <FieldSelect
-              id="md-emp-place-dep"
-              label="Departament"
-              value={placementForm.departmentId ?? ""}
-              onChange={(departmentId) => setPlacementForm((p) => ({ ...p, departmentId }))}
-              allowEmpty
-              emptyLabel="Neselectat"
-              options={mapToOptions(
-                departmentsLookup.data?.items ?? [],
-                (d) => d.id,
-                (d) => `${d.code} — ${d.name}`
-              )}
-            />
-            <FieldSelect
-              id="md-emp-place-job"
-              label="Post"
-              value={placementForm.jobPositionId ?? ""}
-              onChange={(jobPositionId) => setPlacementForm((p) => ({ ...p, jobPositionId }))}
-              allowEmpty
-              emptyLabel="Neselectat"
-              options={mapToOptions(
-                jobsLookup.data?.items ?? [],
-                (j) => j.id,
-                (j) => `${j.code} — ${j.name}`
-              )}
-            />
-            <FieldSelect
-              id="md-emp-place-reason"
-              label="Motiv modificare *"
-              value={placementForm.changeReason}
-              onChange={(changeReason) => setPlacementForm((p) => ({ ...p, changeReason }))}
-              options={PLACEMENT_CHANGE_REASONS.map((r) => ({ value: r, label: r }))}
-            />
-            <button className="btn-primary" type="submit" disabled={updatePlacement.isPending}>
-              Aplică schimbarea plasamentului
-            </button>
+            <div className="comms-form-row">
+              <FieldSelect
+                id="md-emp-place-worksite"
+                label="Punct de lucru"
+                value={placementForm.worksiteId ?? ""}
+                onChange={(worksiteId) => setPlacementForm((p) => ({ ...p, worksiteId }))}
+                allowEmpty
+                emptyLabel="Neselectat"
+                options={mapToOptions(
+                  worksitesLookup.data?.items ?? [],
+                  (w) => w.id,
+                  (w) => `${w.code} — ${w.name}`
+                )}
+              />
+              <FieldSelect
+                id="md-emp-place-dep"
+                label="Departament"
+                value={placementForm.departmentId ?? ""}
+                onChange={(departmentId) => setPlacementForm((p) => ({ ...p, departmentId }))}
+                allowEmpty
+                emptyLabel="Neselectat"
+                options={mapToOptions(
+                  departmentsLookup.data?.items ?? [],
+                  (d) => d.id,
+                  (d) => `${d.code} — ${d.name}`
+                )}
+              />
+            </div>
+            <div className="comms-form-row">
+              <FieldSelect
+                id="md-emp-place-job"
+                label="Post"
+                value={placementForm.jobPositionId ?? ""}
+                onChange={(jobPositionId) => setPlacementForm((p) => ({ ...p, jobPositionId }))}
+                allowEmpty
+                emptyLabel="Neselectat"
+                options={mapToOptions(
+                  jobsLookup.data?.items ?? [],
+                  (j) => j.id,
+                  (j) => `${j.code} — ${j.name}`
+                )}
+              />
+              <FieldSelect
+                id="md-emp-place-reason"
+                label="Motiv modificare *"
+                value={placementForm.changeReason}
+                onChange={(changeReason) => setPlacementForm((p) => ({ ...p, changeReason }))}
+                options={PLACEMENT_CHANGE_REASONS.map((r) => ({ value: r, label: r }))}
+              />
+            </div>
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={updatePlacement.isPending}>
+                Aplică schimbarea plasamentului
+              </button>
+              <button type="button" className="btn-secondary" onClick={closeDetail}>
+                Închide
+              </button>
+            </div>
           </form>
 
           <div className="md-history-block">
@@ -705,7 +719,7 @@ export function MasterDataEmployeesPanel() {
               </table>
             </div>
           </div>
-        </section>
+        </MasterDataCreateModal>
       ) : null}
     </>
   );

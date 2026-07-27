@@ -387,6 +387,7 @@ model LegalEntity {
   communicationPublishRights CommunicationPublishRight[]
 
   @@unique([tenantId, code])
+  @@unique([tenantId, cui])
   @@index([tenantId, active])
 }
 

@@ -95,10 +95,19 @@ export interface CreateLegalEntityPayload {
   worksiteIds: string[];
 }
 
+export interface UpdateLegalEntityPayload {
+  code?: string;
+  name?: string;
+  cui?: string | null;
+  headquarters?: string | null;
+  active?: boolean;
+}
+
 export interface CreateWorksitePayload {
   code: string;
   name: string;
   address?: string;
+  legalEntityId?: string;
   active?: boolean;
 }
 
@@ -209,7 +218,16 @@ export interface CreateSsmResponsiblePayload {
   active?: boolean;
 }
 
-export type UpdateSsmResponsiblePayload = Partial<CreateSsmResponsiblePayload>;
+export type UpdateSsmResponsiblePayload = {
+  type?: CreateSsmResponsiblePayload["type"];
+  personName?: string;
+  legalEntityId?: string | null;
+  worksiteId?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  active?: boolean;
+};
 
 export interface ImportEmployeesResult {
   created: number;
@@ -345,6 +363,42 @@ export const masterDataApi = {
     return httpClient<import("../master-data-shared").LegalEntityItem>("/master-data/legal-entities", {
       method: "POST",
       body: JSON.stringify(payload)
+    });
+  },
+  updateLegalEntity(id: string, payload: UpdateLegalEntityPayload) {
+    return httpClient<import("../master-data-shared").LegalEntityItem>(
+      `/master-data/legal-entities/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload)
+      }
+    );
+  },
+  deleteLegalEntity(id: string) {
+    return httpClient<{ deleted: boolean; id: string }>(
+      `/master-data/legal-entities/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
+    );
+  },
+  deleteWorksite(id: string) {
+    return httpClient<{ deleted: boolean; id: string }>(`/master-data/worksites/${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    });
+  },
+  deleteDepartment(id: string) {
+    return httpClient<{ deleted: boolean; id: string }>(`/master-data/departments/${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    });
+  },
+  deleteJobPosition(id: string) {
+    return httpClient<{ deleted: boolean; id: string }>(
+      `/master-data/job-positions/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
+    );
+  },
+  deleteGroup(id: string) {
+    return httpClient<{ deleted: boolean; id: string }>(`/master-data/groups/${encodeURIComponent(id)}`, {
+      method: "DELETE"
     });
   },
   listSsmResponsibles(params?: PaginationParams) {

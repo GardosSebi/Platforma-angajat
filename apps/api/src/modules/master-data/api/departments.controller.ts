@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -33,5 +33,11 @@ export class DepartmentsController {
   @RequirePermissions(Permission.MASTER_DATA_WRITE)
   update(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: UpdateDepartmentDto) {
     return this.masterData.updateDepartment(tenantId, id, dto);
+  }
+
+  @Delete(":id")
+  @RequirePermissions(Permission.MASTER_DATA_WRITE)
+  remove(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.masterData.deleteDepartment(tenantId, id);
   }
 }

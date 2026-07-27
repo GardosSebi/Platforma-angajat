@@ -1,11 +1,30 @@
-import { FormEvent, useMemo, useState } from "react";
-import type { CreateJobPositionPayload, JobPositionItem } from "../api/master-data.api";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import type {
+  CreateJobPositionPayload,
+  JobPositionItem,
+  UpdateJobPositionPayload
+} from "../api/master-data.api";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
+import { OptionCardRadioGroup } from "../../../shared/components/OptionCardRadioGroup";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
-import { useCreateJobPosition, useDepartmentsLookup, useJobPositions, useLegalEntitiesLookup, useWorksitesLookup } from "../hooks/useMasterData";
-import { MASTER_DATA_ADD_LABELS, activeLabel, activeTone, mutationErrorMessage } from "../master-data-shared";
+import {
+  useCreateJobPosition,
+  useDeleteJobPosition,
+  useDepartmentsLookup,
+  useJobPositions,
+  useLegalEntitiesLookup,
+  useUpdateJobPosition,
+  useWorksitesLookup
+} from "../hooks/useMasterData";
+import {
+  ACTIVE_STATUS_CARD_OPTIONS,
+  MASTER_DATA_ADD_LABELS,
+  activeLabel,
+  activeTone,
+  mutationErrorMessage
+} from "../master-data-shared";
 import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
 const EMPTY_FORM: CreateJobPositionPayload = {
@@ -20,6 +39,20 @@ const EMPTY_FORM: CreateJobPositionPayload = {
   active: true
 };
 
+function toEditForm(item: JobPositionItem): UpdateJobPositionPayload {
+  return {
+    code: item.code,
+    name: item.name,
+    legalEntityId: item.legalEntityId ?? "",
+    worksiteId: item.worksiteId ?? "",
+    departmentId: item.departmentId ?? "",
+    corCode: item.corCode ?? "",
+    description: item.description ?? "",
+    activityDescription: item.activityDescription ?? "",
+    active: item.active
+  };
+}
+
 export function MasterDataPositionsPanel() {
   const pagination = usePagination();
   const query = useJobPositions(pagination.params);
@@ -27,6 +60,8 @@ export function MasterDataPositionsPanel() {
   const legalEntitiesLookup = useLegalEntitiesLookup();
   const worksitesLookup = useWorksitesLookup();
   const createJobPosition = useCreateJobPosition();
+  const updateJobPosition = useUpdateJobPosition();
+  const deleteJobPosition = useDeleteJobPosition();
   const paged = paginationFromResult(query.data, pagination.page, pagination.pageSize);
 
   const departmentById = useMemo(() => {
@@ -37,10 +72,33 @@ export function MasterDataPositionsPanel() {
     return map;
   }, [departmentsLookup.data?.items]);
 
+  const legalEntityOptions = mapToOptions(
+    legalEntitiesLookup.data?.items ?? [],
+    (entity) => entity.id,
+    (entity) => `${entity.code} - ${entity.name}`
+  );
+  const worksiteOptions = mapToOptions(
+    worksitesLookup.data?.items ?? [],
+    (worksite) => worksite.id,
+    (worksite) => `${worksite.code} - ${worksite.name}`
+  );
+  const departmentOptions = mapToOptions(
+    departmentsLookup.data?.items ?? [],
+    (department) => department.id,
+    (department) => `${department.code} - ${department.name}`
+  );
+
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreateJobPositionPayload>(EMPTY_FORM);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<UpdateJobPositionPayload | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const selected = useMemo(
+    () => paged.items.find((item) => item.id === selectedId) ?? null,
+    [paged.items, selectedId]
+  );
 
   const items = useMemo(() => {
     const queryText = search.trim().toLowerCase();
@@ -52,6 +110,25 @@ export function MasterDataPositionsPanel() {
         (item.corCode ?? "").toLowerCase().includes(queryText)
     );
   }, [paged.items, search]);
+
+  useEffect(() => {
+    if (!selectedId || query.isFetching) return;
+    if (!paged.items.some((entry) => entry.id === selectedId)) {
+      setSelectedId(null);
+      setEditForm(null);
+    }
+  }, [paged.items, selectedId, query.isFetching]);
+
+  const openDetails = (item: JobPositionItem) => {
+    setFeedback(null);
+    setSelectedId(item.id);
+    setEditForm(toEditForm(item));
+  };
+
+  const closeDetails = () => {
+    setSelectedId(null);
+    setEditForm(null);
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -78,6 +155,72 @@ export function MasterDataPositionsPanel() {
       }
     );
   };
+
+  const onSaveEdit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedId || !editForm) return;
+    setFeedback(null);
+    updateJobPosition.mutate(
+      {
+        id: selectedId,
+        payload: {
+          code: editForm.code?.trim(),
+          name: editForm.name?.trim(),
+          legalEntityId: editForm.legalEntityId || "",
+          worksiteId: editForm.worksiteId || "",
+          departmentId: editForm.departmentId || "",
+          corCode: editForm.corCode ?? "",
+          description: editForm.description ?? "",
+          activityDescription: editForm.activityDescription ?? "",
+          active: editForm.active
+        }
+      },
+      {
+        onSuccess: () => {
+          closeDetails();
+          setFeedback({ type: "success", message: "Postul a fost actualizat." });
+        },
+        onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+      }
+    );
+  };
+
+  const onToggleActive = () => {
+    if (!selected) return;
+    setFeedback(null);
+    const nextActive = !selected.active;
+    updateJobPosition.mutate(
+      { id: selected.id, payload: { active: nextActive } },
+      {
+        onSuccess: () => {
+          setEditForm((prev) => (prev ? { ...prev, active: nextActive } : prev));
+          setFeedback({
+            type: "success",
+            message: nextActive ? "Postul a fost activat." : "Postul a fost dezactivat."
+          });
+        },
+        onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+      }
+    );
+  };
+
+  const onDelete = () => {
+    if (!selected) return;
+    const confirmed = window.confirm(
+      `Ștergi postul „${selected.name}” (${selected.code})? Această acțiune nu poate fi anulată.`
+    );
+    if (!confirmed) return;
+    setFeedback(null);
+    deleteJobPosition.mutate(selected.id, {
+      onSuccess: () => {
+        closeDetails();
+        setFeedback({ type: "success", message: "Postul a fost șters." });
+      },
+      onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+    });
+  };
+
+  const isMutating = updateJobPosition.isPending || deleteJobPosition.isPending;
 
   return (
     <>
@@ -112,7 +255,7 @@ export function MasterDataPositionsPanel() {
           </div>
         </div>
 
-        {feedback && !showForm ? (
+        {feedback && !showForm && !selectedId ? (
           <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
             {feedback.message}
           </div>
@@ -129,19 +272,20 @@ export function MasterDataPositionsPanel() {
                 <th>Departament</th>
                 <th>COR</th>
                 <th>Stare</th>
+                <th aria-label="Acțiuni" />
               </tr>
             </thead>
             <tbody>
               {query.isLoading ? (
                 <tr>
-                  <td colSpan={7} className="text-muted">
+                  <td colSpan={8} className="text-muted">
                     Se încarcă...
                   </td>
                 </tr>
               ) : null}
               {!query.isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="comms-empty-cell">
+                  <td colSpan={8} className="comms-empty-cell">
                     <p>Nu am găsit posturi{search ? " pentru căutare" : ""}.</p>
                     {!search ? (
                       <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
@@ -160,7 +304,16 @@ export function MasterDataPositionsPanel() {
                   <td>{item.departmentId ? departmentById.get(item.departmentId) ?? item.departmentId : "—"}</td>
                   <td>{item.corCode || "—"}</td>
                   <td>
-                    <span className={`comms-status comms-status--${activeTone(item.active)}`}>{activeLabel(item.active)}</span>
+                    <span className={`comms-status comms-status--${activeTone(item.active)}`}>
+                      {activeLabel(item.active)}
+                    </span>
+                  </td>
+                  <td className="comms-actions-cell">
+                    <div className="comms-row-actions">
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => openDetails(item)}>
+                        Editează
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -211,11 +364,7 @@ export function MasterDataPositionsPanel() {
               onChange={(legalEntityId) => setForm((prev) => ({ ...prev, legalEntityId }))}
               allowEmpty
               emptyLabel="Neselectată"
-              options={mapToOptions(
-                legalEntitiesLookup.data?.items ?? [],
-                (entity) => entity.id,
-                (entity) => `${entity.code} - ${entity.name}`
-              )}
+              options={legalEntityOptions}
             />
             <FieldSelect
               id="md-job-worksite"
@@ -224,11 +373,7 @@ export function MasterDataPositionsPanel() {
               onChange={(worksiteId) => setForm((prev) => ({ ...prev, worksiteId }))}
               allowEmpty
               emptyLabel="Neselectat"
-              options={mapToOptions(
-                worksitesLookup.data?.items ?? [],
-                (worksite) => worksite.id,
-                (worksite) => `${worksite.code} - ${worksite.name}`
-              )}
+              options={worksiteOptions}
             />
             <FieldSelect
               id="md-job-department"
@@ -237,11 +382,7 @@ export function MasterDataPositionsPanel() {
               onChange={(departmentId) => setForm((prev) => ({ ...prev, departmentId }))}
               allowEmpty
               emptyLabel="Neselectat"
-              options={mapToOptions(
-                departmentsLookup.data?.items ?? [],
-                (department) => department.id,
-                (department) => `${department.code} - ${department.name}`
-              )}
+              options={departmentOptions}
             />
             <details className="comms-advanced">
               <summary>Câmpuri opționale</summary>
@@ -271,6 +412,126 @@ export function MasterDataPositionsPanel() {
                 {createJobPosition.isPending ? "Se salvează..." : "Salvează"}
               </button>
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Anulează
+              </button>
+            </div>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
+      ) : null}
+
+      {selected && editForm ? (
+        <MasterDataCreateModal
+          title={`Editează: ${selected.name}`}
+          titleId="md-position-edit-title"
+          description={selected.code}
+          onClose={closeDetails}
+          size="wide"
+        >
+          <form className="form-stack" onSubmit={onSaveEdit}>
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-job-edit-code">Cod *</label>
+                <input
+                  id="md-job-edit-code"
+                  required
+                  value={editForm.code ?? ""}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, code: event.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-job-edit-name">Denumire *</label>
+                <input
+                  id="md-job-edit-name"
+                  required
+                  value={editForm.name ?? ""}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="comms-form-row">
+              <FieldSelect
+                id="md-job-edit-entity"
+                label="Entitate juridică"
+                value={editForm.legalEntityId ?? ""}
+                onChange={(legalEntityId) => setEditForm((prev) => ({ ...prev, legalEntityId }))}
+                allowEmpty
+                emptyLabel="Neselectată"
+                options={legalEntityOptions}
+              />
+              <FieldSelect
+                id="md-job-edit-worksite"
+                label="Punct de lucru"
+                value={editForm.worksiteId ?? ""}
+                onChange={(worksiteId) => setEditForm((prev) => ({ ...prev, worksiteId }))}
+                allowEmpty
+                emptyLabel="Neselectat"
+                options={worksiteOptions}
+              />
+            </div>
+            <FieldSelect
+              id="md-job-edit-department"
+              label="Departament (opțional)"
+              value={editForm.departmentId ?? ""}
+              onChange={(departmentId) => setEditForm((prev) => ({ ...prev, departmentId }))}
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={departmentOptions}
+            />
+            <div className="comms-form-row">
+              <div className="field">
+                <label htmlFor="md-job-edit-cor">Cod COR</label>
+                <input
+                  id="md-job-edit-cor"
+                  value={editForm.corCode ?? ""}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, corCode: event.target.value }))}
+                  placeholder="Ex: 251201"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="md-job-edit-description">Descriere</label>
+                <input
+                  id="md-job-edit-description"
+                  value={editForm.description ?? ""}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, description: event.target.value }))}
+                  placeholder="Scurtă descriere..."
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="md-job-edit-activity">Descriere activitate</label>
+              <textarea
+                id="md-job-edit-activity"
+                value={editForm.activityDescription ?? ""}
+                onChange={(event) =>
+                  setEditForm((prev) => ({ ...prev, activityDescription: event.target.value }))
+                }
+                rows={2}
+                placeholder="Descrierea activității postului..."
+              />
+            </div>
+            <OptionCardRadioGroup
+              name="md-job-edit-active"
+              legend="Status"
+              value={editForm.active ? "true" : "false"}
+              onChange={(value) => setEditForm((prev) => ({ ...prev, active: value === "true" }))}
+              options={[...ACTIVE_STATUS_CARD_OPTIONS]}
+            />
+            <div className="comms-compose-actions">
+              <button type="submit" className="btn-primary" disabled={isMutating}>
+                {updateJobPosition.isPending ? "Se salvează…" : "Salvează modificările"}
+              </button>
+              <button type="button" className="btn-secondary" disabled={isMutating} onClick={onToggleActive}>
+                {selected.active ? "Dezactivează" : "Activează"}
+              </button>
+              <button type="button" className="btn-secondary" disabled={isMutating} onClick={onDelete}>
+                {deleteJobPosition.isPending ? "Se șterge…" : "Șterge"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={closeDetails}>
                 Anulează
               </button>
             </div>

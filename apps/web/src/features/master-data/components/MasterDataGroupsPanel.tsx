@@ -8,6 +8,7 @@ import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   useAddGroupMember,
   useCreateGroup,
+  useDeleteGroup,
   useEmployeeOptions,
   useGroup,
   useGroups,
@@ -41,10 +42,17 @@ export function MasterDataGroupsPanel() {
   const employeeOptions = useEmployeeOptions(undefined, { enabled: Boolean(selectedId) });
   const createGroup = useCreateGroup();
   const updateGroup = useUpdateGroup();
+  const deleteGroup = useDeleteGroup();
   const addMember = useAddGroupMember();
   const removeMember = useRemoveGroupMember();
 
+  const closeEdit = () => {
+    setSelectedId(null);
+    setMemberToAdd("");
+  };
+
   const openGroup = (item: EmployeeGroupItem) => {
+    setShowForm(false);
     setSelectedId(item.id);
     setEditName(item.name);
     setEditDescription(item.description ?? "");
@@ -76,6 +84,7 @@ export function MasterDataGroupsPanel() {
   const onSaveGroup = (event: FormEvent) => {
     event.preventDefault();
     if (!selectedId) return;
+    setFeedback(null);
     updateGroup.mutate(
       {
         id: selectedId,
@@ -90,6 +99,38 @@ export function MasterDataGroupsPanel() {
         onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
       }
     );
+  };
+
+  const onToggleActive = () => {
+    if (!selectedId) return;
+    setFeedback(null);
+    const nextActive = !editActive;
+    updateGroup.mutate(
+      { id: selectedId, payload: { active: nextActive } },
+      {
+        onSuccess: () => {
+          setEditActive(nextActive);
+          setFeedback({
+            type: "success",
+            message: nextActive ? "Grupul a fost activat." : "Grupul a fost dezactivat."
+          });
+        },
+        onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+      }
+    );
+  };
+
+  const onDelete = () => {
+    if (!selectedId) return;
+    if (!window.confirm(`Ștergi grupul „${editName}"? Această acțiune nu poate fi anulată.`)) return;
+    setFeedback(null);
+    deleteGroup.mutate(selectedId, {
+      onSuccess: () => {
+        closeEdit();
+        setFeedback({ type: "success", message: "Grupul a fost șters." });
+      },
+      onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
+    });
   };
 
   const members = detailQuery.data?.members ?? [];
@@ -115,6 +156,8 @@ export function MasterDataGroupsPanel() {
     );
   };
 
+  const busy = updateGroup.isPending || deleteGroup.isPending;
+
   return (
     <>
       <section className="card comms-panel">
@@ -128,6 +171,7 @@ export function MasterDataGroupsPanel() {
             className="btn-primary comms-toolbar-cta"
             onClick={() => {
               setFeedback(null);
+              closeEdit();
               setShowForm(true);
             }}
           >
@@ -173,7 +217,7 @@ export function MasterDataGroupsPanel() {
                   <td className="comms-actions-cell">
                     <div className="comms-row-actions">
                       <button type="button" className="btn-secondary btn-sm" onClick={() => openGroup(item)}>
-                        Gestionează
+                        Editează
                       </button>
                     </div>
                   </td>
@@ -223,25 +267,22 @@ export function MasterDataGroupsPanel() {
                 Anulează
               </button>
             </div>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
           </form>
         </MasterDataCreateModal>
       ) : null}
 
       {selectedId ? (
-        <section className="card comms-panel md-detail-panel">
-          <div className="comms-toolbar">
-            <h3 className="card-title">Grup: {editName}</h3>
-            <button type="button" className="btn-secondary" onClick={() => setSelectedId(null)}>
-              Închide
-            </button>
-          </div>
-
-          {feedback ? (
-            <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
-              {feedback.message}
-            </div>
-          ) : null}
-
+        <MasterDataCreateModal
+          title={`Editează: ${editName}`}
+          titleId="md-group-edit-title"
+          size="wide"
+          onClose={closeEdit}
+        >
           <form className="form-stack" onSubmit={onSaveGroup}>
             <div className="field">
               <label htmlFor="md-grp-edit-name">Denumire</label>
@@ -263,9 +304,25 @@ export function MasterDataGroupsPanel() {
               onChange={(next) => setEditActive(next === "true")}
               options={[...ACTIVE_STATUS_CARD_OPTIONS]}
             />
-            <button className="btn-primary" type="submit" disabled={updateGroup.isPending}>
-              Salvează grup
-            </button>
+            <div className="comms-compose-actions">
+              <button className="btn-primary" type="submit" disabled={busy}>
+                {updateGroup.isPending ? "Se salvează…" : "Salvează"}
+              </button>
+              <button type="button" className="btn-secondary" disabled={busy} onClick={onToggleActive}>
+                {editActive ? "Dezactivează" : "Activează"}
+              </button>
+              <button type="button" className="btn-secondary" disabled={busy} onClick={onDelete}>
+                {deleteGroup.isPending ? "Se șterge…" : "Șterge"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={closeEdit}>
+                Anulează
+              </button>
+            </div>
+            {feedback ? (
+              <div className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+                {feedback.message}
+              </div>
+            ) : null}
           </form>
 
           <div className="md-members-block">
@@ -308,6 +365,8 @@ export function MasterDataGroupsPanel() {
                       removeMember.mutate(
                         { groupId: selectedId, employeeId: m.id },
                         {
+                          onSuccess: () =>
+                            setFeedback({ type: "success", message: "Angajat eliminat din grup." }),
                           onError: (error) =>
                             setFeedback({ type: "error", message: mutationErrorMessage(error) })
                         }
@@ -321,7 +380,7 @@ export function MasterDataGroupsPanel() {
               {members.length === 0 ? <li className="text-muted">Niciun membru în acest grup.</li> : null}
             </ul>
           </div>
-        </section>
+        </MasterDataCreateModal>
       ) : null}
     </>
   );
