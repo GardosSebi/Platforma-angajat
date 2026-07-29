@@ -16,16 +16,18 @@ function fileNameFromDisposition(disposition: string | null): string | undefined
   return plainMatch?.[1]?.trim();
 }
 
-export async function downloadWithAuth(path: string, fallbackFilename: string) {
+async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
   const session = authStore.get();
   if (session?.accessToken && isAccessTokenExpired(session.accessToken)) {
     handleSessionExpired();
     throw new Error("Sesiunea a expirat. Autentificați-vă din nou.");
   }
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
     headers: {
       ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
-      ...(session?.tenantId ? { "x-tenant-id": session.tenantId } : {})
+      ...(session?.tenantId ? { "x-tenant-id": session.tenantId } : {}),
+      ...(init?.headers ?? {})
     }
   });
 
@@ -42,6 +44,39 @@ export async function downloadWithAuth(path: string, fallbackFilename: string) {
     throw new Error(`Download failed (${response.status}). ${details}`.trim());
   }
 
+  return response;
+}
+
+export async function fetchBlobWithAuth(path: string, init?: RequestInit): Promise<Blob> {
+  const response = await authorizedFetch(path, init);
+  return response.blob();
+}
+
+export async function downloadWithAuth(path: string, fallbackFilename: string) {
+  const response = await authorizedFetch(path);
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get("content-disposition");
+  const filename = fileNameFromDisposition(contentDisposition) ?? fallbackFilename;
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+
+export async function downloadJsonPostWithAuth(
+  path: string,
+  body: unknown,
+  fallbackFilename: string
+) {
+  const response = await authorizedFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   const blob = await response.blob();
   const contentDisposition = response.headers.get("content-disposition");
   const filename = fileNameFromDisposition(contentDisposition) ?? fallbackFilename;

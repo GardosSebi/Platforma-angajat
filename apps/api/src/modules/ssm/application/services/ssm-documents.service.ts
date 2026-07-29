@@ -18,10 +18,25 @@ import { paginatedResult } from "../../../../common/pagination";
 import { ListSsmDocumentsDto } from "../../api/dto/list-ssm-documents.dto";
 import { ItmAccessService } from "./itm-access.service";
 import { SystemRole } from "../../../../common/prisma-enums";
+import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
+import {
+  assertDocumentTypeAccess,
+  canAccessDocumentType,
+  defaultPoliciesForSeed,
+  DOCUMENT_TYPE_MODULE_HINTS,
+  type DocumentTypePolicyRow
+} from "../document-type-acl";
 
 const MAX_FILE_BYTES = 120 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".mp4", ".mov", ".avi", ".mkv"]);
 const ALLOWED_MIME_PREFIXES = ["application/pdf", "application/msword", "video/", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+const PROCEDURE_DOCUMENT_TYPES = new Set<SsmDocumentType>([
+  SsmDocumentType.IPSSM,
+  SsmDocumentType.EMERGENCY_PROCEDURE,
+  SsmDocumentType.PSI,
+  SsmDocumentType.THEMATIC,
+  SsmDocumentType.PPP
+]);
 
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) {
@@ -45,11 +60,17 @@ function toBool(value?: string): boolean {
 type EmployeePlacementNames = {
   department: { name: string } | null;
   jobPosition: { name: string } | null;
-  worksite: { name: string } | null;
+  worksite: { name: string; legalEntity: { name: string } | null } | null;
+  entityName?: string | null;
 };
 
 function ssmDocumentVisibleToEmployee(
-  doc: { targetType: SsmDocumentTargetType; targetLabel: string | null; status: SsmDocumentStatus },
+  doc: {
+    targetType: SsmDocumentTargetType;
+    targetLabel: string | null;
+    entityName?: string | null;
+    status: SsmDocumentStatus;
+  },
   employee: EmployeePlacementNames
 ): boolean {
   if (doc.status !== SsmDocumentStatus.ACTIVE) {
@@ -67,6 +88,16 @@ function ssmDocumentVisibleToEmployee(
   if (doc.targetType === SsmDocumentTargetType.WORKSITE) {
     return doc.targetLabel === (employee.worksite?.name ?? undefined);
   }
+  if (doc.targetType === SsmDocumentTargetType.ENTITY) {
+    const employeeEntity =
+      employee.worksite?.legalEntity?.name ?? employee.entityName ?? null;
+    if (!doc.targetLabel && !doc.entityName) {
+      return true;
+    }
+    const needle = (doc.targetLabel ?? doc.entityName ?? "").trim().toLowerCase();
+    if (!needle) return true;
+    return Boolean(employeeEntity && employeeEntity.trim().toLowerCase() === needle);
+  }
   return false;
 }
 
@@ -75,8 +106,88 @@ export class SsmDocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly itmAccess: ItmAccessService
+    private readonly itmAccess: ItmAccessService,
+    private readonly trainingAutomation: SsmTrainingAutomationService
   ) {}
+
+  private async resolveProcedureAudienceEmployeeIds(
+    tenantId: string,
+    doc: {
+      targetType: SsmDocumentTargetType;
+      targetRefId: string | null;
+      targetLabel: string | null;
+    }
+  ): Promise<string[]> {
+    const base = { tenantId, active: true as const };
+    if (doc.targetType === SsmDocumentTargetType.ALL || doc.targetType === SsmDocumentTargetType.ENTITY) {
+      const rows = await this.prisma.employee.findMany({ where: base, select: { id: true } });
+      return rows.map((r) => r.id);
+    }
+    if (doc.targetType === SsmDocumentTargetType.DEPARTMENT) {
+      const rows = await this.prisma.employee.findMany({
+        where: {
+          ...base,
+          ...(doc.targetRefId
+            ? { departmentId: doc.targetRefId }
+            : doc.targetLabel
+              ? { department: { name: doc.targetLabel } }
+              : { id: "__none__" })
+        },
+        select: { id: true }
+      });
+      return rows.map((r) => r.id);
+    }
+    if (doc.targetType === SsmDocumentTargetType.JOB_POSITION) {
+      const rows = await this.prisma.employee.findMany({
+        where: {
+          ...base,
+          ...(doc.targetRefId
+            ? { jobPositionId: doc.targetRefId }
+            : doc.targetLabel
+              ? { jobPosition: { name: doc.targetLabel } }
+              : { id: "__none__" })
+        },
+        select: { id: true }
+      });
+      return rows.map((r) => r.id);
+    }
+    if (doc.targetType === SsmDocumentTargetType.WORKSITE) {
+      const rows = await this.prisma.employee.findMany({
+        where: {
+          ...base,
+          ...(doc.targetRefId
+            ? { worksiteId: doc.targetRefId }
+            : doc.targetLabel
+              ? { worksite: { name: doc.targetLabel } }
+              : { id: "__none__" })
+        },
+        select: { id: true }
+      });
+      return rows.map((r) => r.id);
+    }
+    return [];
+  }
+
+  private async triggerProcedureTrainingIfNeeded(
+    tenantId: string,
+    actorId: string,
+    doc: {
+      type: SsmDocumentType;
+      title: string;
+      targetType: SsmDocumentTargetType;
+      targetRefId: string | null;
+      targetLabel: string | null;
+    }
+  ) {
+    if (!PROCEDURE_DOCUMENT_TYPES.has(doc.type)) {
+      return;
+    }
+    const employeeIds = await this.resolveProcedureAudienceEmployeeIds(tenantId, doc);
+    if (!employeeIds.length) {
+      return;
+    }
+    await this.trainingAutomation.assignOnProcedureChange(tenantId, actorId, employeeIds, doc.title);
+  }
 
   private assertUpload(file?: Express.Multer.File) {
     if (!file) {
@@ -113,10 +224,15 @@ export class SsmDocumentsService {
     tenantId: string,
     actorId: string,
     dto: CreateSsmDocumentDto,
-    file?: Express.Multer.File
+    file?: Express.Multer.File,
+    viewer?: JwtPayload
   ) {
     this.assertUpload(file);
     const upload = file as Express.Multer.File;
+    if (viewer) {
+      const policies = await this.loadTypePolicies(tenantId);
+      assertDocumentTypeAccess(viewer, dto.type, "edit", policies);
+    }
 
     const periodStart = parseOptionalDate(dto.periodStart);
     const periodEnd = parseOptionalDate(dto.periodEnd);
@@ -124,7 +240,7 @@ export class SsmDocumentsService {
       throw new BadRequestException("periodStart must be before periodEnd.");
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const createdDoc = await tx.ssmDocument.create({
         data: {
           tenantId,
@@ -173,8 +289,31 @@ export class SsmDocumentsService {
         payload: { type: dto.type, title: dto.title.trim(), version: 1 }
       });
 
-      return { documentId: createdDoc.id, versionId: version.id, versionNumber: 1 };
+      return {
+        documentId: createdDoc.id,
+        versionId: version.id,
+        versionNumber: 1,
+        type: createdDoc.type,
+        title: createdDoc.title,
+        targetType: createdDoc.targetType,
+        targetRefId: createdDoc.targetRefId,
+        targetLabel: createdDoc.targetLabel
+      };
     });
+
+    await this.triggerProcedureTrainingIfNeeded(tenantId, actorId, {
+      type: result.type,
+      title: result.title,
+      targetType: result.targetType,
+      targetRefId: result.targetRefId,
+      targetLabel: result.targetLabel
+    });
+
+    return {
+      documentId: result.documentId,
+      versionId: result.versionId,
+      versionNumber: result.versionNumber
+    };
   }
 
   async addVersion(
@@ -182,7 +321,8 @@ export class SsmDocumentsService {
     actorId: string,
     documentId: string,
     changeNote: string | undefined,
-    file?: Express.Multer.File
+    file?: Express.Multer.File,
+    viewer?: JwtPayload
   ) {
     this.assertUpload(file);
     const upload = file as Express.Multer.File;
@@ -191,6 +331,10 @@ export class SsmDocumentsService {
     });
     if (!document) {
       throw new NotFoundException("Document not found.");
+    }
+    if (viewer) {
+      const policies = await this.loadTypePolicies(tenantId);
+      assertDocumentTypeAccess(viewer, document.type, "edit", policies);
     }
     if (document.status === SsmDocumentStatus.ARCHIVED) {
       throw new BadRequestException("Cannot upload a new version for archived document.");
@@ -228,6 +372,14 @@ export class SsmDocumentsService {
       entityType: "SsmDocument",
       entityId: documentId,
       payload: { version: nextVersion }
+    });
+
+    await this.triggerProcedureTrainingIfNeeded(tenantId, actorId, {
+      type: document.type,
+      title: document.title,
+      targetType: document.targetType,
+      targetRefId: document.targetRefId,
+      targetLabel: document.targetLabel
     });
 
     return { documentId, versionId: version.id, versionNumber: nextVersion };
@@ -313,7 +465,7 @@ export class SsmDocumentsService {
       include: {
         department: { select: { name: true } },
         jobPosition: { select: { name: true } },
-        worksite: { select: { name: true } }
+        worksite: { select: { name: true, legalEntity: { select: { name: true } } } }
       }
     });
     if (!employee) {
@@ -324,9 +476,32 @@ export class SsmDocumentsService {
       employee: {
         department: employee.department,
         jobPosition: employee.jobPosition,
-        worksite: employee.worksite
+        worksite: employee.worksite,
+        entityName: employee.worksite?.legalEntity?.name ?? null
       }
     };
+  }
+
+  private async loadTypePolicies(tenantId: string): Promise<DocumentTypePolicyRow[]> {
+    const rows = await this.prisma.ssmDocumentTypePolicy.findMany({ where: { tenantId } });
+    return rows.map((row) => ({
+      documentType: row.documentType,
+      viewRoles: row.viewRoles,
+      editRoles: row.editRoles,
+      approveRoles: row.approveRoles,
+      relatedModuleHint: row.relatedModuleHint
+    }));
+  }
+
+  private allowedTypesForViewer(
+    viewer: JwtPayload,
+    action: "view" | "edit" | "approve",
+    policies: DocumentTypePolicyRow[]
+  ): SsmDocumentType[] | null {
+    const allTypes = Object.values(SsmDocumentType);
+    const allowed = allTypes.filter((type) => canAccessDocumentType(viewer, type, action, policies));
+    if (allowed.length === allTypes.length) return null;
+    return allowed;
   }
 
   async listDocuments(tenantId: string, query: ListSsmDocumentsDto, viewer: JwtPayload) {
@@ -334,11 +509,22 @@ export class SsmDocumentsService {
     if (ctx.scope === "empty") {
       return paginatedResult([], 0, 1, resolvePagination(query).pageSize);
     }
+    const policies = await this.loadTypePolicies(tenantId);
+    const allowedTypes = this.allowedTypesForViewer(viewer, "view", policies);
+    if (allowedTypes && allowedTypes.length === 0) {
+      return paginatedResult([], 0, 1, resolvePagination(query).pageSize);
+    }
+    if (query.type && allowedTypes && !allowedTypes.includes(query.type)) {
+      return paginatedResult([], 0, 1, resolvePagination(query).pageSize);
+    }
+
+    const periodFrom = parseOptionalDate(query.periodFrom);
+    const periodTo = parseOptionalDate(query.periodTo);
     const p = resolvePagination(query);
     const dbWhere = {
       tenantId,
       activeVersionId: { not: null },
-      ...(query.type ? { type: query.type } : {}),
+      ...(query.type ? { type: query.type } : allowedTypes ? { type: { in: allowedTypes } } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.targetType ? { targetType: query.targetType } : {}),
       ...(query.entityName ? { entityName: { contains: query.entityName, mode: "insensitive" as const } } : {}),
@@ -348,12 +534,35 @@ export class SsmDocumentsService {
       ...(query.jobPositionName
         ? { jobPositionName: { contains: query.jobPositionName, mode: "insensitive" as const } }
         : {}),
+      ...(periodFrom || periodTo
+        ? {
+            AND: [
+              ...(periodFrom
+                ? [
+                    {
+                      OR: [{ periodEnd: null }, { periodEnd: { gte: periodFrom } }]
+                    }
+                  ]
+                : []),
+              ...(periodTo
+                ? [
+                    {
+                      OR: [{ periodStart: null }, { periodStart: { lte: periodTo } }]
+                    }
+                  ]
+                : [])
+            ]
+          }
+        : {}),
       ...(query.controlOnly && toBool(query.controlOnly) ? { isControlFolder: true } : {}),
       ...(query.q
         ? {
             OR: [
               { title: { contains: query.q, mode: "insensitive" as const } },
-              { targetLabel: { contains: query.q, mode: "insensitive" as const } }
+              { targetLabel: { contains: query.q, mode: "insensitive" as const } },
+              { entityName: { contains: query.q, mode: "insensitive" as const } },
+              { departmentName: { contains: query.q, mode: "insensitive" as const } },
+              { jobPositionName: { contains: query.q, mode: "insensitive" as const } }
             ]
           }
         : {})
@@ -369,7 +578,12 @@ export class SsmDocumentsService {
         .filter((row) => row.activeVersion)
         .filter((row) =>
           ssmDocumentVisibleToEmployee(
-            { targetType: row.targetType, targetLabel: row.targetLabel, status: row.status },
+            {
+              targetType: row.targetType,
+              targetLabel: row.targetLabel,
+              entityName: row.entityName,
+              status: row.status
+            },
             ctx.employee
           )
         );
@@ -409,6 +623,7 @@ export class SsmDocumentsService {
         .filter((row) => {
           if (row.status !== SsmDocumentStatus.ACTIVE) return false;
           if (row.targetType === SsmDocumentTargetType.ALL) return true;
+          if (row.targetType === SsmDocumentTargetType.ENTITY) return true;
           if (row.targetType === SsmDocumentTargetType.WORKSITE) {
             return row.targetLabel === ctx.worksiteName;
           }
@@ -469,6 +684,7 @@ export class SsmDocumentsService {
         {
           targetType: document.targetType,
           targetLabel: document.targetLabel,
+          entityName: document.entityName,
           status: document.status
         },
         ctx.employee
@@ -489,12 +705,67 @@ export class SsmDocumentsService {
   async streamActiveVersion(tenantId: string, documentId: string, viewer: JwtPayload) {
     await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
     const document = await this.assertDocumentReadable(tenantId, documentId, viewer);
+    const policies = await this.loadTypePolicies(tenantId);
+    assertDocumentTypeAccess(viewer, document.type, "view", policies);
     const version = document.activeVersion!;
     if (viewer.roles?.includes(SystemRole.ITM_INSPECTOR)) {
       await this.itmAccess.logAccess(tenantId, viewer.sub, "DOWNLOAD", "SsmDocument", documentId, {
         title: document.title,
         fileName: version.fileName
       });
+    }
+    return {
+      stream: createReadStream(version.storagePath),
+      mimeType: version.mimeType,
+      fileName: version.fileName
+    };
+  }
+
+  async streamDocumentVersion(
+    tenantId: string,
+    documentId: string,
+    versionId: string,
+    viewer: JwtPayload
+  ) {
+    await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
+    const document = await this.prisma.ssmDocument.findFirst({
+      where: { id: documentId, tenantId }
+    });
+    if (!document) {
+      throw new NotFoundException("Document not found.");
+    }
+    const policies = await this.loadTypePolicies(tenantId);
+    assertDocumentTypeAccess(viewer, document.type, "view", policies);
+
+    const ctx = await this.employeeRowForViewer(tenantId, viewer);
+    if (ctx.scope === "empty") {
+      throw new ForbiddenException("Contul nu este asociat unui angajat pentru acces la documente.");
+    }
+    if (
+      ctx.scope === "self" &&
+      !ssmDocumentVisibleToEmployee(
+        {
+          targetType: document.targetType,
+          targetLabel: document.targetLabel,
+          entityName: document.entityName,
+          status: SsmDocumentStatus.ACTIVE
+        },
+        ctx.employee
+      )
+    ) {
+      throw new ForbiddenException("Nu aveți acces la acest document.");
+    }
+
+    const version = await this.prisma.ssmDocumentVersion.findFirst({
+      where: { id: versionId, tenantId, documentId }
+    });
+    if (!version) {
+      throw new NotFoundException("Version not found.");
+    }
+    try {
+      await access(version.storagePath, constants.R_OK);
+    } catch {
+      throw new NotFoundException("Fișierul versiunii nu a fost găsit pe server.");
     }
     return {
       stream: createReadStream(version.storagePath),
@@ -516,6 +787,9 @@ export class SsmDocumentsService {
       throw new NotFoundException("Document not found.");
     }
 
+    const policies = await this.loadTypePolicies(tenantId);
+    assertDocumentTypeAccess(viewer, document.type, "view", policies);
+
     const ctx = await this.employeeRowForViewer(tenantId, viewer);
     if (ctx.scope === "empty") {
       throw new ForbiddenException("Contul nu este asociat unui angajat pentru acces la documente.");
@@ -526,18 +800,40 @@ export class SsmDocumentsService {
         {
           targetType: document.targetType,
           targetLabel: document.targetLabel,
-          status: document.status
+          entityName: document.entityName,
+          status: document.status === SsmDocumentStatus.ARCHIVED ? SsmDocumentStatus.ACTIVE : document.status
         },
         ctx.employee
       )
     ) {
       throw new ForbiddenException("Nu aveți acces la acest document.");
     }
+
+    const authorIds = [...new Set(document.versions.map((v) => v.createdBy))];
+    const authors = await this.prisma.user.findMany({
+      where: { id: { in: authorIds }, tenantId },
+      select: { id: true, fullName: true, email: true }
+    });
+    const authorMap = new Map(authors.map((a) => [a.id, a.fullName || a.email]));
+
     return {
       documentId: document.id,
       title: document.title,
+      type: document.type,
+      relatedModuleHint: DOCUMENT_TYPE_MODULE_HINTS[document.type] ?? null,
       activeVersionId: document.activeVersionId,
-      versions: document.versions
+      versions: document.versions.map((version) => ({
+        id: version.id,
+        versionNumber: version.versionNumber,
+        fileName: version.fileName,
+        mimeType: version.mimeType,
+        fileSize: version.fileSize,
+        createdBy: version.createdBy,
+        createdByName: authorMap.get(version.createdBy) ?? version.createdBy,
+        createdAt: version.createdAt.toISOString(),
+        changeNote: version.changeNote,
+        isActive: version.id === document.activeVersionId
+      }))
     };
   }
 
@@ -603,6 +899,11 @@ export class SsmDocumentsService {
         targetLabel: row.targetLabel,
         isControlFolder: row.isControlFolder,
         checklistItems: row.checklistItems,
+        hasFile: Boolean(row.storagePath),
+        fileName: row.fileName,
+        mimeType: row.mimeType,
+        fileSize: row.fileSize,
+        relatedModuleHint: DOCUMENT_TYPE_MODULE_HINTS[row.type] ?? null,
         active: row.active,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt
@@ -740,6 +1041,209 @@ export class SsmDocumentsService {
       await this.createTemplate(tenantId, actorId, item);
       created += 1;
     }
+    await this.seedDefaultTypePolicies(tenantId);
     return { created };
+  }
+
+  async uploadTemplateFile(
+    tenantId: string,
+    actorId: string,
+    templateId: string,
+    file?: Express.Multer.File
+  ) {
+    this.assertUpload(file);
+    const upload = file as Express.Multer.File;
+    const template = await this.prisma.ssmDocumentTemplate.findFirst({
+      where: { id: templateId, tenantId }
+    });
+    if (!template) {
+      throw new NotFoundException("Șablonul de document nu a fost găsit.");
+    }
+    const safeName = sanitizeFilename(upload.originalname);
+    const fileName = `template-${Date.now()}-${safeName}`;
+    const targetDir = resolve(process.cwd(), "uploads", "ssm-document-templates", tenantId, templateId);
+    await mkdir(targetDir, { recursive: true });
+    const absolutePath = resolve(targetDir, fileName);
+    await writeFile(absolutePath, upload.buffer);
+
+    await this.prisma.ssmDocumentTemplate.update({
+      where: { id: templateId },
+      data: {
+        fileName: upload.originalname,
+        mimeType: upload.mimetype,
+        fileSize: upload.size,
+        storagePath: absolutePath
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "DOCUMENT_TEMPLATE_FILE_UPLOADED",
+      entityType: "SsmDocumentTemplate",
+      entityId: templateId,
+      payload: { fileName: upload.originalname }
+    });
+    return {
+      templateId,
+      fileName: upload.originalname,
+      mimeType: upload.mimetype,
+      hasFile: true
+    };
+  }
+
+  async streamTemplateFile(tenantId: string, templateId: string) {
+    const template = await this.prisma.ssmDocumentTemplate.findFirst({
+      where: { id: templateId, tenantId }
+    });
+    if (!template?.storagePath) {
+      throw new NotFoundException("Șablonul nu are fișier atașat.");
+    }
+    try {
+      await access(template.storagePath, constants.R_OK);
+    } catch {
+      throw new NotFoundException("Fișierul șablonului nu a fost găsit pe server.");
+    }
+    return {
+      stream: createReadStream(template.storagePath),
+      mimeType: template.mimeType ?? "application/octet-stream",
+      fileName: template.fileName ?? "template"
+    };
+  }
+
+  async createDocumentFromTemplate(
+    tenantId: string,
+    actorId: string,
+    templateId: string,
+    viewer: JwtPayload,
+    overrides?: { title?: string; targetLabel?: string }
+  ) {
+    const template = await this.prisma.ssmDocumentTemplate.findFirst({
+      where: { id: templateId, tenantId, active: true }
+    });
+    if (!template) {
+      throw new NotFoundException("Șablonul de document nu a fost găsit.");
+    }
+    if (!template.storagePath || !template.fileName || !template.mimeType) {
+      throw new BadRequestException("Șablonul nu are fișier. Încărcați mai întâi un Word/PDF.");
+    }
+    try {
+      await access(template.storagePath, constants.R_OK);
+    } catch {
+      throw new NotFoundException("Fișierul șablonului nu a fost găsit pe server.");
+    }
+    const { readFile } = await import("fs/promises");
+    const buffer = await readFile(template.storagePath);
+    const fakeFile = {
+      originalname: template.fileName,
+      mimetype: template.mimeType,
+      size: template.fileSize ?? buffer.length,
+      buffer
+    } as Express.Multer.File;
+
+    return this.createDocument(
+      tenantId,
+      actorId,
+      {
+        title: overrides?.title?.trim() || template.title,
+        type: template.type,
+        targetType: template.targetType,
+        targetLabel: overrides?.targetLabel?.trim() || template.targetLabel || undefined,
+        isControlFolder: template.isControlFolder,
+        changeNote: `Creat din șablon ${template.name}`
+      },
+      fakeFile,
+      viewer
+    );
+  }
+
+  async listTypePolicies(tenantId: string) {
+    let rows = await this.prisma.ssmDocumentTypePolicy.findMany({
+      where: { tenantId },
+      orderBy: { documentType: "asc" }
+    });
+    if (!rows.length) {
+      await this.seedDefaultTypePolicies(tenantId);
+      rows = await this.prisma.ssmDocumentTypePolicy.findMany({
+        where: { tenantId },
+        orderBy: { documentType: "asc" }
+      });
+    }
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        documentType: row.documentType,
+        viewRoles: row.viewRoles,
+        editRoles: row.editRoles,
+        approveRoles: row.approveRoles,
+        relatedModuleHint: row.relatedModuleHint ?? DOCUMENT_TYPE_MODULE_HINTS[row.documentType] ?? null
+      })),
+      moduleHints: DOCUMENT_TYPE_MODULE_HINTS
+    };
+  }
+
+  async upsertTypePolicy(
+    tenantId: string,
+    actorId: string,
+    documentType: SsmDocumentType,
+    dto: {
+      viewRoles?: string[];
+      editRoles?: string[];
+      approveRoles?: string[];
+      relatedModuleHint?: string | null;
+    }
+  ) {
+    const row = await this.prisma.ssmDocumentTypePolicy.upsert({
+      where: { tenantId_documentType: { tenantId, documentType } },
+      create: {
+        tenantId,
+        documentType,
+        viewRoles: dto.viewRoles ?? [],
+        editRoles: dto.editRoles ?? [],
+        approveRoles: dto.approveRoles ?? [],
+        relatedModuleHint: dto.relatedModuleHint ?? DOCUMENT_TYPE_MODULE_HINTS[documentType] ?? null
+      },
+      update: {
+        viewRoles: dto.viewRoles,
+        editRoles: dto.editRoles,
+        approveRoles: dto.approveRoles,
+        relatedModuleHint: dto.relatedModuleHint
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "DOCUMENT_TYPE_POLICY_UPSERTED",
+      entityType: "SsmDocumentTypePolicy",
+      entityId: row.id,
+      payload: { documentType }
+    });
+    return {
+      id: row.id,
+      documentType: row.documentType,
+      viewRoles: row.viewRoles,
+      editRoles: row.editRoles,
+      approveRoles: row.approveRoles,
+      relatedModuleHint: row.relatedModuleHint
+    };
+  }
+
+  async seedDefaultTypePolicies(tenantId: string) {
+    const defaults = defaultPoliciesForSeed(tenantId);
+    let created = 0;
+    for (const item of defaults) {
+      const existing = await this.prisma.ssmDocumentTypePolicy.findUnique({
+        where: { tenantId_documentType: { tenantId, documentType: item.documentType } }
+      });
+      if (existing) continue;
+      await this.prisma.ssmDocumentTypePolicy.create({ data: item });
+      created += 1;
+    }
+    return { created };
+  }
+
+  documentModuleHints() {
+    return DOCUMENT_TYPE_MODULE_HINTS;
   }
 }

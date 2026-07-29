@@ -320,6 +320,7 @@ model Tenant {
   ssmPreventionPlans         SsmPreventionPlan[]
   ssmPreventionMeasures      SsmPreventionMeasure[]
   ssmDocumentTemplates       SsmDocumentTemplate[]
+  ssmDocumentTypePolicies    SsmDocumentTypePolicy[]
   communicationAnnouncements CommunicationAnnouncement[]
   communicationTemplates      CommunicationTemplate[]
   communicationAnnouncementReads CommunicationAnnouncementRead[]
@@ -649,6 +650,23 @@ model SsmDocument {
   @@index([tenantId, legalEntityId, status])
 }
 
+model SsmDocumentTypePolicy {
+  id                String          @id @default(cuid())
+  tenantId          String
+  documentType      SsmDocumentType
+  viewRoles         String[]        @default([])
+  editRoles         String[]        @default([])
+  approveRoles      String[]        @default([])
+  relatedModuleHint String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, documentType])
+  @@index([tenantId])
+}
+
 model SsmDocumentVersion {
   id            String   @id @default(cuid())
   tenantId      String
@@ -716,6 +734,9 @@ model SsmTrainingPlan {
   trainingTypeId      String
   materialTitle       String?
   materialUrl         String?
+  materialStoragePath String?
+  materialMimeType    String?
+  materialFileName    String?
   materialStartedAt   DateTime?
   materialCompletedAt DateTime?
   materialTimeSpentSeconds Int?
@@ -1421,6 +1442,10 @@ model SsmDocumentTemplate {
   targetLabel     String?
   isControlFolder Boolean               @default(false)
   checklistItems  String[]              @default([])
+  fileName        String?
+  mimeType        String?
+  fileSize        Int?
+  storagePath     String?
   active          Boolean               @default(true)
   createdBy       String
   createdAt       DateTime              @default(now())

@@ -6,6 +6,7 @@ export interface AssignTrainingRequest {
 
 export interface AssignTrainingResponse {
   assignmentId: string;
+  planId?: string;
 }
 
 export const SSM_DOCUMENT_TYPES = [
@@ -59,8 +60,10 @@ export interface SsmDocumentVersion {
   mimeType: string;
   fileSize: number;
   createdBy: string;
+  createdByName?: string;
   createdAt: string;
   changeNote?: string | null;
+  isActive?: boolean;
 }
 
 export interface SsmDocumentListItem {
@@ -89,17 +92,19 @@ export interface ListSsmDocumentsResponse {
 export interface SsmDocumentHistoryResponse {
   documentId: string;
   title: string;
+  type?: SsmDocumentType;
+  relatedModuleHint?: string | null;
   activeVersionId?: string | null;
   versions: SsmDocumentVersion[];
 }
 
-export interface SsmDocumentControlFoldersResponse {
-  folders: Array<{
-    key: string;
-    label: string;
-    count: number;
-    documents: SsmDocumentListItem[];
-  }>;
+export interface SsmDocumentTypePolicyItem {
+  id: string;
+  documentType: SsmDocumentType;
+  viewRoles: string[];
+  editRoles: string[];
+  approveRoles: string[];
+  relatedModuleHint?: string | null;
 }
 
 export interface SsmDocumentTemplateItem {
@@ -111,9 +116,23 @@ export interface SsmDocumentTemplateItem {
   targetLabel?: string | null;
   isControlFolder: boolean;
   checklistItems: string[];
+  hasFile?: boolean;
+  fileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  relatedModuleHint?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SsmDocumentControlFoldersResponse {
+  folders: Array<{
+    key: string;
+    label: string;
+    count: number;
+    documents: SsmDocumentListItem[];
+  }>;
 }
 
 export interface CreateSsmDocumentTemplateRequest {
@@ -137,6 +156,13 @@ export interface UploadSsmDocumentResponse {
   versionNumber: number;
 }
 
+export interface SsmTrainingTestQuestionInput {
+  id: string;
+  text: string;
+  options: string[];
+  correctIndex: number;
+}
+
 export interface CreateSsmTrainingTypeRequest {
   code: string;
   name: string;
@@ -145,6 +171,25 @@ export interface CreateSsmTrainingTypeRequest {
   description?: string;
   recurrenceDays?: number;
   reminderDays?: number[];
+  testQuestions?: SsmTrainingTestQuestionInput[];
+}
+
+export interface UpdateSsmTrainingTypeRequest {
+  name?: string;
+  category?: SsmTrainingCategory;
+  legalMinDurationHours?: number;
+  description?: string;
+  recurrenceDays?: number;
+  reminderDays?: number[];
+  testQuestions?: SsmTrainingTestQuestionInput[];
+  active?: boolean;
+}
+
+export interface GenerateSsmCollectiveSheetRequest {
+  title: string;
+  attendees: string[];
+  trainerName?: string;
+  location?: string;
 }
 
 export type SsmTrainingCategory =
@@ -163,6 +208,7 @@ export interface SsmTrainingTypeItem {
   description?: string | null;
   recurrenceDays?: number | null;
   reminderDays: number[];
+  testQuestions?: SsmTrainingTestQuestionInput[] | null;
   active: boolean;
 }
 
@@ -224,6 +270,9 @@ export interface SsmTrainingPlanItem {
   completedAt?: string | null;
   materialTitle?: string | null;
   materialUrl?: string | null;
+  materialFileName?: string | null;
+  materialMimeType?: string | null;
+  hasUploadedMaterial?: boolean;
   materialStartedAt?: string | null;
   materialCompletedAt?: string | null;
   materialTimeSpentSeconds?: number | null;

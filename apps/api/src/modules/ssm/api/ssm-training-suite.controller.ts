@@ -8,8 +8,11 @@ import {
   Post,
   Query,
   StreamableFile,
-  UseGuards
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { JwtPayload } from "../../../auth/jwt.strategy";
@@ -29,7 +32,8 @@ import {
   GenerateCollectiveSheetDto,
   MaterialCompleteDto,
   SignPlanDto,
-  SignPlansBatchDto
+  SignPlansBatchDto,
+  UpdateTrainingTypeDto
 } from "./dto/training-suite.dto";
 import { assertSsmTrainingCatalogManagement } from "./ssm-viewer-scope";
 
@@ -53,6 +57,18 @@ export class SsmTrainingSuiteController {
   ) {
     assertSsmTrainingCatalogManagement(user);
     return this.trainingSuite.createTrainingType(tenantId, user.sub, dto);
+  }
+
+  @Patch("types/:id")
+  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  updateType(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: UpdateTrainingTypeDto
+  ) {
+    assertSsmTrainingCatalogManagement(user);
+    return this.trainingSuite.updateTrainingType(tenantId, user.sub, id, dto);
   }
 
   @Get("plans")
@@ -85,6 +101,37 @@ export class SsmTrainingSuiteController {
   ) {
     assertSsmTrainingCatalogManagement(user);
     return this.trainingSuite.createTrainingPlansForGroup(tenantId, user.sub, dto);
+  }
+
+  @Post("plans/:id/material")
+  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  @UseInterceptors(FileInterceptor("file"))
+  uploadMaterial(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @UploadedFile() file?: Express.Multer.File
+  ) {
+    assertSsmTrainingCatalogManagement(user);
+    return this.trainingSuite.uploadPlanMaterial(tenantId, user.sub, id, file, user);
+  }
+
+  @Get("plans/:id/material")
+  @RequirePermissions(Permission.SSM_TRAINING_VIEW)
+  async streamMaterial(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string
+  ) {
+    const { stream, mimeType, fileName } = await this.trainingSuite.streamPlanMaterial(
+      tenantId,
+      id,
+      user
+    );
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: `inline; filename="${fileName.replace(/"/g, "")}"`
+    });
   }
 
   @Patch("plans/:id/material-start")

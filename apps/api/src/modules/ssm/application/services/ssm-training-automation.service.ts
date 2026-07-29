@@ -178,6 +178,51 @@ export class SsmTrainingAutomationService {
     );
   }
 
+  async assignOnNewEquipment(
+    tenantId: string,
+    actorUserId: string,
+    worksiteId: string,
+    equipmentLabel: string
+  ) {
+    const employees = await this.prisma.employee.findMany({
+      where: { tenantId, active: true, worksiteId },
+      select: { id: true }
+    });
+    let assigned = 0;
+    for (const employee of employees) {
+      const plan = await this.autoAssignTrainingPlan(
+        tenantId,
+        actorUserId,
+        employee.id,
+        "SUPPLEMENTARY",
+        `Flux automat: echipament nou (${equipmentLabel})`
+      );
+      if (plan) assigned += 1;
+    }
+    return { checked: employees.length, assigned };
+  }
+
+  async assignOnProcedureChange(
+    tenantId: string,
+    actorUserId: string,
+    employeeIds: string[],
+    documentTitle: string
+  ) {
+    const uniqueIds = [...new Set(employeeIds)];
+    let assigned = 0;
+    for (const employeeId of uniqueIds) {
+      await this.autoAssignTrainingPlan(
+        tenantId,
+        actorUserId,
+        employeeId,
+        "SUPPLEMENTARY",
+        `Flux automat: modificare procedură (${documentTitle})`
+      );
+      assigned += 1;
+    }
+    return { checked: uniqueIds.length, assigned };
+  }
+
   /** Cron zilnic: absență >30 zile → instruire suplimentară. */
   async processAbsenceTriggers(tenantId: string, actorUserId: string) {
     const cutoff = new Date(Date.now() - ABSENCE_SUPPLEMENTARY_DAYS * DAY_MS);

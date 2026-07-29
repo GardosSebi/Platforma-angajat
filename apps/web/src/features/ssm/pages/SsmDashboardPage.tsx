@@ -38,7 +38,7 @@ const SSM_SECTIONS: Array<{
     title: "Instruire și conformitate",
     caption: "Calendar, teste, fișe",
     description:
-      "Modul 3.3: tipuri legale, e-learning, teste, semnături, calendar scadențe, remindere și raport conformitate pe departament."
+      "Planificare, e-learning, semnături, calendar scadențe și raport conformitate."
   },
   {
     id: "eip",

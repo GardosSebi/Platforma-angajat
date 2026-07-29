@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CompleteSsmTestRequest, CreateSsmTrainingPlanGroupRequest, CreateSsmTrainingPlanRequest, CreateSsmTrainingTypeRequest } from "@repo/shared-types/ssm";
+import type {
+  CompleteSsmTestRequest,
+  CreateSsmTrainingPlanGroupRequest,
+  CreateSsmTrainingPlanRequest,
+  CreateSsmTrainingTypeRequest,
+  GenerateSsmCollectiveSheetRequest,
+  UpdateSsmTrainingTypeRequest
+} from "@repo/shared-types/ssm";
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { ssmApi } from "../api/ssm.api";
 
@@ -38,6 +45,34 @@ export function useCreateTrainingType() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "types"] });
     }
+  });
+}
+
+export function useUpdateTrainingType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ typeId, payload }: { typeId: string; payload: UpdateSsmTrainingTypeRequest }) =>
+      ssmApi.updateTrainingType(typeId, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "types"] });
+    }
+  });
+}
+
+export function useUploadTrainingMaterial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ planId, file }: { planId: string; file: File }) =>
+      ssmApi.uploadTrainingMaterial(planId, file),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
+    }
+  });
+}
+
+export function useGenerateCollectiveSheet() {
+  return useMutation({
+    mutationFn: (payload: GenerateSsmCollectiveSheetRequest) => ssmApi.generateCollectiveSheet(payload)
   });
 }
 

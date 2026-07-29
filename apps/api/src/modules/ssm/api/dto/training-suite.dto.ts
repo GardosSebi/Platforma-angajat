@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -67,6 +68,54 @@ export class CreateTrainingTypeDto {
     options: string[];
     correctIndex: number;
   }>;
+}
+
+export class UpdateTrainingTypeDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  name?: string;
+
+  @IsOptional()
+  @IsIn(SSM_TRAINING_CATEGORIES)
+  category?: SsmTrainingCategoryCode;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  legalMinDurationHours?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  description?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  recurrenceDays?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(365, { each: true })
+  reminderDays?: number[];
+
+  @IsOptional()
+  @IsArray()
+  testQuestions?: Array<{
+    id: string;
+    text: string;
+    options: string[];
+    correctIndex: number;
+  }>;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 export class MaterialCompleteDto {

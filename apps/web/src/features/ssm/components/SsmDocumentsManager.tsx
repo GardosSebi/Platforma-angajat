@@ -6,10 +6,12 @@ import { stringOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   type CreateSsmDocumentRequest,
-  type SsmDocumentStatus
+  type SsmDocumentStatus,
+  type SsmDocumentTypePolicyItem
 } from "@repo/shared-types/ssm";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
+import { downloadWithAuth } from "../../../shared/api/http-download";
 import {
   useAddSsmDocumentVersion,
   useArchiveSsmDocument,
@@ -17,7 +19,8 @@ import {
   useRevertSsmDocumentVersion,
   useSsmControlFolders,
   useSsmDocumentHistory,
-  useSsmDocuments
+  useSsmDocuments,
+  useSsmDocumentTypePolicies
 } from "../hooks/useSsmDocuments";
 import { ssmApi } from "../api/ssm.api";
 
@@ -46,6 +49,32 @@ const SSM_DOCUMENT_TARGET_TYPES: ReadonlyArray<CreateSsmDocumentRequest["targetT
 
 const STATUS_OPTIONS: Array<SsmDocumentStatus | ""> = ["", "ACTIVE", "ARCHIVED"];
 
+function dateInputValue(isoOrEmpty?: string | null): string {
+  if (!isoOrEmpty) return "";
+  return isoOrEmpty.slice(0, 10);
+}
+
+function toIsoDateOrEmpty(value: string): string {
+  return value ? new Date(value).toISOString() : "";
+}
+
+function formatRoDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ro-RO");
+}
+
+function rolesToText(roles: string[]): string {
+  return roles.join(", ");
+}
+
+function textToRoles(value: string): string[] {
+  return value
+    .split(",")
+    .map((role) => role.trim())
+    .filter(Boolean);
+}
+
 function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
   const queryClient = useQueryClient();
   const templatesQuery = useQuery({
@@ -55,6 +84,20 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
   const seedMutation = useMutation({
     mutationFn: () => ssmApi.seedDocumentTemplates(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ssm", "document-templates"] })
+  });
+  const uploadFileMutation = useMutation({
+    mutationFn: ({ templateId, file }: { templateId: string; file: File }) =>
+      ssmApi.uploadDocumentTemplateFile(templateId, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ssm", "document-templates"] })
+  });
+  const createFromTemplateMutation = useMutation({
+    mutationFn: (templateId: string) => ssmApi.createDocumentFromTemplate(templateId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "document-templates"] })
+      ]);
+    }
   });
 
   return (
@@ -70,13 +113,233 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
       <ul className="data-list">
         {(templatesQuery.data?.items ?? []).map((t) => (
           <li key={t.id}>
-            <strong>{t.name}</strong> — {t.title} ({t.type})
-            {t.isControlFolder ? " · control ITM/ISU" : ""}
+            <div>
+              <strong>{t.name}</strong> — {t.title} ({t.type})
+              {t.isControlFolder ? " · control ITM/ISU" : ""}
+            </div>
+            <p className="field-hint">
+              {t.hasFile ? `Fișier: ${t.fileName ?? "încărcat"}` : "Fără fișier atașat"}
+              {t.relatedModuleHint ? ` · ${t.relatedModuleHint}` : ""}
+            </p>
+            <div className="ssm-inline-actions">
+              {canEdit ? (
+                <label className="btn-text">
+                  Încarcă fișier
+                  <input
+                    type="file"
+                    hidden
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        uploadFileMutation.mutate({ templateId: t.id, file });
+                      }
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              ) : null}
+              {t.hasFile ? (
+                <button
+                  type="button"
+                  className="btn-text"
+                  onClick={() => void downloadWithAuth(ssmApi.getDocumentTemplateFileUrl(t.id), t.fileName ?? `${t.name}.bin`)}
+                >
+                  Descarcă șablon
+                </button>
+              ) : null}
+              {canEdit && t.hasFile ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => createFromTemplateMutation.mutate(t.id)}
+                  disabled={createFromTemplateMutation.isPending}
+                >
+                  Creează document din șablon
+                </button>
+              ) : null}
+            </div>
           </li>
         ))}
       </ul>
       {!templatesQuery.isLoading && !(templatesQuery.data?.items ?? []).length ? (
         <p className="field-hint">Niciun șablon. Administratorii pot încărca setul implicit (IPSSM, PPP, registru, PSI).</p>
+      ) : null}
+      {uploadFileMutation.isError ? (
+        <p className="feedback error" role="alert">
+          {mutationErrorMessage(uploadFileMutation.error)}
+        </p>
+      ) : null}
+      {createFromTemplateMutation.isSuccess ? (
+        <p className="feedback success" role="status">
+          Document creat din șablon.
+        </p>
+      ) : null}
+      {createFromTemplateMutation.isError ? (
+        <p className="feedback error" role="alert">
+          {mutationErrorMessage(createFromTemplateMutation.error)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function DocumentTypePoliciesPanel() {
+  const queryClient = useQueryClient();
+  const policiesQuery = useSsmDocumentTypePolicies();
+  const [drafts, setDrafts] = useState<
+    Record<string, { viewRoles: string; editRoles: string; approveRoles: string; relatedModuleHint: string }>
+  >({});
+
+  useEffect(() => {
+    const items = policiesQuery.data?.items ?? [];
+    const next: typeof drafts = {};
+    for (const item of items) {
+      next[item.documentType] = {
+        viewRoles: rolesToText(item.viewRoles),
+        editRoles: rolesToText(item.editRoles),
+        approveRoles: rolesToText(item.approveRoles),
+        relatedModuleHint: item.relatedModuleHint ?? ""
+      };
+    }
+    setDrafts(next);
+  }, [policiesQuery.data?.items]);
+
+  const seedMutation = useMutation({
+    mutationFn: () => ssmApi.seedDocumentTypePolicies(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ssm", "documents", "policies"] })
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: ({
+      documentType,
+      payload
+    }: {
+      documentType: string;
+      payload: {
+        viewRoles: string[];
+        editRoles: string[];
+        approveRoles: string[];
+        relatedModuleHint: string | null;
+      };
+    }) => ssmApi.upsertDocumentTypePolicy(documentType, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ssm", "documents", "policies"] })
+  });
+
+  const items: SsmDocumentTypePolicyItem[] = policiesQuery.data?.items ?? [];
+
+  return (
+    <div className="card ssm-doc-card">
+      <div className="ssm-card-header">
+        <h3 className="card-title">Acces pe categorie</h3>
+        <button type="button" className="btn-secondary" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
+          {seedMutation.isPending ? "Se încarcă…" : "Încarcă politici implicite"}
+        </button>
+      </div>
+      <div className="ssm-history-list">
+        {items.map((item) => {
+          const draft = drafts[item.documentType] ?? {
+            viewRoles: rolesToText(item.viewRoles),
+            editRoles: rolesToText(item.editRoles),
+            approveRoles: rolesToText(item.approveRoles),
+            relatedModuleHint: item.relatedModuleHint ?? ""
+          };
+          return (
+            <div key={item.id} className="ssm-history-item" style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <div>
+                <strong>{item.documentType}</strong>
+                {item.relatedModuleHint ? <span className="field-hint"> — {item.relatedModuleHint}</span> : null}
+              </div>
+              <p className="field-hint">
+                View: {item.viewRoles.join(", ") || "—"} · Edit: {item.editRoles.join(", ") || "—"} · Approve:{" "}
+                {item.approveRoles.join(", ") || "—"}
+              </p>
+              <div className="form-stack">
+                <div className="field">
+                  <label htmlFor={`policy-view-${item.documentType}`}>viewRoles (virgule)</label>
+                  <input
+                    id={`policy-view-${item.documentType}`}
+                    value={draft.viewRoles}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [item.documentType]: { ...draft, viewRoles: event.target.value }
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`policy-edit-${item.documentType}`}>editRoles (virgule)</label>
+                  <input
+                    id={`policy-edit-${item.documentType}`}
+                    value={draft.editRoles}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [item.documentType]: { ...draft, editRoles: event.target.value }
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`policy-approve-${item.documentType}`}>approveRoles (virgule)</label>
+                  <input
+                    id={`policy-approve-${item.documentType}`}
+                    value={draft.approveRoles}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [item.documentType]: { ...draft, approveRoles: event.target.value }
+                      }))
+                    }
+                  />
+                </div>
+                <div className="ssm-inline-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={saveMutation.isPending}
+                    onClick={() =>
+                      saveMutation.mutate({
+                        documentType: item.documentType,
+                        payload: {
+                          viewRoles: textToRoles(draft.viewRoles),
+                          editRoles: textToRoles(draft.editRoles),
+                          approveRoles: textToRoles(draft.approveRoles),
+                          relatedModuleHint: draft.relatedModuleHint.trim() || null
+                        }
+                      })
+                    }
+                  >
+                    Salvează
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!policiesQuery.isLoading && !items.length ? (
+        <p className="field-hint">Nicio politică. Folosiți „Încarcă politici implicite” pentru setul standard pe tipuri.</p>
+      ) : null}
+      {seedMutation.isSuccess ? (
+        <p className="feedback success" role="status">
+          Politici implicite încărcate.
+        </p>
+      ) : null}
+      {seedMutation.isError ? (
+        <p className="feedback error" role="alert">
+          {mutationErrorMessage(seedMutation.error)}
+        </p>
+      ) : null}
+      {saveMutation.isSuccess ? (
+        <p className="feedback success" role="status">
+          Politică salvată.
+        </p>
+      ) : null}
+      {saveMutation.isError ? (
+        <p className="feedback error" role="alert">
+          {mutationErrorMessage(saveMutation.error)}
+        </p>
       ) : null}
     </div>
   );
@@ -113,13 +376,29 @@ export function SsmDocumentsManager() {
     type: "",
     status: "",
     targetType: "",
+    entityName: "",
+    departmentName: "",
+    jobPositionName: "",
+    periodFrom: "",
+    periodTo: "",
     controlOnly: false
   });
 
   useEffect(() => {
     docsPage.resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset page when filters change
-  }, [filters.q, filters.type, filters.status, filters.targetType, filters.controlOnly]);
+  }, [
+    filters.q,
+    filters.type,
+    filters.status,
+    filters.targetType,
+    filters.entityName,
+    filters.departmentName,
+    filters.jobPositionName,
+    filters.periodFrom,
+    filters.periodTo,
+    filters.controlOnly
+  ]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>();
   const [createPayload, setCreatePayload] = useState<CreateSsmDocumentRequest>(EMPTY_DOC);
   const [createFile, setCreateFile] = useState<File | null>(null);
@@ -184,100 +463,144 @@ export function SsmDocumentsManager() {
         Documente SSM (3.2)
       </h2>
 
+      <div className="card ssm-doc-card callout-info">
+        <h3 className="card-title">Clarificare module duale</h3>
+        <ul className="data-list">
+          <li>
+            <strong>RISK_ASSESSMENT / EXPOSURE_SHEET</strong> → modul Evaluări risc
+          </li>
+          <li>
+            <strong>PPP</strong> → modul Plan PPP
+          </li>
+          <li>
+            <strong>REGISTER</strong> → modul Accidente
+          </li>
+          <li>
+            <strong>PSI / EMERGENCY</strong> → modul PSI
+          </li>
+          <li>
+            <strong>THEMATIC</strong> → Instruire
+          </li>
+        </ul>
+        <p className="field-hint">Normativ EIP rămâne în modul EIP (nu ca tip de document).</p>
+      </div>
+
       <div className="ssm-doc-grid">
         {canUploadDocuments ? (
           <form onSubmit={onCreate} className="card form-stack ssm-doc-card">
-          <h3 className="card-title">Upload document nou</h3>
-          <div className="field">
-            <label htmlFor="doc-title">Titlu document</label>
-            <input
-              id="doc-title"
-              value={createPayload.title}
-              onChange={(event) => setCreatePayload((prev) => ({ ...prev, title: event.target.value }))}
-              required
+            <h3 className="card-title">Upload document nou</h3>
+            <div className="field">
+              <label htmlFor="doc-title">Titlu document</label>
+              <input
+                id="doc-title"
+                value={createPayload.title}
+                onChange={(event) => setCreatePayload((prev) => ({ ...prev, title: event.target.value }))}
+                required
+              />
+            </div>
+            <FieldSelect
+              id="doc-type"
+              label="Tip document"
+              value={createPayload.type}
+              onChange={(type) =>
+                setCreatePayload((prev) => ({ ...prev, type: type as CreateSsmDocumentRequest["type"] }))
+              }
+              options={stringOptions(SSM_DOCUMENT_TYPES)}
             />
-          </div>
-          <FieldSelect
-            id="doc-type"
-            label="Tip document"
-            value={createPayload.type}
-            onChange={(type) =>
-              setCreatePayload((prev) => ({ ...prev, type: type as CreateSsmDocumentRequest["type"] }))
-            }
-            options={stringOptions(SSM_DOCUMENT_TYPES)}
-          />
-          <FieldSelect
-            id="doc-target-type"
-            label="Alocare"
-            value={createPayload.targetType}
-            onChange={(targetType) =>
-              setCreatePayload((prev) => ({
-                ...prev,
-                targetType: targetType as CreateSsmDocumentRequest["targetType"]
-              }))
-            }
-            options={stringOptions(SSM_DOCUMENT_TARGET_TYPES)}
-          />
-          <div className="field">
-            <label htmlFor="doc-target-label">Etichetă alocare</label>
-            <input
-              id="doc-target-label"
-              value={createPayload.targetLabel ?? ""}
-              onChange={(event) => setCreatePayload((prev) => ({ ...prev, targetLabel: event.target.value }))}
-              placeholder="ex: Departament Producție"
+            <FieldSelect
+              id="doc-target-type"
+              label="Alocare"
+              value={createPayload.targetType}
+              onChange={(targetType) =>
+                setCreatePayload((prev) => ({
+                  ...prev,
+                  targetType: targetType as CreateSsmDocumentRequest["targetType"]
+                }))
+              }
+              options={stringOptions(SSM_DOCUMENT_TARGET_TYPES)}
             />
-          </div>
-          <div className="field">
-            <label htmlFor="doc-meta-entity">Entitate</label>
-            <input
-              id="doc-meta-entity"
-              value={createPayload.entityName ?? ""}
-              onChange={(event) => setCreatePayload((prev) => ({ ...prev, entityName: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="doc-meta-department">Departament</label>
-            <input
-              id="doc-meta-department"
-              value={createPayload.departmentName ?? ""}
-              onChange={(event) => setCreatePayload((prev) => ({ ...prev, departmentName: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="doc-meta-job">Post</label>
-            <input
-              id="doc-meta-job"
-              value={createPayload.jobPositionName ?? ""}
-              onChange={(event) => setCreatePayload((prev) => ({ ...prev, jobPositionName: event.target.value }))}
-            />
-          </div>
-          <div className="field inline-check">
-            <input
-              id="doc-control-folder"
-              type="checkbox"
-              checked={Boolean(createPayload.isControlFolder)}
-              onChange={(event) => setCreatePayload((prev) => ({ ...prev, isControlFolder: event.target.checked }))}
-            />
-            <label htmlFor="doc-control-folder">Include în acces rapid control ITM/ISU</label>
-          </div>
-          <div className="field">
-            <label htmlFor="doc-file">Fișier (Word/PDF/video)</label>
-            <input id="doc-file" type="file" onChange={(event) => setCreateFile(event.target.files?.[0] ?? null)} required />
-          </div>
-          <button type="submit" className="btn-primary" disabled={createMutation.isPending || !createFile}>
-            {createMutation.isPending ? "Se încarcă..." : "Adaugă document"}
-          </button>
-          {createMutation.isSuccess ? (
-            <p className="feedback success" role="status">
-              Document adăugat cu succes.
-            </p>
-          ) : null}
-          {createMutation.isError ? (
-            <p className="feedback error" role="alert">
-              {mutationErrorMessage(createMutation.error)}
-            </p>
-          ) : null}
-        </form>
+            <div className="field">
+              <label htmlFor="doc-target-label">Etichetă alocare</label>
+              <input
+                id="doc-target-label"
+                value={createPayload.targetLabel ?? ""}
+                onChange={(event) => setCreatePayload((prev) => ({ ...prev, targetLabel: event.target.value }))}
+                placeholder="ex: Departament Producție"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="doc-meta-entity">Entitate</label>
+              <input
+                id="doc-meta-entity"
+                value={createPayload.entityName ?? ""}
+                onChange={(event) => setCreatePayload((prev) => ({ ...prev, entityName: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="doc-meta-department">Departament</label>
+              <input
+                id="doc-meta-department"
+                value={createPayload.departmentName ?? ""}
+                onChange={(event) => setCreatePayload((prev) => ({ ...prev, departmentName: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="doc-meta-job">Post</label>
+              <input
+                id="doc-meta-job"
+                value={createPayload.jobPositionName ?? ""}
+                onChange={(event) => setCreatePayload((prev) => ({ ...prev, jobPositionName: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="doc-period-start">Perioadă de la</label>
+              <input
+                id="doc-period-start"
+                type="date"
+                value={dateInputValue(createPayload.periodStart)}
+                onChange={(event) =>
+                  setCreatePayload((prev) => ({ ...prev, periodStart: toIsoDateOrEmpty(event.target.value) }))
+                }
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="doc-period-end">Perioadă până la</label>
+              <input
+                id="doc-period-end"
+                type="date"
+                value={dateInputValue(createPayload.periodEnd)}
+                onChange={(event) =>
+                  setCreatePayload((prev) => ({ ...prev, periodEnd: toIsoDateOrEmpty(event.target.value) }))
+                }
+              />
+            </div>
+            <div className="field inline-check">
+              <input
+                id="doc-control-folder"
+                type="checkbox"
+                checked={Boolean(createPayload.isControlFolder)}
+                onChange={(event) => setCreatePayload((prev) => ({ ...prev, isControlFolder: event.target.checked }))}
+              />
+              <label htmlFor="doc-control-folder">Include în acces rapid control ITM/ISU</label>
+            </div>
+            <div className="field">
+              <label htmlFor="doc-file">Fișier (Word/PDF/video)</label>
+              <input id="doc-file" type="file" onChange={(event) => setCreateFile(event.target.files?.[0] ?? null)} required />
+            </div>
+            <button type="submit" className="btn-primary" disabled={createMutation.isPending || !createFile}>
+              {createMutation.isPending ? "Se încarcă..." : "Adaugă document"}
+            </button>
+            {createMutation.isSuccess ? (
+              <p className="feedback success" role="status">
+                Document adăugat cu succes.
+              </p>
+            ) : null}
+            {createMutation.isError ? (
+              <p className="feedback error" role="alert">
+                {mutationErrorMessage(createMutation.error)}
+              </p>
+            ) : null}
+          </form>
         ) : (
           <p className="card ssm-doc-card field-hint">
             Încărcarea documentelor noi este disponibilă pentru rolurile cu drept de editare documente SSM și upload
@@ -319,6 +642,33 @@ export function SsmDocumentsManager() {
               allowEmpty
               emptyLabel="Toate statusurile"
               options={stringOptions(STATUS_OPTIONS.filter(Boolean) as string[])}
+            />
+            <input
+              placeholder="Entitate"
+              value={filters.entityName}
+              onChange={(event) => setFilters((prev) => ({ ...prev, entityName: event.target.value }))}
+            />
+            <input
+              placeholder="Departament"
+              value={filters.departmentName}
+              onChange={(event) => setFilters((prev) => ({ ...prev, departmentName: event.target.value }))}
+            />
+            <input
+              placeholder="Post"
+              value={filters.jobPositionName}
+              onChange={(event) => setFilters((prev) => ({ ...prev, jobPositionName: event.target.value }))}
+            />
+            <input
+              type="date"
+              aria-label="Perioadă de la"
+              value={dateInputValue(filters.periodFrom)}
+              onChange={(event) => setFilters((prev) => ({ ...prev, periodFrom: toIsoDateOrEmpty(event.target.value) }))}
+            />
+            <input
+              type="date"
+              aria-label="Perioadă până la"
+              value={dateInputValue(filters.periodTo)}
+              onChange={(event) => setFilters((prev) => ({ ...prev, periodTo: toIsoDateOrEmpty(event.target.value) }))}
             />
             <label className="inline-check">
               <input
@@ -367,6 +717,20 @@ export function SsmDocumentsManager() {
               <p className="field-hint">
                 Activ: <strong>{selectedDoc.title}</strong> (v{selectedDoc.activeVersion.versionNumber})
               </p>
+              <div className="ssm-inline-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() =>
+                    void downloadWithAuth(
+                      ssmApi.getDocumentFileUrl(selectedDoc.id),
+                      selectedDoc.activeVersion.fileName
+                    )
+                  }
+                >
+                  Descarcă fișier activ
+                </button>
+              </div>
               {canUploadDocuments ? (
                 <form onSubmit={onUploadVersion} className="form-stack">
                   <div className="field">
@@ -435,22 +799,45 @@ export function SsmDocumentsManager() {
 
               <div className="ssm-history-list">
                 {historyQuery.data?.versions.map((version) => (
-                  <div key={version.id} className="ssm-history-item">
-                    <div>
-                      <strong>v{version.versionNumber}</strong> {version.fileName}
+                  <div key={version.id} className="ssm-history-item" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                    <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+                      <div>
+                        <strong>v{version.versionNumber}</strong> {version.fileName}
+                        {version.isActive ? <span className="badge-good"> Activ</span> : null}
+                      </div>
+                      <div className="ssm-inline-actions">
+                        <button
+                          type="button"
+                          className="btn-text"
+                          onClick={() =>
+                            selectedDocumentId &&
+                            void downloadWithAuth(
+                              ssmApi.getDocumentVersionFileUrl(selectedDocumentId, version.id),
+                              version.fileName
+                            )
+                          }
+                        >
+                          Descarcă
+                        </button>
+                        {canApproveDocuments ? (
+                          <button
+                            type="button"
+                            className="btn-text"
+                            onClick={() =>
+                              selectedDocumentId &&
+                              revertMutation.mutate({ documentId: selectedDocumentId, versionId: version.id })
+                            }
+                            disabled={revertMutation.isPending}
+                          >
+                            Setează activă
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
-                    {canApproveDocuments ? (
-                      <button
-                        type="button"
-                        className="btn-text"
-                        onClick={() =>
-                          selectedDocumentId && revertMutation.mutate({ documentId: selectedDocumentId, versionId: version.id })
-                        }
-                        disabled={revertMutation.isPending}
-                      >
-                        Setează activă
-                      </button>
-                    ) : null}
+                    <p className="field-hint">
+                      {version.createdByName ?? version.createdBy} · {formatRoDate(version.createdAt)}
+                      {version.changeNote ? ` · ${version.changeNote}` : ""}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -473,6 +860,8 @@ export function SsmDocumentsManager() {
           {!controlQuery.data?.folders.length ? <p className="field-hint">Nu sunt încă documente marcate pentru control.</p> : null}
         </div>
       </div>
+
+      {canApproveDocuments ? <DocumentTypePoliciesPanel /> : null}
     </section>
   );
 }

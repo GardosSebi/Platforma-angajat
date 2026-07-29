@@ -20,8 +20,15 @@ export const PORTAL_TAB_LABELS: Record<EmployeePortalTab, string> = {
   tickets: "Solicitări"
 };
 
-export function planHasMaterial(plan: Pick<SsmTrainingPlanItem, "materialTitle" | "materialUrl">): boolean {
-  return Boolean(plan.materialUrl?.trim() || plan.materialTitle?.trim());
+export function planHasMaterial(
+  plan: Pick<SsmTrainingPlanItem, "materialTitle" | "materialUrl" | "hasUploadedMaterial" | "materialFileName">
+): boolean {
+  return Boolean(
+    plan.materialUrl?.trim() ||
+      plan.materialTitle?.trim() ||
+      plan.hasUploadedMaterial ||
+      plan.materialFileName?.trim()
+  );
 }
 
 export function trainingStep(plan: SsmTrainingPlanItem): number {
@@ -30,7 +37,7 @@ export function trainingStep(plan: SsmTrainingPlanItem): number {
   if (plan.employeeSignedAt) return 4;
   if (plan.score != null && plan.status !== "BLOCKED") return 3;
   if (plan.materialCompletedAt || !planHasMaterial(plan)) return 2;
-  return plan.materialUrl || plan.materialTitle ? 1 : 2;
+  return plan.hasUploadedMaterial || plan.materialUrl || plan.materialTitle ? 1 : 2;
 }
 
 export function planWorkflowLabel(plan: SsmTrainingPlanItem): string {

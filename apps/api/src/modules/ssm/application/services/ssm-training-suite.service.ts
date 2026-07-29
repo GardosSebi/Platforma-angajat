@@ -1,4 +1,7 @@
-import { readFile } from "fs/promises";
+import { createReadStream } from "fs";
+import { access, mkdir, readFile, writeFile } from "fs/promises";
+import { constants } from "fs";
+import { extname, resolve as resolvePath } from "path";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   Prisma,
@@ -28,7 +31,8 @@ import {
   CreateTrainingTypeDto,
   GenerateCollectiveSheetDto,
   SignPlanDto,
-  SignPlansBatchDto
+  SignPlansBatchDto,
+  UpdateTrainingTypeDto
 } from "../../api/dto/training-suite.dto";
 import {
   buildTrainingTestPresentation,
@@ -40,12 +44,86 @@ import {
   type SsmTrainingTestAttemptMeta
 } from "../training-test-bank";
 
+const MAX_MATERIAL_BYTES = 120 * 1024 * 1024;
+const ALLOWED_MATERIAL_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".mp4", ".mov", ".avi", ".mkv"]);
+const ALLOWED_MATERIAL_MIME_PREFIXES = [
+  "application/pdf",
+  "application/msword",
+  "video/",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+];
+
 function parseDate(value: string): Date {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
     throw new BadRequestException(`Invalid date: ${value}`);
   }
   return d;
+}
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+}
+
+function parseTestQuestionsJson(raw: unknown): Array<{
+  id: string;
+  text: string;
+  options: string[];
+  correctIndex: number;
+}> | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const parsed = raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      if (
+        typeof row.id !== "string" ||
+        typeof row.text !== "string" ||
+        !Array.isArray(row.options) ||
+        typeof row.correctIndex !== "number"
+      ) {
+        return null;
+      }
+      return {
+        id: row.id,
+        text: row.text,
+        options: row.options.filter((opt): opt is string => typeof opt === "string"),
+        correctIndex: row.correctIndex
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item && item.options.length >= 2));
+  return parsed.length ? parsed : null;
+}
+
+function embedSignatureImage(
+  doc: InstanceType<typeof PDFDocument>,
+  label: string,
+  signedAt: Date | null | undefined,
+  signatureData: string | null | undefined,
+  x: number,
+  y: number
+): number {
+  doc.fontSize(10).text(`${label}:`, x, y);
+  let nextY = y + 14;
+  if (signedAt) {
+    doc.fontSize(9).text(signedAt.toLocaleDateString("ro-RO"), x, nextY);
+    nextY += 14;
+  } else {
+    doc.fontSize(9).text("nesemnat", x, nextY);
+    nextY += 14;
+  }
+  if (signatureData?.startsWith("data:image")) {
+    try {
+      const base64 = signatureData.split(",")[1];
+      if (base64) {
+        doc.image(Buffer.from(base64, "base64"), x, nextY, { width: 140, height: 44 });
+        nextY += 52;
+      }
+    } catch {
+      // ignore invalid signature payloads
+    }
+  }
+  return nextY;
 }
 
 function daysDiff(from: Date, to: Date): number {
@@ -95,8 +173,13 @@ type PrismaWithTrainingTypeExtended = PrismaService & {
         description?: string;
         recurrenceDays?: number;
         reminderDays: number[];
+        testQuestionsJson?: Prisma.InputJsonValue;
       };
-    }): Promise<{ id: string; code: string }>;
+    }): Promise<{ id: string; code: string; testQuestionsJson?: unknown }>;
+    update(args: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }): Promise<{ id: string; code: string; testQuestionsJson?: unknown }>;
   };
 };
 
@@ -187,10 +270,22 @@ export class SsmTrainingSuiteService {
   }
 
   async listTrainingTypes(tenantId: string) {
-    return this.prisma.ssmTrainingType.findMany({
+    const rows = await this.prisma.ssmTrainingType.findMany({
       where: { tenantId },
       orderBy: [{ active: "desc" }, { code: "asc" }]
     });
+    return rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      category: row.category,
+      legalMinDurationHours: row.legalMinDurationHours,
+      description: row.description,
+      recurrenceDays: row.recurrenceDays,
+      reminderDays: row.reminderDays,
+      testQuestions: parseTestQuestionsJson(row.testQuestionsJson),
+      active: row.active
+    }));
   }
 
   async createTrainingType(tenantId: string, actorId: string, dto: CreateTrainingTypeDto) {
@@ -225,7 +320,62 @@ export class SsmTrainingSuiteService {
       entityId: created.id,
       payload: { code: created.code }
     });
-    return created;
+    return {
+      ...created,
+      testQuestions: parseTestQuestionsJson(created.testQuestionsJson)
+    };
+  }
+
+  async updateTrainingType(
+    tenantId: string,
+    actorId: string,
+    typeId: string,
+    dto: UpdateTrainingTypeDto
+  ) {
+    const existing = await this.prisma.ssmTrainingType.findFirst({
+      where: { id: typeId, tenantId }
+    });
+    if (!existing) {
+      throw new NotFoundException("Training type not found.");
+    }
+    const category = (dto.category ?? existing.category) as SsmTrainingCategoryCode;
+    const legalMinimum = LEGAL_MIN_HOURS_BY_CATEGORY[category];
+    const nextHours = dto.legalMinDurationHours ?? existing.legalMinDurationHours ?? legalMinimum;
+    if (legalMinimum && (nextHours ?? legalMinimum) < legalMinimum) {
+      throw new BadRequestException(`${category} requires at least ${legalMinimum} legal hours.`);
+    }
+    const updated = await (this.prisma as PrismaWithTrainingTypeExtended).ssmTrainingType.update({
+      where: { id: typeId },
+      data: {
+        name: dto.name?.trim(),
+        category: dto.category,
+        legalMinDurationHours: dto.legalMinDurationHours,
+        description: dto.description?.trim(),
+        recurrenceDays: dto.recurrenceDays,
+        reminderDays: dto.reminderDays,
+        active: dto.active,
+        ...(dto.testQuestions !== undefined
+          ? {
+              testQuestionsJson: dto.testQuestions.length
+                ? (dto.testQuestions as unknown as Prisma.InputJsonValue)
+                : Prisma.DbNull
+            }
+          : {})
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "TRAINING_TYPE_UPDATED",
+      entityType: "SsmTrainingType",
+      entityId: updated.id,
+      payload: { code: updated.code }
+    });
+    return {
+      ...updated,
+      testQuestions: parseTestQuestionsJson(updated.testQuestionsJson)
+    };
   }
 
   async createTrainingPlan(tenantId: string, actorId: string, dto: CreateTrainingPlanDto) {
@@ -348,8 +498,106 @@ export class SsmTrainingSuiteService {
     };
   }
 
-  private planHasMaterial(plan: { materialUrl?: string | null; materialTitle?: string | null }): boolean {
-    return Boolean(plan.materialUrl?.trim() || plan.materialTitle?.trim());
+  private planHasMaterial(plan: {
+    materialUrl?: string | null;
+    materialTitle?: string | null;
+    materialStoragePath?: string | null;
+    materialFileName?: string | null;
+  }): boolean {
+    return Boolean(
+      plan.materialUrl?.trim() ||
+        plan.materialTitle?.trim() ||
+        plan.materialStoragePath?.trim() ||
+        plan.materialFileName?.trim()
+    );
+  }
+
+  private assertMaterialUpload(file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException("Material file is required.");
+    }
+    if (file.size > MAX_MATERIAL_BYTES) {
+      throw new BadRequestException("File too large. Max 120MB.");
+    }
+    const extension = extname(file.originalname).toLowerCase();
+    if (!ALLOWED_MATERIAL_EXTENSIONS.has(extension)) {
+      throw new BadRequestException("Only Word, PDF, or video uploads are allowed.");
+    }
+    if (!ALLOWED_MATERIAL_MIME_PREFIXES.some((prefix) => file.mimetype.startsWith(prefix))) {
+      throw new BadRequestException("Unsupported file format.");
+    }
+  }
+
+  async uploadPlanMaterial(
+    tenantId: string,
+    actorId: string,
+    trainingPlanId: string,
+    file: Express.Multer.File | undefined,
+    viewer: JwtPayload
+  ) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
+    this.assertMaterialUpload(file);
+    const upload = file as Express.Multer.File;
+    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId }
+    });
+    if (!plan) {
+      throw new NotFoundException("Training plan not found.");
+    }
+    const safeName = sanitizeFilename(upload.originalname);
+    const fileName = `${Date.now()}-${safeName}`;
+    const targetDir = resolvePath(process.cwd(), "uploads", "ssm-training-materials", tenantId, trainingPlanId);
+    await mkdir(targetDir, { recursive: true });
+    const absolutePath = resolvePath(targetDir, fileName);
+    await writeFile(absolutePath, upload.buffer);
+
+    const updated = await this.prisma.ssmTrainingPlan.update({
+      where: { id: trainingPlanId },
+      data: {
+        materialStoragePath: absolutePath,
+        materialMimeType: upload.mimetype,
+        materialFileName: upload.originalname,
+        materialTitle: plan.materialTitle?.trim() || upload.originalname
+      }
+    });
+
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "TRAINING_MATERIAL_UPLOADED",
+      entityType: "SsmTrainingPlan",
+      entityId: trainingPlanId,
+      payload: { fileName: upload.originalname, mimeType: upload.mimetype }
+    });
+
+    return {
+      trainingPlanId,
+      materialFileName: updated.materialFileName,
+      materialMimeType: updated.materialMimeType,
+      materialTitle: updated.materialTitle,
+      hasUploadedMaterial: true
+    };
+  }
+
+  async streamPlanMaterial(tenantId: string, trainingPlanId: string, viewer: JwtPayload) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
+    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId }
+    });
+    if (!plan?.materialStoragePath) {
+      throw new NotFoundException("Nu există material încărcat pentru această instruire.");
+    }
+    try {
+      await access(plan.materialStoragePath, constants.R_OK);
+    } catch {
+      throw new NotFoundException("Fișierul materialului nu a fost găsit pe server.");
+    }
+    return {
+      stream: createReadStream(plan.materialStoragePath),
+      mimeType: plan.materialMimeType ?? "application/octet-stream",
+      fileName: plan.materialFileName ?? "material"
+    };
   }
 
   private assertTrainingPlanActiveForWorkflow(plan: { status: SsmTrainingPlanStatus; score?: number | null }) {
@@ -367,6 +615,8 @@ export class SsmTrainingSuiteService {
   private assertMaterialReady(plan: {
     materialUrl?: string | null;
     materialTitle?: string | null;
+    materialStoragePath?: string | null;
+    materialFileName?: string | null;
     materialCompletedAt?: Date | null;
   }) {
     if (this.planHasMaterial(plan) && !plan.materialCompletedAt) {
@@ -888,6 +1138,9 @@ export class SsmTrainingSuiteService {
         completedAt: row.completedAt,
         materialTitle: row.materialTitle,
         materialUrl: row.materialUrl,
+        materialFileName: row.materialFileName,
+        materialMimeType: row.materialMimeType,
+        hasUploadedMaterial: Boolean(row.materialStoragePath),
         materialStartedAt: row.materialStartedAt,
         materialCompletedAt: row.materialCompletedAt,
         materialTimeSpentSeconds: row.materialTimeSpentSeconds,
@@ -1351,7 +1604,13 @@ export class SsmTrainingSuiteService {
     const trainings = await this.prisma.ssmTrainingPlan.findMany({
       where: { tenantId, employeeId },
       include: {
-        employee: true,
+        employee: {
+          include: {
+            jobPosition: { select: { name: true } },
+            department: { select: { name: true } },
+            worksite: { select: { name: true, legalEntity: { select: { name: true } } } }
+          }
+        },
         trainingType: true,
         signature: true
       },
@@ -1398,15 +1657,27 @@ export class SsmTrainingSuiteService {
   }
 
   private buildIndividualSheetPdfBuffer(plan: {
-    employee: { fullName: string; jobPositionId: string | null };
-    trainingType: { name: string; code: string };
+    employee: {
+      fullName: string;
+      jobPositionId: string | null;
+      jobPosition?: { name: string } | null;
+      department?: { name: string } | null;
+      worksite?: { name: string; legalEntity?: { name: string } | null } | null;
+    };
+    trainingType: { name: string; code: string; category: SsmTrainingCategory; legalMinDurationHours?: number | null };
+    materialTitle?: string | null;
     scheduledAt: Date;
     dueAt: Date;
+    completedAt?: Date | null;
     durationMinutes?: number | null;
     score?: number | null;
     signature?: {
       employeeSignedAt: Date | null;
+      managerSignedAt: Date | null;
       responsibleSignedAt: Date | null;
+      employeeSignature: string | null;
+      managerSignature: string | null;
+      responsibleSignature: string | null;
     } | null;
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
@@ -1416,35 +1687,66 @@ export class SsmTrainingSuiteService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      doc.fontSize(18).text("FIȘA INDIVIDUALĂ DE INSTRUIRE SSM/PSI", { align: "center" });
+      doc.fontSize(16).text("FIȘA INDIVIDUALĂ DE INSTRUIRE", { align: "center" });
+      doc.fontSize(12).text("în domeniul securității și sănătății în muncă / PSI", { align: "center" });
       doc.moveDown();
       doc.fontSize(11);
-      doc.text("Unitatea: conform evidenței angajatului");
+      doc.text(`Unitatea: ${plan.employee.worksite?.legalEntity?.name ?? "conform evidenței angajatului"}`);
+      doc.text(`Departament: ${plan.employee.department?.name ?? "-"}`);
+      doc.text(`Punct de lucru: ${plan.employee.worksite?.name ?? "-"}`);
       doc.text(`Nume și prenume: ${plan.employee.fullName}`);
-      doc.text(`Funcție: ${plan.employee.jobPositionId ? "conform fișă post" : "-"}`);
+      doc.text(`Funcție / meserie: ${plan.employee.jobPosition?.name ?? "-"}`);
+      doc.moveDown(0.5);
       doc.text(`Tip instruire: ${plan.trainingType.name}`);
       doc.text(`Cod tematică: ${plan.trainingType.code}`);
+      doc.text(`Categorie: ${plan.trainingType.category}`);
+      if (plan.materialTitle) {
+        doc.text(`Tematică / material: ${plan.materialTitle}`);
+      }
+      if (plan.trainingType.legalMinDurationHours) {
+        doc.text(`Durată minimă legală (ore): ${plan.trainingType.legalMinDurationHours}`);
+      }
       doc.text(`Data programării: ${plan.scheduledAt.toLocaleDateString("ro-RO")}`);
       doc.text(`Data limită: ${plan.dueAt.toLocaleDateString("ro-RO")}`);
+      doc.text(
+        `Data finalizării: ${plan.completedAt ? plan.completedAt.toLocaleDateString("ro-RO") : "-"}`
+      );
       doc.text(`Durată parcurgere (min): ${plan.durationMinutes ?? "-"}`);
       doc.text(`Rezultat test verificare: ${plan.score != null ? `${plan.score}%` : "—"}`);
       doc.moveDown();
-      doc.text(
-        `Semnătură angajat: ${
-          plan.signature?.employeeSignedAt
-            ? `da (${plan.signature.employeeSignedAt.toLocaleDateString("ro-RO")})`
-            : "nu"
-        }`
+      doc.fontSize(12).text("Semnături olografe", { underline: true });
+      doc.moveDown(0.4);
+
+      const startY = doc.y;
+      const colWidth = 160;
+      embedSignatureImage(
+        doc,
+        "Angajat",
+        plan.signature?.employeeSignedAt,
+        plan.signature?.employeeSignature,
+        40,
+        startY
       );
-      doc.text(
-        `Semnătură responsabil SSM: ${
-          plan.signature?.responsibleSignedAt
-            ? `da (${plan.signature.responsibleSignedAt.toLocaleDateString("ro-RO")})`
-            : "nu"
-        }`
+      embedSignatureImage(
+        doc,
+        "Manager",
+        plan.signature?.managerSignedAt,
+        plan.signature?.managerSignature,
+        40 + colWidth,
+        startY
       );
-      doc.moveDown();
-      doc.fontSize(9).text("Document generat electronic — păstrare conform legislației muncii.");
+      const endY = embedSignatureImage(
+        doc,
+        "Responsabil SSM",
+        plan.signature?.responsibleSignedAt,
+        plan.signature?.responsibleSignature,
+        40 + colWidth * 2,
+        startY
+      );
+      doc.y = Math.max(endY, doc.y) + 12;
+      doc.fontSize(9).text(
+        "Document generat electronic conform evidențelor de instruire — păstrare în dosarul digital al angajatului."
+      );
       doc.end();
     });
   }
@@ -1454,7 +1756,13 @@ export class SsmTrainingSuiteService {
     const plan = await this.prisma.ssmTrainingPlan.findFirst({
       where: { id: trainingPlanId, tenantId },
       include: {
-        employee: true,
+        employee: {
+          include: {
+            jobPosition: { select: { name: true } },
+            department: { select: { name: true } },
+            worksite: { select: { name: true, legalEntity: { select: { name: true } } } }
+          }
+        },
         trainingType: true,
         signature: true
       }
@@ -1512,19 +1820,26 @@ export class SsmTrainingSuiteService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      doc.fontSize(16).text("Fișă colectivă de instructaj", { align: "center" });
-      doc.moveDown(0.6);
+      doc.fontSize(16).text("FIȘĂ COLECTIVĂ DE INSTRUCTAJ", { align: "center" });
+      doc.fontSize(11).text("Vizitatori / colaboratori externi", { align: "center" });
+      doc.moveDown();
       doc.fontSize(12).text(`Tematică: ${dto.title}`);
       doc.text(`Instructor: ${dto.trainerName ?? "-"}`);
       doc.text(`Locație: ${dto.location ?? "-"}`);
-      doc.text(`Data: ${createdAt.toISOString()}`);
+      doc.text(`Data: ${createdAt.toLocaleDateString("ro-RO")} ${createdAt.toLocaleTimeString("ro-RO")}`);
       doc.moveDown();
       doc.text("Participanți:");
+      doc.moveDown(0.3);
       dto.attendees.forEach((name, index) => {
-        doc.text(`${index + 1}. ${name}`);
+        const y = doc.y;
+        doc.text(`${index + 1}. ${name}`, 40, y, { width: 280 });
+        doc.text("Semnătură: ____________________", 330, y);
+        doc.moveDown(0.8);
       });
       doc.moveDown();
-      doc.fontSize(10).text("Document generat automat pentru vizitatori/colaboratori.");
+      doc.fontSize(10).text(
+        "Document generat pentru evidența instructajului vizitatorilor și colaboratorilor externi."
+      );
       doc.end();
     });
     return buffer;

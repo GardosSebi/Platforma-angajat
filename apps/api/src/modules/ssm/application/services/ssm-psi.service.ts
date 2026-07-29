@@ -17,6 +17,7 @@ import {
   RegisterSsmPsiEquipmentVerificationDto,
   UpdateSsmPsiEquipmentDto
 } from "../../api/dto/ssm-psi.dto";
+import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -93,7 +94,8 @@ export class SsmPsiService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly mailService: MailService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly trainingAutomation: SsmTrainingAutomationService
   ) {}
 
   private async assertWorksite(tenantId: string, worksiteId: string) {
@@ -196,6 +198,13 @@ export class SsmPsiService {
       entityId: created.id,
       payload: { code: created.code, worksiteId: dto.worksiteId, category: dto.category }
     });
+
+    await this.trainingAutomation.assignOnNewEquipment(
+      tenantId,
+      actorId,
+      dto.worksiteId,
+      `${created.code} — ${created.name}`
+    );
 
     return mapEquipment(created);
   }

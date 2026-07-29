@@ -9,6 +9,11 @@ export interface SsmDocumentFilters extends PaginationParams {
   type?: string;
   status?: string;
   targetType?: string;
+  entityName?: string;
+  departmentName?: string;
+  jobPositionName?: string;
+  periodFrom?: string;
+  periodTo?: string;
   controlOnly?: boolean;
 }
 
@@ -18,6 +23,11 @@ function toSearchParams(filters: SsmDocumentFilters): URLSearchParams {
   if (filters.type) params.set("type", filters.type);
   if (filters.status) params.set("status", filters.status);
   if (filters.targetType) params.set("targetType", filters.targetType);
+  if (filters.entityName?.trim()) params.set("entityName", filters.entityName.trim());
+  if (filters.departmentName?.trim()) params.set("departmentName", filters.departmentName.trim());
+  if (filters.jobPositionName?.trim()) params.set("jobPositionName", filters.jobPositionName.trim());
+  if (filters.periodFrom) params.set("periodFrom", filters.periodFrom);
+  if (filters.periodTo) params.set("periodTo", filters.periodTo);
   if (filters.controlOnly) params.set("controlOnly", "true");
   if (filters.page) params.set("page", String(filters.page));
   if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
@@ -45,6 +55,13 @@ export function useSsmDocumentHistory(documentId?: string) {
     queryKey: ["ssm", "documents", "history", documentId],
     queryFn: () => ssmApi.getDocumentHistory(documentId!),
     enabled: Boolean(documentId)
+  });
+}
+
+export function useSsmDocumentTypePolicies() {
+  return useQuery({
+    queryKey: ["ssm", "documents", "policies"],
+    queryFn: ssmApi.listDocumentTypePolicies
   });
 }
 

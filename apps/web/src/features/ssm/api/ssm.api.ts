@@ -63,6 +63,11 @@ import type {
 import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
 import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
+import { downloadJsonPostWithAuth } from "../../../shared/api/http-download";
+import type {
+  GenerateSsmCollectiveSheetRequest,
+  UpdateSsmTrainingTypeRequest
+} from "@repo/shared-types/ssm";
 
 export const ssmApi = {
   assignTraining(payload: AssignTrainingRequest) {
@@ -86,6 +91,52 @@ export const ssmApi = {
   },
   seedDocumentTemplates() {
     return httpClient<{ created: number }>("/ssm/documents/templates/seed-defaults", { method: "POST" });
+  },
+  uploadDocumentTemplateFile(templateId: string, file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    return httpClient<{ templateId: string; fileName: string; hasFile: boolean }>(
+      `/ssm/documents/templates/${templateId}/file`,
+      { method: "POST", body }
+    );
+  },
+  getDocumentTemplateFileUrl(templateId: string) {
+    return `/ssm/documents/templates/${templateId}/file`;
+  },
+  createDocumentFromTemplate(templateId: string, payload?: { title?: string; targetLabel?: string }) {
+    return httpClient<UploadSsmDocumentResponse>(`/ssm/documents/templates/${templateId}/create-document`, {
+      method: "POST",
+      body: JSON.stringify(payload ?? {})
+    });
+  },
+  listDocumentTypePolicies() {
+    return httpClient<{
+      items: import("@repo/shared-types/ssm").SsmDocumentTypePolicyItem[];
+      moduleHints: Record<string, string>;
+    }>("/ssm/documents/policies");
+  },
+  seedDocumentTypePolicies() {
+    return httpClient<{ created: number }>("/ssm/documents/policies/seed-defaults", { method: "POST" });
+  },
+  upsertDocumentTypePolicy(
+    documentType: string,
+    payload: {
+      viewRoles?: string[];
+      editRoles?: string[];
+      approveRoles?: string[];
+      relatedModuleHint?: string | null;
+    }
+  ) {
+    return httpClient(`/ssm/documents/policies/${documentType}`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+  },
+  getDocumentVersionFileUrl(documentId: string, versionId: string) {
+    return `/ssm/documents/${documentId}/versions/${versionId}/file`;
+  },
+  getDocumentFileUrl(documentId: string) {
+    return `/ssm/documents/${documentId}/file`;
   },
   createDocument(payload: CreateSsmDocumentRequest, file: File) {
     const body = new FormData();
@@ -131,6 +182,36 @@ export const ssmApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  updateTrainingType(typeId: string, payload: UpdateSsmTrainingTypeRequest) {
+    return httpClient<SsmTrainingTypeItem>(`/ssm/training-suite/types/${typeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  uploadTrainingMaterial(trainingPlanId: string, file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    return httpClient<{
+      trainingPlanId: string;
+      materialFileName?: string | null;
+      materialMimeType?: string | null;
+      materialTitle?: string | null;
+      hasUploadedMaterial: boolean;
+    }>(`/ssm/training-suite/plans/${trainingPlanId}/material`, {
+      method: "POST",
+      body
+    });
+  },
+  getTrainingMaterialUrl(trainingPlanId: string) {
+    return `/ssm/training-suite/plans/${trainingPlanId}/material`;
+  },
+  generateCollectiveSheet(payload: GenerateSsmCollectiveSheetRequest) {
+    return downloadJsonPostWithAuth(
+      "/ssm/training-suite/collective-sheet.pdf",
+      payload,
+      "fisa-colectiva-instructaj.pdf"
+    );
   },
   listTrainingPlans(params?: PaginationParams) {
     return httpClient<PaginatedResult<SsmTrainingPlanItem>>(

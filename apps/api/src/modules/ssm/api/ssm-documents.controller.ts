@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   StreamableFile,
   UploadedFile,
@@ -13,6 +14,7 @@ import {
   UseInterceptors
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { SsmDocumentType } from "@prisma/client";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { JwtPayload } from "../../../auth/jwt.strategy";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -29,6 +31,7 @@ import {
   CreateSsmDocumentTemplateDto,
   UpdateSsmDocumentTemplateDto
 } from "./dto/ssm-document-template.dto";
+import { UpsertSsmDocumentTypePolicyDto } from "./dto/ssm-document-type-policy.dto";
 
 @Controller("ssm/documents")
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
@@ -40,8 +43,32 @@ export class SsmDocumentsController {
   listTypes() {
     return {
       types: SsmDocumentsService.documentTypes(),
-      targets: SsmDocumentsService.documentTargets()
+      targets: SsmDocumentsService.documentTargets(),
+      moduleHints: this.documentsService.documentModuleHints()
     };
+  }
+
+  @Get("policies")
+  @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
+  listPolicies(@TenantId() tenantId: string) {
+    return this.documentsService.listTypePolicies(tenantId);
+  }
+
+  @Put("policies/:documentType")
+  @RequirePermissions(Permission.SSM_DOCUMENT_APPROVE)
+  upsertPolicy(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("documentType") documentType: SsmDocumentType,
+    @Body() dto: UpsertSsmDocumentTypePolicyDto
+  ) {
+    return this.documentsService.upsertTypePolicy(tenantId, user.sub, documentType, dto);
+  }
+
+  @Post("policies/seed-defaults")
+  @RequirePermissions(Permission.SSM_DOCUMENT_APPROVE)
+  seedPolicies(@TenantId() tenantId: string) {
+    return this.documentsService.seedDefaultTypePolicies(tenantId);
   }
 
   @Get()
@@ -89,10 +116,68 @@ export class SsmDocumentsController {
     return this.documentsService.updateTemplate(tenantId, user.sub, templateId, dto);
   }
 
+  @Post("templates/:templateId/file")
+  @UseInterceptors(FileInterceptor("file"))
+  @RequirePermissions(Permission.SSM_DOCUMENT_EDIT, Permission.FILES_UPLOAD)
+  uploadTemplateFile(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("templateId") templateId: string,
+    @UploadedFile() file?: Express.Multer.File
+  ) {
+    return this.documentsService.uploadTemplateFile(tenantId, user.sub, templateId, file);
+  }
+
+  @Get("templates/:templateId/file")
+  @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
+  @Header("Cache-Control", "private, max-age=300")
+  async downloadTemplateFile(@TenantId() tenantId: string, @Param("templateId") templateId: string) {
+    const { stream, mimeType, fileName } = await this.documentsService.streamTemplateFile(
+      tenantId,
+      templateId
+    );
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: `attachment; filename="${encodeURIComponent(fileName)}"`
+    });
+  }
+
+  @Post("templates/:templateId/create-document")
+  @RequirePermissions(Permission.SSM_DOCUMENT_EDIT, Permission.FILES_UPLOAD)
+  createFromTemplate(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("templateId") templateId: string,
+    @Body() body: { title?: string; targetLabel?: string }
+  ) {
+    return this.documentsService.createDocumentFromTemplate(tenantId, user.sub, templateId, user, body);
+  }
+
   @Get(":id/history")
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
   history(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
     return this.documentsService.getDocumentHistory(tenantId, id, user);
+  }
+
+  @Get(":id/versions/:versionId/file")
+  @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
+  @Header("Cache-Control", "private, max-age=300")
+  async downloadVersionFile(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Param("versionId") versionId: string
+  ) {
+    const { stream, mimeType, fileName } = await this.documentsService.streamDocumentVersion(
+      tenantId,
+      id,
+      versionId,
+      user
+    );
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: `inline; filename="${encodeURIComponent(fileName)}"`
+    });
   }
 
   @Get(":id/file")
@@ -115,11 +200,11 @@ export class SsmDocumentsController {
   @RequirePermissions(Permission.SSM_DOCUMENT_EDIT, Permission.FILES_UPLOAD)
   create(
     @TenantId() tenantId: string,
-    @CurrentUser() user: { sub: string },
+    @CurrentUser() user: JwtPayload,
     @Body() dto: CreateSsmDocumentDto,
     @UploadedFile() file?: Express.Multer.File
   ) {
-    return this.documentsService.createDocument(tenantId, user.sub, dto, file);
+    return this.documentsService.createDocument(tenantId, user.sub, dto, file, user);
   }
 
   @Post(":id/versions")
@@ -127,12 +212,12 @@ export class SsmDocumentsController {
   @RequirePermissions(Permission.SSM_DOCUMENT_EDIT, Permission.FILES_UPLOAD)
   addVersion(
     @TenantId() tenantId: string,
-    @CurrentUser() user: { sub: string },
+    @CurrentUser() user: JwtPayload,
     @Param("id") id: string,
     @Body("changeNote") changeNote: string | undefined,
     @UploadedFile() file?: Express.Multer.File
   ) {
-    return this.documentsService.addVersion(tenantId, user.sub, id, changeNote, file);
+    return this.documentsService.addVersion(tenantId, user.sub, id, changeNote, file, user);
   }
 
   @Patch(":id/revert")

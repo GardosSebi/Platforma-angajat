@@ -37,5 +37,13 @@ export class ListSsmDocumentsDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsString()
+  periodFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  periodTo?: string;
+
+  @IsOptional()
+  @IsString()
   controlOnly?: string;
 }

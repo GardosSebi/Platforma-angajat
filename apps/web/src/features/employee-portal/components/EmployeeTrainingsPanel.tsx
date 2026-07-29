@@ -13,6 +13,7 @@ import {
 } from "../../ssm/hooks/useSsmTrainingSuite";
 import { ssmApi } from "../../ssm/api/ssm.api";
 import { SsmTrainingTestPanel } from "../../ssm/components/SsmTrainingTestPanel";
+import { TrainingMaterialViewer } from "../../ssm/components/TrainingMaterialViewer";
 import {
   formatRoDate,
   formatRoDateTime,
@@ -219,20 +220,14 @@ export function EmployeeTrainingsPanel() {
 
               {planHasMaterial(activePlan) ? (
                 <>
-                  {activePlan.materialUrl ? (
-                    <p>
-                      <a
-                        href={activePlan.materialUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-secondary employee-portal-material-link"
-                      >
-                        Deschide: {activePlan.materialTitle ?? "Material instruire"}
-                      </a>
-                    </p>
-                  ) : (
-                    <p className="field-hint">{activePlan.materialTitle ?? "Material instruire"} — fără link extern.</p>
-                  )}
+                  <TrainingMaterialViewer
+                    plan={activePlan}
+                    onOpened={() => {
+                      if (!activePlan.materialStartedAt) {
+                        startMaterial.mutate(activePlan.id);
+                      }
+                    }}
+                  />
                   {!activePlan.materialCompletedAt ? (
                     <p className="field-hint">
                       Timp parcurgere înregistrat automat: {Math.floor(materialElapsed / 60)} min {materialElapsed % 60} sec
