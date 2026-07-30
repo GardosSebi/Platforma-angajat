@@ -17,7 +17,8 @@ import {
 
 const REPORT_TYPE_OPTIONS: Array<{ value: SsmReportType; label: string }> = [
   { value: "trainings", label: "Instruiri" },
-  { value: "eip", label: "EIP" },
+  { value: "eip", label: "EIP · mișcări" },
+  { value: "eip-stock", label: "EIP · necesar/stoc" },
   { value: "medical", label: "Medicina muncii" },
   { value: "documents", label: "Documente & versiuni" },
   { value: "accidents", label: "Accidente" },
@@ -112,13 +113,18 @@ function buildPayload(form: FormState): CreateSsmScheduledReportRequest {
   };
 }
 
-export function SsmScheduledReportsPanel() {
+type Props = {
+  embedded?: boolean;
+};
+
+export function SsmScheduledReportsPanel({ embedded = false }: Props) {
   const schedulesQuery = useScheduledReports();
   const createSchedule = useCreateScheduledReport();
   const updateSchedule = useUpdateScheduledReport();
   const deleteSchedule = useDeleteScheduledReport();
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [showForm, setShowForm] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const reportTypeLabel = useMemo(
@@ -138,6 +144,7 @@ export function SsmScheduledReportsPanel() {
     createSchedule.mutate(payload, {
       onSuccess: () => {
         setForm(EMPTY_FORM);
+        setShowForm(false);
         setFeedback({ type: "success", message: "Raport programat creat." });
       },
       onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
@@ -167,139 +174,151 @@ export function SsmScheduledReportsPanel() {
   const schedules = schedulesQuery.data ?? [];
 
   return (
-    <section className="card ssm-doc-card ssm-scheduled-reports" aria-labelledby="ssm-scheduled-reports-title">
-      <h3 id="ssm-scheduled-reports-title" className="card-title">
-        Rapoarte programate
-      </h3>
-      <p className="field-hint">
-        Trimite automat rapoarte SSM pe e-mail, conform unui calendar zilnic, săptămânal sau lunar.
-      </p>
-
-      <form className="form-stack" onSubmit={onSubmit}>
-        <div className="ssm-form-grid">
-          <FieldSelect
-            id="scheduled-report-type"
-            label="Tip raport"
-            value={form.reportType}
-            onChange={(reportType) => setForm((prev) => ({ ...prev, reportType: reportType as SsmReportType }))}
-            options={REPORT_TYPE_OPTIONS}
-          />
-          <FieldSelect
-            id="scheduled-report-cadence"
-            label="Frecvență"
-            value={form.cadence}
-            onChange={(cadence) => setForm((prev) => ({ ...prev, cadence: cadence as SsmReportCadence }))}
-            options={SSM_REPORT_CADENCES.map((cadence) => ({
-              value: cadence,
-              label: CADENCE_LABELS[cadence]
-            }))}
-          />
-          {form.cadence === "WEEKLY" ? (
-            <FieldSelect
-              id="scheduled-report-day-of-week"
-              label="Zi săptămână"
-              value={form.dayOfWeek}
-              onChange={(dayOfWeek) => setForm((prev) => ({ ...prev, dayOfWeek }))}
-              options={DAY_OF_WEEK_OPTIONS}
-            />
+    <div className={`ssm-panel-layout ${embedded ? "" : "ssm-scheduled-standalone"}`}>
+      <div className="card form-stack ssm-doc-card">
+        <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+          <h4 className="card-title" style={{ margin: 0 }}>
+            Programări active
+          </h4>
+          <span className="ssm-chip">{schedules.length}</span>
+        </div>
+        <p className="field-hint" style={{ marginTop: 0 }}>
+          Trimitere automată pe e-mail: zilnic, săptămânal sau lunar.
+        </p>
+        {feedback ? (
+          <p className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
+            {feedback.message}
+          </p>
+        ) : null}
+        <div className="ssm-history-list">
+          {schedulesQuery.isLoading ? <p className="field-hint">Se încarcă programările…</p> : null}
+          {!schedulesQuery.isLoading && schedules.length === 0 ? (
+            <p className="field-hint">Nu există rapoarte programate.</p>
           ) : null}
-          {form.cadence === "MONTHLY" ? (
+          {schedules.map((row) => (
+            <div key={row.id} className={`ssm-history-item ${row.active ? "" : "inactive"}`}>
+              <div>
+                <strong>{reportTypeLabel[row.reportType as SsmReportType] ?? row.reportType}</strong>
+                <div className="field-hint">
+                  {cadenceSummary(row)} · {FORMAT_LABELS[row.format as SsmReportDeliveryFormat] ?? row.format}
+                </div>
+                <div className="field-hint">{row.recipients.join(", ")}</div>
+                <div className="field-hint">
+                  {row.active ? "Activ" : "Inactiv"} · Următoarea: {formatDate(row.nextRunAt)}
+                </div>
+              </div>
+              <div className="ssm-inline-actions">
+                {row.active ? (
+                  <button
+                    type="button"
+                    className="btn-text"
+                    disabled={updateSchedule.isPending}
+                    onClick={() => onDeactivate(row.id)}
+                  >
+                    Dezactivează
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn-text"
+                  disabled={deleteSchedule.isPending}
+                  onClick={() => onDelete(row.id)}
+                >
+                  Șterge
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card form-stack ssm-doc-card">
+        <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+          <h4 className="card-title" style={{ margin: 0 }}>
+            Programare nouă
+          </h4>
+          <button type="button" className="btn-primary" onClick={() => setShowForm((value) => !value)}>
+            {showForm ? "Ascunde" : "Adaugă"}
+          </button>
+        </div>
+        {showForm ? (
+          <form className="form-stack" onSubmit={onSubmit}>
+            <FieldSelect
+              id="scheduled-report-type"
+              label="Tip raport"
+              value={form.reportType}
+              onChange={(reportType) => setForm((prev) => ({ ...prev, reportType: reportType as SsmReportType }))}
+              options={REPORT_TYPE_OPTIONS}
+            />
+            <FieldSelect
+              id="scheduled-report-cadence"
+              label="Frecvență"
+              value={form.cadence}
+              onChange={(cadence) => setForm((prev) => ({ ...prev, cadence: cadence as SsmReportCadence }))}
+              options={SSM_REPORT_CADENCES.map((cadence) => ({
+                value: cadence,
+                label: CADENCE_LABELS[cadence]
+              }))}
+            />
+            {form.cadence === "WEEKLY" ? (
+              <FieldSelect
+                id="scheduled-report-day-of-week"
+                label="Zi săptămână"
+                value={form.dayOfWeek}
+                onChange={(dayOfWeek) => setForm((prev) => ({ ...prev, dayOfWeek }))}
+                options={DAY_OF_WEEK_OPTIONS}
+              />
+            ) : null}
+            {form.cadence === "MONTHLY" ? (
+              <div className="field">
+                <label htmlFor="scheduled-report-day-of-month">Zi lună (1–28)</label>
+                <input
+                  id="scheduled-report-day-of-month"
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={form.dayOfMonth}
+                  onChange={(event) => setForm((prev) => ({ ...prev, dayOfMonth: event.target.value }))}
+                  required
+                />
+              </div>
+            ) : null}
+            <FieldSelect
+              id="scheduled-report-format"
+              label="Format"
+              value={form.format}
+              onChange={(format) => setForm((prev) => ({ ...prev, format: format as SsmReportDeliveryFormat }))}
+              options={SSM_REPORT_DELIVERY_FORMATS.map((format) => ({
+                value: format,
+                label: FORMAT_LABELS[format]
+              }))}
+            />
             <div className="field">
-              <label htmlFor="scheduled-report-day-of-month">Zi lună (1–28)</label>
+              <label htmlFor="scheduled-report-recipients">Destinatari (e-mail, separate prin virgulă) *</label>
               <input
-                id="scheduled-report-day-of-month"
-                type="number"
-                min={1}
-                max={28}
-                value={form.dayOfMonth}
-                onChange={(event) => setForm((prev) => ({ ...prev, dayOfMonth: event.target.value }))}
+                id="scheduled-report-recipients"
+                value={form.recipientsCsv}
+                onChange={(event) => setForm((prev) => ({ ...prev, recipientsCsv: event.target.value }))}
+                placeholder="ssm@companie.ro, manager@companie.ro"
                 required
               />
             </div>
-          ) : null}
-          <FieldSelect
-            id="scheduled-report-format"
-            label="Format"
-            value={form.format}
-            onChange={(format) => setForm((prev) => ({ ...prev, format: format as SsmReportDeliveryFormat }))}
-            options={SSM_REPORT_DELIVERY_FORMATS.map((format) => ({
-              value: format,
-              label: FORMAT_LABELS[format]
-            }))}
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="scheduled-report-recipients">Destinatari (e-mail, separate prin virgulă) *</label>
-          <input
-            id="scheduled-report-recipients"
-            value={form.recipientsCsv}
-            onChange={(event) => setForm((prev) => ({ ...prev, recipientsCsv: event.target.value }))}
-            placeholder="ssm@companie.ro, manager@companie.ro"
-            required
-          />
-        </div>
-
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={form.active}
-            onChange={(event) => setForm((prev) => ({ ...prev, active: event.target.checked }))}
-          />
-          Activ imediat după creare
-        </label>
-
-        <button className="btn-primary" type="submit" disabled={createSchedule.isPending}>
-          {createSchedule.isPending ? "Se salvează..." : "Programează raport"}
-        </button>
-      </form>
-
-      {feedback ? (
-        <p className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
-          {feedback.message}
-        </p>
-      ) : null}
-
-      <div className="ssm-doc-items ssm-scheduled-list">
-        {schedulesQuery.isLoading ? <p className="field-hint">Se încarcă programările...</p> : null}
-        {!schedulesQuery.isLoading && schedules.length === 0 ? (
-          <p className="field-hint">Nu există rapoarte programate.</p>
-        ) : null}
-        {schedules.map((row) => (
-          <article key={row.id} className={`ssm-doc-item ${row.active ? "" : "inactive"}`}>
-            <div>
-              <strong>{reportTypeLabel[row.reportType as SsmReportType] ?? row.reportType}</strong>
-              <span>
-                {cadenceSummary(row)} · {FORMAT_LABELS[row.format as SsmReportDeliveryFormat] ?? row.format}
-              </span>
-              <span>{row.recipients.join(", ")}</span>
-              <span>
-                {row.active ? "Activ" : "Inactiv"} · Următoarea rulare: {formatDate(row.nextRunAt)}
-              </span>
-            </div>
-            <div className="ssm-inline-actions">
-              {row.active ? (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={updateSchedule.isPending}
-                  onClick={() => onDeactivate(row.id)}
-                >
-                  Dezactivează
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn-secondary btn-danger"
-                disabled={deleteSchedule.isPending}
-                onClick={() => onDelete(row.id)}
-              >
-                Șterge
-              </button>
-            </div>
-          </article>
-        ))}
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={(event) => setForm((prev) => ({ ...prev, active: event.target.checked }))}
+              />
+              Activ imediat după creare
+            </label>
+            <button className="btn-primary" type="submit" disabled={createSchedule.isPending}>
+              {createSchedule.isPending ? "Se salvează…" : "Programează raport"}
+            </button>
+          </form>
+        ) : (
+          <p className="field-hint">Apasă „Adaugă” pentru a crea o trimitere automată.</p>
+        )}
       </div>
-    </section>
+    </div>
   );
 }

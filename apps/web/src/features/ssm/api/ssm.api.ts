@@ -40,6 +40,8 @@ import type {
   SsmRiskAssessmentHistoryResponse,
   SsmRiskAssessmentItem,
   SsmComplianceDashboardResponse,
+  SsmOverviewFilters,
+  SsmReportFilters,
   SsmReportResponse,
   SsmReportType,
   SsmUnifiedCalendarResponse,
@@ -563,20 +565,46 @@ export const ssmApi = {
       body: JSON.stringify(payload)
     });
   },
-  unifiedCalendar() {
-    return httpClient<SsmUnifiedCalendarResponse>("/ssm/overview/calendar");
+  buildOverviewQuery(filters?: SsmOverviewFilters | SsmReportFilters) {
+    const qs = new URLSearchParams();
+    if (filters?.legalEntityId) qs.set("legalEntityId", filters.legalEntityId);
+    if (filters?.worksiteId) qs.set("worksiteId", filters.worksiteId);
+    if (filters?.departmentId) qs.set("departmentId", filters.departmentId);
+    if (filters?.employeeId) qs.set("employeeId", filters.employeeId);
+    if ("source" in (filters ?? {}) && (filters as SsmOverviewFilters).source) {
+      qs.set("source", (filters as SsmOverviewFilters).source!);
+    }
+    if (filters?.from) qs.set("from", filters.from);
+    if (filters?.to) qs.set("to", filters.to);
+    if ("docIssue" in (filters ?? {}) && (filters as SsmReportFilters).docIssue) {
+      qs.set("docIssue", (filters as SsmReportFilters).docIssue!);
+    }
+    const built = qs.toString();
+    return built ? `?${built}` : "";
   },
-  complianceDashboard() {
-    return httpClient<SsmComplianceDashboardResponse>("/ssm/overview/compliance-dashboard");
+  unifiedCalendar(filters?: SsmOverviewFilters) {
+    return httpClient<SsmUnifiedCalendarResponse>(
+      `/ssm/overview/calendar${this.buildOverviewQuery(filters)}`
+    );
   },
-  ssmReport(type: SsmReportType) {
-    return httpClient<SsmReportResponse>(`/ssm/reports/${type}`);
+  complianceDashboard(filters?: SsmOverviewFilters) {
+    return httpClient<SsmComplianceDashboardResponse>(
+      `/ssm/overview/compliance-dashboard${this.buildOverviewQuery({
+        legalEntityId: filters?.legalEntityId,
+        worksiteId: filters?.worksiteId,
+        departmentId: filters?.departmentId,
+        employeeId: filters?.employeeId
+      })}`
+    );
   },
-  getSsmReportPdfUrl(type: SsmReportType) {
-    return `/ssm/reports/${type}.pdf`;
+  ssmReport(type: SsmReportType, filters?: SsmReportFilters) {
+    return httpClient<SsmReportResponse>(`/ssm/reports/${type}${this.buildOverviewQuery(filters)}`);
   },
-  getSsmReportExcelUrl(type: SsmReportType) {
-    return `/ssm/reports/${type}.xlsx`;
+  getSsmReportPdfUrl(type: SsmReportType, filters?: SsmReportFilters) {
+    return `/ssm/reports/${type}.pdf${this.buildOverviewQuery(filters)}`;
+  },
+  getSsmReportExcelUrl(type: SsmReportType, filters?: SsmReportFilters) {
+    return `/ssm/reports/${type}.xlsx${this.buildOverviewQuery(filters)}`;
   },
   listPreventionPlans() {
     return httpClient<{ items: import("@repo/shared-types/ssm").SsmPreventionPlanItem[] }>("/ssm/prevention-plans");
@@ -611,8 +639,11 @@ export const ssmApi = {
       body: JSON.stringify(payload)
     });
   },
-  getCalendarPdfUrl() {
-    return "/ssm/overview/calendar.pdf";
+  getCalendarPdfUrl(filters?: SsmOverviewFilters) {
+    return `/ssm/overview/calendar.pdf${this.buildOverviewQuery(filters)}`;
+  },
+  getCalendarIcalUrl(filters?: SsmOverviewFilters) {
+    return `/ssm/overview/calendar.ics${this.buildOverviewQuery(filters)}`;
   },
   listScheduledReports() {
     return httpClient<SsmScheduledReportRow[]>("/ssm/scheduled-reports");

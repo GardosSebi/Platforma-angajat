@@ -1,29 +1,63 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { SsmReportType } from "@repo/shared-types/ssm";
+import type { SsmOverviewFilters, SsmReportFilters, SsmReportType } from "@repo/shared-types/ssm";
 import type {
   CreateSsmScheduledReportRequest,
   UpdateSsmScheduledReportRequest
 } from "@repo/shared-types/ssm-scheduled-reports";
 import { ssmApi } from "../api/ssm.api";
 
-export function useUnifiedSsmCalendar() {
+function overviewKey(filters?: SsmOverviewFilters) {
+  return {
+    legalEntityId: filters?.legalEntityId ?? "",
+    worksiteId: filters?.worksiteId ?? "",
+    departmentId: filters?.departmentId ?? "",
+    employeeId: filters?.employeeId ?? "",
+    source: filters?.source ?? "",
+    from: filters?.from ?? "",
+    to: filters?.to ?? ""
+  };
+}
+
+function reportFiltersKey(filters?: SsmReportFilters) {
+  return {
+    legalEntityId: filters?.legalEntityId ?? "",
+    worksiteId: filters?.worksiteId ?? "",
+    departmentId: filters?.departmentId ?? "",
+    employeeId: filters?.employeeId ?? "",
+    from: filters?.from ?? "",
+    to: filters?.to ?? "",
+    docIssue: filters?.docIssue ?? ""
+  };
+}
+
+export function useUnifiedSsmCalendar(filters?: SsmOverviewFilters) {
   return useQuery({
-    queryKey: ["ssm", "overview", "calendar"],
-    queryFn: ssmApi.unifiedCalendar
+    queryKey: ["ssm", "overview", "calendar", overviewKey(filters)],
+    queryFn: () => ssmApi.unifiedCalendar(filters)
   });
 }
 
-export function useSsmComplianceDashboard() {
+export function useSsmComplianceDashboard(filters?: SsmOverviewFilters) {
   return useQuery({
-    queryKey: ["ssm", "overview", "compliance-dashboard"],
-    queryFn: ssmApi.complianceDashboard
+    queryKey: [
+      "ssm",
+      "overview",
+      "compliance-dashboard",
+      {
+        legalEntityId: filters?.legalEntityId ?? "",
+        worksiteId: filters?.worksiteId ?? "",
+        departmentId: filters?.departmentId ?? "",
+        employeeId: filters?.employeeId ?? ""
+      }
+    ],
+    queryFn: () => ssmApi.complianceDashboard(filters)
   });
 }
 
-export function useSsmReport(type: SsmReportType) {
+export function useSsmReport(type: SsmReportType, filters?: SsmReportFilters) {
   return useQuery({
-    queryKey: ["ssm", "reports", type],
-    queryFn: () => ssmApi.ssmReport(type)
+    queryKey: ["ssm", "reports", type, reportFiltersKey(filters)],
+    queryFn: () => ssmApi.ssmReport(type, filters)
   });
 }
 

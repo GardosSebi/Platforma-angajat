@@ -883,9 +883,45 @@ export interface DispatchSsmPsiRemindersResponse {
   candidates: number;
 }
 
-export type SsmCalendarSource = "TRAINING" | "MEDICAL" | "EIP" | "PSI" | "PSI_TRAINING";
+export type SsmCalendarSource =
+  | "TRAINING"
+  | "MEDICAL"
+  | "EIP"
+  | "PSI"
+  | "PSI_TRAINING"
+  | "EVACUATION_DRILL";
 export type SsmTrafficLight = "GREEN" | "YELLOW" | "RED";
-export type SsmReportType = "trainings" | "eip" | "medical" | "documents" | "accidents" | "psi" | "compliance";
+export type SsmReportType =
+  | "trainings"
+  | "eip"
+  | "eip-stock"
+  | "medical"
+  | "documents"
+  | "accidents"
+  | "psi"
+  | "compliance";
+
+export type SsmDocumentReportIssue = "expired" | "needsReview" | "";
+
+export interface SsmOverviewFilters {
+  legalEntityId?: string;
+  worksiteId?: string;
+  departmentId?: string;
+  employeeId?: string;
+  /** Calendar only: single event source */
+  source?: SsmCalendarSource | "";
+  /** Inclusive period start (YYYY-MM-DD or ISO) */
+  from?: string;
+  /** Inclusive period end (YYYY-MM-DD or ISO) */
+  to?: string;
+  /** Documents report only */
+  docIssue?: SsmDocumentReportIssue;
+}
+
+export type SsmReportFilters = Pick<
+  SsmOverviewFilters,
+  "legalEntityId" | "worksiteId" | "departmentId" | "employeeId" | "from" | "to" | "docIssue"
+>;
 
 export interface SsmUnifiedCalendarEvent {
   id: string;
@@ -895,6 +931,10 @@ export interface SsmUnifiedCalendarEvent {
   dueAt?: string | null;
   status: string;
   ownerLabel?: string | null;
+  employeeId?: string | null;
+  departmentId?: string | null;
+  worksiteId?: string | null;
+  legalEntityId?: string | null;
 }
 
 export interface SsmUnifiedCalendarResponse {
@@ -923,18 +963,63 @@ export interface SsmOverdueItem {
   dueAt?: string | null;
   daysOverdue: number;
   severity: string;
+  employeeId?: string | null;
+}
+
+export interface SsmOrgTrafficItem {
+  id: string;
+  name: string;
+  score: number;
+  trafficLight: SsmTrafficLight;
+  employeeCount: number;
+  compliantEmployees: number;
+  overdueEmployees: number;
+}
+
+export interface SsmOverdueEmployeeItem {
+  id: string;
+  module: string;
+  title: string;
+  dueAt?: string | null;
+  daysOverdue: number;
+  severity: string;
+}
+
+export interface SsmOverdueEmployee {
+  employeeId: string;
+  fullName: string;
+  email?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  legalEntityId?: string | null;
+  legalEntityName?: string | null;
+  outstandingCount: number;
+  modules: string[];
+  maxDaysOverdue: number;
+  items: SsmOverdueEmployeeItem[];
 }
 
 export interface SsmComplianceDashboardResponse {
   kpi: {
+    /** % angajați cu toate cerințele personale la zi */
     globalScore: number;
     trafficLight: SsmTrafficLight;
+    totalEmployees: number;
+    compliantEmployees: number;
+    overdueEmployees: number;
+    /** Scor pe verificări (module), păstrat pentru rapoarte */
+    checksScore: number;
     totalChecks: number;
     noncompliant: number;
   };
   breakdown: SsmComplianceBreakdownItem[];
   topNonconformities: SsmTopNonconformity[];
   overdueItems: SsmOverdueItem[];
+  overdueEmployees: SsmOverdueEmployee[];
+  byEntity: SsmOrgTrafficItem[];
+  byDepartment: SsmOrgTrafficItem[];
 }
 
 export type SsmReportRow = Record<string, string | number | boolean | null>;
