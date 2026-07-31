@@ -77,6 +77,13 @@ export interface SurveyFormFillerProps {
   onUploadFile?: (file: File) => Promise<string>;
   submitLabel?: string;
   thanksFooter?: ReactNode;
+  /** Fill as respondent without persisting (shows local thank-you after validate). */
+  previewMode?: boolean;
+  localeToggle?: {
+    available: string[];
+    value: string;
+    onChange: (locale: string) => void;
+  };
 }
 
 export function SurveyFormFiller({
@@ -87,7 +94,9 @@ export function SurveyFormFiller({
   onSubmit,
   onUploadFile,
   submitLabel = "Trimite răspunsurile",
-  thanksFooter
+  thanksFooter,
+  previewMode = false,
+  localeToggle
 }: SurveyFormFillerProps) {
   const [answers, setAnswers] = useState<Record<string, SurveyAnswerValue>>({});
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +157,11 @@ export function SurveyFormFiller({
     }
     setPending(true);
     try {
-      await onSubmit(payload);
+      if (previewMode) {
+        await Promise.resolve();
+      } else {
+        await onSubmit(payload);
+      }
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Trimiterea a eșuat.");
@@ -158,17 +171,46 @@ export function SurveyFormFiller({
   };
 
   if (done) {
-    return <SurveyThankYou footer={thanksFooter} />;
+    return (
+      <SurveyThankYou
+        footer={
+          previewMode ? (
+            <p className="field-hint">Previzualizare — răspunsurile nu au fost salvate.</p>
+          ) : (
+            thanksFooter
+          )
+        }
+      />
+    );
   }
 
   return (
     <form className="card form-stack survey-fill-form" onSubmit={(e) => void handleSubmit(e)}>
+      {previewMode ? (
+        <div className="feedback success" role="status">
+          Mod previzualizare — completați ca respondent; nimic nu se salvează.
+        </div>
+      ) : null}
       <header className="survey-fill-header">
         <h1 className="survey-fill-title">{title}</h1>
         {description ? (
           <p className="survey-fill-desc" style={{ whiteSpace: "pre-wrap" }}>
             {description}
           </p>
+        ) : null}
+        {localeToggle && localeToggle.available.length > 1 ? (
+          <div className="comms-inline-actions" style={{ marginTop: "0.75rem" }}>
+            {localeToggle.available.map((locale) => (
+              <button
+                key={locale}
+                type="button"
+                className={`btn-secondary btn-sm${localeToggle.value === locale ? " active" : ""}`}
+                onClick={() => localeToggle.onChange(locale)}
+              >
+                {locale.toUpperCase()}
+              </button>
+            ))}
+          </div>
         ) : null}
       </header>
 
@@ -440,7 +482,15 @@ export function SurveyFormFiller({
       ) : null}
 
       <button type="submit" className="btn-primary" disabled={pending || Boolean(uploadingQuestionId)}>
-        {pending ? "Se trimite…" : uploadingQuestionId ? "Se încarcă fișierul…" : submitLabel}
+        {pending
+          ? previewMode
+            ? "Se verifică…"
+            : "Se trimite…"
+          : uploadingQuestionId
+            ? "Se încarcă fișierul…"
+            : previewMode
+              ? "Finalizează previzualizarea"
+              : submitLabel}
       </button>
     </form>
   );

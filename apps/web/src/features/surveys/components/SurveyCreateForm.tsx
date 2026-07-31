@@ -21,7 +21,9 @@ import { AUDIENCE_LABELS, AUDIENCE_TYPES } from "../surveys-shared";
 
 export type SurveyFormState = Omit<CreateSurveyRequest, "questionSchema" | "conditionalLogic" | "targetEmployeeIds" | "translations"> & {
   targetEmployeeIdsCsv: string;
+  opensAtInput: string;
   closesAtInput: string;
+  responseLimitInput: string;
   translationRoTitle: string;
   translationEnTitle: string;
 };
@@ -30,6 +32,7 @@ export type QuestionFormState = {
   id: string;
   type: SurveyQuestionType;
   title: string;
+  titleEn: string;
   required: boolean;
   options: SurveyQuestionOption[];
   min: number;
@@ -52,6 +55,7 @@ type Props = {
   surveyForm: SurveyFormState;
   questionForm: QuestionFormState;
   questions: SurveyQuestion[];
+  questionTitlesEn: Record<string, string>;
   conditionalLogic: SurveyConditionalRule[];
   audienceOptions: AudienceOption[];
   canSave: boolean;
@@ -59,6 +63,7 @@ type Props = {
   feedback: { type: "success" | "error"; message: string } | null;
   onSurveyChange: (patch: Partial<SurveyFormState>) => void;
   onQuestionChange: (patch: Partial<QuestionFormState>) => void;
+  onQuestionTitleEnChange: (questionId: string, titleEn: string) => void;
   onAudienceRefChange: (value: string) => void;
   onAddQuestion: () => void;
   onUpdateOption: (index: number, label: string) => void;
@@ -94,6 +99,7 @@ export function SurveyCreateForm({
   surveyForm,
   questionForm,
   questions,
+  questionTitlesEn,
   conditionalLogic,
   audienceOptions,
   canSave,
@@ -101,6 +107,7 @@ export function SurveyCreateForm({
   feedback,
   onSurveyChange,
   onQuestionChange,
+  onQuestionTitleEnChange,
   onAudienceRefChange,
   onAddQuestion,
   onUpdateOption,
@@ -174,12 +181,34 @@ export function SurveyCreateForm({
             }))}
           />
           <div className="field">
+            <label htmlFor="survey-opens">Deschidere</label>
+            <input
+              id="survey-opens"
+              type="date"
+              value={surveyForm.opensAtInput}
+              onChange={(event) => onSurveyChange({ opensAtInput: event.target.value })}
+            />
+          </div>
+          <div className="field">
             <label htmlFor="survey-closes">Închidere automată</label>
             <input
               id="survey-closes"
               type="date"
               value={surveyForm.closesAtInput}
               onChange={(event) => onSurveyChange({ closesAtInput: event.target.value })}
+            />
+          </div>
+        </div>
+        <div className="comms-form-row">
+          <div className="field">
+            <label htmlFor="survey-response-limit">Limită răspunsuri (canal privat)</label>
+            <input
+              id="survey-response-limit"
+              type="number"
+              min={1}
+              value={surveyForm.responseLimitInput}
+              onChange={(event) => onSurveyChange({ responseLimitInput: event.target.value })}
+              placeholder="Fără limită"
             />
           </div>
         </div>
@@ -252,6 +281,15 @@ export function SurveyCreateForm({
               placeholder="Scrie întrebarea..."
             />
           </div>
+          <div className="field">
+            <label htmlFor="question-title-en">Traducere EN (opțional)</label>
+            <input
+              id="question-title-en"
+              value={questionForm.titleEn}
+              onChange={(event) => onQuestionChange({ titleEn: event.target.value })}
+              placeholder="Question title in English..."
+            />
+          </div>
         </div>
         {questionForm.type === "MULTI_TEXT" ? (
           <div className="field">
@@ -312,6 +350,15 @@ export function SurveyCreateForm({
                   {index + 1}. {question.title}
                 </strong>
                 <span>{SURVEY_QUESTION_TYPE_LABELS[question.type]}</span>
+                <div className="field" style={{ marginTop: "0.35rem" }}>
+                  <label htmlFor={`q-en-${question.id}`}>EN</label>
+                  <input
+                    id={`q-en-${question.id}`}
+                    value={questionTitlesEn[question.id] ?? ""}
+                    onChange={(event) => onQuestionTitleEnChange(question.id, event.target.value)}
+                    placeholder="Traducere EN opțională"
+                  />
+                </div>
               </li>
             ))}
           </ul>

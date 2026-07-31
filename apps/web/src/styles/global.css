@@ -946,6 +946,15 @@ button {
   max-width: 28rem;
 }
 
+.ssm-panel-tabs--3 {
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+}
+
+.ssm-documents-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
 .ssm-panel-header .field-hint {
   margin: 0;
 }

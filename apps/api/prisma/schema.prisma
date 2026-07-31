@@ -1401,6 +1401,7 @@ model Survey {
   description         String?
   surveyType          SurveyType           @default(ENGAGEMENT)
   status              SurveyStatus       @default(DRAFT)
+  opensAt             DateTime?
   closesAt            DateTime?
   audienceType        SurveyAudienceType @default(ALL)
   audienceRefId       String?
@@ -1414,6 +1415,7 @@ model Survey {
   publicExpiresAt     DateTime?
   publicResponseLimit Int?
   publicResponseCount Int                @default(0)
+  responseLimit       Int?
   anonymousMode       Boolean            @default(false)
   emailNotifyOnPublish Boolean           @default(false)
   autoCreateTicket    Boolean            @default(false)
@@ -1429,6 +1431,7 @@ model Survey {
 
   @@index([tenantId, status, createdAt])
   @@index([tenantId, status, closesAt])
+  @@index([tenantId, status, opensAt])
   @@index([tenantId, audienceType, audienceRefId])
 }
 

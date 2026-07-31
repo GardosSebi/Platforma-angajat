@@ -96,6 +96,39 @@ export interface SurveyTranslation {
 
 export type SurveyTranslations = Record<string, SurveyTranslation>;
 
+export function localizeSurveyContent(
+  survey: {
+    title: string;
+    description?: string | null;
+    questionSchema: SurveyQuestion[];
+    translations?: SurveyTranslations | null;
+  },
+  locale?: string | null
+): { title: string; description?: string | null; questions: SurveyQuestion[] } {
+  const raw = (locale ?? "").trim().toLowerCase();
+  const candidates = raw ? [raw, raw.split("-")[0]!] : [];
+  let translation: SurveyTranslation | undefined;
+  for (const key of candidates) {
+    translation = survey.translations?.[key];
+    if (translation) break;
+  }
+  if (!translation) {
+    return {
+      title: survey.title,
+      description: survey.description,
+      questions: survey.questionSchema
+    };
+  }
+  return {
+    title: translation.title?.trim() || survey.title,
+    description: translation.description ?? survey.description,
+    questions: survey.questionSchema.map((question) => ({
+      ...question,
+      title: translation.questions?.[question.id]?.trim() || question.title
+    }))
+  };
+}
+
 export interface CreateSurveyRequest {
   title: string;
   description?: string;
@@ -113,7 +146,9 @@ export interface CreateSurveyRequest {
   autoCreateTicket?: boolean;
   autoTicketTitle?: string;
   autoTicketCategory?: string;
+  opensAt?: string;
   closesAt?: string;
+  responseLimit?: number;
 }
 
 export interface UpdateSurveyRequest {
@@ -134,7 +169,9 @@ export interface UpdateSurveyRequest {
   autoCreateTicket?: boolean;
   autoTicketTitle?: string;
   autoTicketCategory?: string;
-  closesAt?: string;
+  opensAt?: string | null;
+  closesAt?: string | null;
+  responseLimit?: number | null;
 }
 
 export interface SurveyItem {
@@ -143,6 +180,7 @@ export interface SurveyItem {
   description?: string | null;
   surveyType: SurveyType;
   status: SurveyStatus;
+  opensAt?: string | null;
   closesAt?: string | null;
   audienceType: SurveyAudienceType;
   audienceRefId?: string | null;
@@ -161,6 +199,7 @@ export interface SurveyItem {
   publicExpiresAt?: string | null;
   publicResponseLimit?: number | null;
   publicResponseCount: number;
+  responseLimit?: number | null;
   createdAt: string;
   updatedAt: string;
   stats: {
@@ -194,6 +233,21 @@ export interface SurveyStatsResponse {
   privateResponses: number;
   publicResponses: number;
   questionStats: SurveyQuestionStats[];
+}
+
+export interface SurveyResponseListItem {
+  id: string;
+  submittedAt: string;
+  channel: "PUBLIC" | "PRIVATE";
+  employeeId?: string | null;
+  employeeName?: string | null;
+  respondentUserId?: string | null;
+  answers: Record<string, SurveyAnswerValue>;
+}
+
+export interface SurveyResponsesListResponse {
+  surveyId: string;
+  items: SurveyResponseListItem[];
 }
 
 export interface SurveyPublicLinkResponse {

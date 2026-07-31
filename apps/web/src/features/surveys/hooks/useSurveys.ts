@@ -26,13 +26,22 @@ export function useSurveyStats(surveyId?: string) {
   });
 }
 
+export function useSurveyResponses(surveyId?: string) {
+  return useQuery({
+    queryKey: ["surveys", "responses", surveyId],
+    queryFn: () => surveysApi.listResponses(surveyId!),
+    enabled: Boolean(surveyId)
+  });
+}
+
 function useRefreshSurveys() {
   const queryClient = useQueryClient();
   return async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["surveys", "overview"] }),
       queryClient.invalidateQueries({ queryKey: ["surveys", "list"] }),
-      queryClient.invalidateQueries({ queryKey: ["surveys", "stats"] })
+      queryClient.invalidateQueries({ queryKey: ["surveys", "stats"] }),
+      queryClient.invalidateQueries({ queryKey: ["surveys", "responses"] })
     ]);
   };
 }

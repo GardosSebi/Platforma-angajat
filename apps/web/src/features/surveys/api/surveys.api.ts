@@ -4,6 +4,7 @@ import type {
   SubmitSurveyResponseRequest,
   SurveyItem,
   SurveyPublicLinkResponse,
+  SurveyResponsesListResponse,
   SurveyStatsResponse,
   UpdateSurveyRequest
 } from "@repo/shared-types/surveys";
@@ -91,6 +92,12 @@ export const surveysApi = {
   },
   stats(id: string) {
     return httpClient<SurveyStatsResponse>(`/surveys/${id}/stats`);
+  },
+  listResponses(id: string) {
+    return httpClient<SurveyResponsesListResponse>(`/surveys/${id}/responses`);
+  },
+  preview(id: string) {
+    return httpClient<SurveyItem>(`/surveys/${id}/preview`);
   },
   getExportUrl(id: string, type: "json" | "xlsx" | "pdf") {
     return `/surveys/${id}/export.${type}`;

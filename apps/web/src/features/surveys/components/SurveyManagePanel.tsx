@@ -1,11 +1,15 @@
-import type { SurveyItem, SurveyQuestionStats } from "@repo/shared-types/surveys";
-import { SURVEY_QUESTION_TYPE_LABELS } from "@repo/shared-types/surveys";
+import { useMemo, useState } from "react";
+import type { SurveyAnswerValue, SurveyItem, SurveyQuestionStats, SurveyResponseListItem } from "@repo/shared-types/surveys";
+import { localizeSurveyContent, SURVEY_QUESTION_TYPE_LABELS } from "@repo/shared-types/surveys";
 import { AUDIENCE_LABELS, SURVEY_STATUS_LABELS, formatSurveyDate } from "../surveys-shared";
+import { SurveyFormFiller } from "./SurveyFormFiller";
 
 type Props = {
   survey: SurveyItem | undefined;
   stats: SurveyQuestionStats[] | undefined;
   statsLoading: boolean;
+  responses: SurveyResponseListItem[] | undefined;
+  responsesLoading: boolean;
   canComplete: boolean;
   responded: boolean;
   openingSurveyId: string | null;
@@ -28,10 +32,19 @@ type Props = {
   onEdit?: () => void;
 };
 
+function formatAnswer(value: SurveyAnswerValue): string {
+  if (value === null || value === undefined) return "—";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Da" : "Nu";
+  return String(value);
+}
+
 export function SurveyManagePanel({
   survey,
   stats,
   statsLoading,
+  responses,
+  responsesLoading,
   canComplete,
   responded,
   openingSurveyId,
@@ -53,6 +66,20 @@ export function SurveyManagePanel({
   onBackToList,
   onEdit
 }: Props) {
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewLocale, setPreviewLocale] = useState("ro");
+  const [expandedResponseId, setExpandedResponseId] = useState<string | null>(null);
+
+  const localizedPreview = useMemo(() => {
+    if (!survey) return null;
+    return localizeSurveyContent(survey, previewLocale);
+  }, [survey, previewLocale]);
+
+  const localeOptions = useMemo(() => {
+    const keys = new Set(["ro", ...(Object.keys(survey?.translations ?? {}))]);
+    return Array.from(keys);
+  }, [survey?.translations]);
+
   if (!survey) {
     return (
       <section className="card comms-panel">
@@ -107,6 +134,12 @@ export function SurveyManagePanel({
           </div>
         </div>
 
+        <p className="field-hint">
+          {survey.opensAt ? `Deschidere: ${formatSurveyDate(survey.opensAt)} · ` : null}
+          {survey.closesAt ? `Închidere: ${formatSurveyDate(survey.closesAt)} · ` : null}
+          {survey.responseLimit ? `Limită privat: ${survey.responseLimit}` : "Fără limită pe canal privat"}
+        </p>
+
         <fieldset className="comms-fieldset">
           <legend>Acțiuni</legend>
           <div className="comms-inline-actions">
@@ -125,6 +158,16 @@ export function SurveyManagePanel({
                     : "Deschide și completează"}
               </button>
             ) : null}
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setShowPreview((prev) => !prev);
+                setPreviewLocale("ro");
+              }}
+            >
+              {showPreview ? "Închide previzualizarea" : "Previzualizare (fără salvare)"}
+            </button>
             {canEdit ? (
               <button type="button" className="btn-secondary" onClick={onEdit}>
                 Editează sondaj
@@ -139,10 +182,30 @@ export function SurveyManagePanel({
           </div>
         </fieldset>
 
+        {showPreview && localizedPreview ? (
+          <div className="survey-preview-wrap">
+            <SurveyFormFiller
+              key={`${survey.id}-${previewLocale}-preview`}
+              title={localizedPreview.title}
+              description={localizedPreview.description}
+              questions={localizedPreview.questions}
+              conditionalLogic={survey.conditionalLogic}
+              previewMode
+              localeToggle={{
+                available: localeOptions,
+                value: previewLocale,
+                onChange: setPreviewLocale
+              }}
+              onSubmit={async () => undefined}
+            />
+          </div>
+        ) : null}
+
         <fieldset className="comms-fieldset">
           <legend>Linkuri de distribuire</legend>
           <p className="field-hint">
             Link privat (autentificare): <code>{privateLink}</code>
+            {!survey.privateLinkEnabled ? " — dezactivat" : null}
           </p>
           <div className="comms-form-row">
             <div className="field">
@@ -155,7 +218,7 @@ export function SurveyManagePanel({
               />
             </div>
             <div className="field">
-              <label htmlFor="public-limit">Limită răspunsuri</label>
+              <label htmlFor="public-limit">Limită răspunsuri publice</label>
               <input
                 id="public-limit"
                 type="number"
@@ -227,6 +290,57 @@ export function SurveyManagePanel({
                 ) : null}
               </article>
             ))}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="card comms-panel">
+        <div className="comms-toolbar">
+          <div className="comms-toolbar-start">
+            <h2 className="card-title">Răspunsuri individuale</h2>
+            <p className="comms-toolbar-hint">{responses?.length ?? 0} înregistrări (max. 500)</p>
+          </div>
+        </div>
+        {responsesLoading ? <p className="field-hint">Se încarcă răspunsurile…</p> : null}
+        {!responsesLoading && (responses?.length ?? 0) === 0 ? (
+          <p className="field-hint">Niciun răspuns individual încă.</p>
+        ) : null}
+        {!responsesLoading && responses && responses.length > 0 ? (
+          <div className="survey-stats-list">
+            {responses.map((item) => {
+              const expanded = expandedResponseId === item.id;
+              return (
+                <article key={item.id} className="survey-stat-item">
+                  <div className="comms-inline-actions" style={{ justifyContent: "space-between", width: "100%" }}>
+                    <div>
+                      <strong>{formatSurveyDate(item.submittedAt)}</strong>
+                      <span>
+                        {" "}
+                        · {item.channel === "PUBLIC" ? "Public" : "Privat"}
+                        {item.employeeName ? ` · ${item.employeeName}` : survey.anonymousMode ? " · Anonim" : ""}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => setExpandedResponseId(expanded ? null : item.id)}
+                    >
+                      {expanded ? "Ascunde" : "Detalii"}
+                    </button>
+                  </div>
+                  {expanded ? (
+                    <ul className="survey-question-preview">
+                      {survey.questionSchema.map((question) => (
+                        <li key={question.id}>
+                          <strong>{question.title}</strong>
+                          <span>{formatAnswer(item.answers[question.id])}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         ) : null}
       </section>

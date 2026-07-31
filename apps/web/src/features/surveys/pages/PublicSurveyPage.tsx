@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { SurveyAnswerValue } from "@repo/shared-types/surveys";
+import { localizeSurveyContent } from "@repo/shared-types/surveys";
 import { Link, useParams } from "react-router-dom";
 import { submitPublicSurveyResponse, uploadPublicAnswerFile } from "../api/surveys.api";
 import { SurveyFormFiller } from "../components/SurveyFormFiller";
@@ -7,6 +9,7 @@ import { usePublicSurveyQuery } from "../hooks/useSurveys";
 export function PublicSurveyPage() {
   const { token } = useParams<{ token: string }>();
   const query = usePublicSurveyQuery(token);
+  const [locale, setLocale] = useState("ro");
 
   if (!token) {
     return (
@@ -48,6 +51,9 @@ export function PublicSurveyPage() {
   const survey = query.data;
   if (!survey) return null;
 
+  const localized = localizeSurveyContent(survey, locale);
+  const localeOptions = Array.from(new Set(["ro", ...Object.keys(survey.translations ?? {})]));
+
   const handleSubmit = async (answers: Record<string, SurveyAnswerValue>) => {
     await submitPublicSurveyResponse(token, { answers });
   };
@@ -62,10 +68,16 @@ export function PublicSurveyPage() {
           <span className="survey-fill-brand-text">Sondaj (link public)</span>
         </div>
         <SurveyFormFiller
-          title={survey.title}
-          description={survey.description}
-          questions={survey.questionSchema}
+          key={`${survey.id}-${locale}`}
+          title={localized.title}
+          description={localized.description}
+          questions={localized.questions}
           conditionalLogic={survey.conditionalLogic}
+          localeToggle={
+            localeOptions.length > 1
+              ? { available: localeOptions, value: locale, onChange: setLocale }
+              : undefined
+          }
           onSubmit={handleSubmit}
           onUploadFile={async (file) => {
             const uploaded = await uploadPublicAnswerFile(token, file);

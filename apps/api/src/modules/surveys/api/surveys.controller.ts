@@ -137,6 +137,12 @@ export class SurveysController {
     return this.surveys.stats(tenantId, id);
   }
 
+  @Get(":id/responses")
+  @RequirePermissions(Permission.SURVEYS_VIEW)
+  responses(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.surveys.listResponses(tenantId, id);
+  }
+
   @Get(":id/export.json")
   @RequirePermissions(Permission.SURVEYS_EXPORT)
   @Header("Content-Type", "application/json")

@@ -166,7 +166,9 @@ export class SurveysService {
         description: clean(dto.description),
         surveyType: dto.surveyType ?? SurveyType.ENGAGEMENT,
         audienceType: dto.audienceType ?? SurveyAudienceType.ALL,
+        opensAt: dto.opensAt ? parseDate(dto.opensAt) : undefined,
         closesAt: dto.closesAt ? parseDate(dto.closesAt) : undefined,
+        responseLimit: dto.responseLimit ?? null,
         audienceRefId: clean(dto.audienceRefId),
         audienceLabel: clean(dto.audienceLabel),
         targetEmployeeIds: dedupe(dto.targetEmployeeIds),
@@ -215,7 +217,9 @@ export class SurveysService {
         description: cleanNullable(dto.description),
         surveyType: dto.surveyType,
         status: dto.status,
+        opensAt: dto.opensAt === undefined ? undefined : dto.opensAt ? parseDate(dto.opensAt) : null,
         closesAt: dto.closesAt === undefined ? undefined : dto.closesAt ? parseDate(dto.closesAt) : null,
+        responseLimit: dto.responseLimit === undefined ? undefined : dto.responseLimit,
         audienceType: dto.audienceType,
         audienceRefId: dto.audienceRefId === undefined ? undefined : clean(dto.audienceRefId) ?? null,
         audienceLabel: dto.audienceLabel === undefined ? undefined : clean(dto.audienceLabel) ?? null,
@@ -268,9 +272,10 @@ export class SurveysService {
 
   async getForRespond(tenantId: string, id: string, userId: string, email: string) {
     const survey = await this.assertSurvey(tenantId, id);
-    if (survey.status !== SurveyStatus.ACTIVE) {
-      throw new BadRequestException("Sondajul nu este activ.");
+    if (!survey.privateLinkEnabled) {
+      throw new ForbiddenException("Linkul privat este dezactivat pentru acest sondaj.");
     }
+    this.assertCanRespond(survey);
     const employeeId = await findEmployeeIdForUserEmail(this.prisma, tenantId, email);
     await this.assertEmployeeMayRespondToSurvey(tenantId, survey, employeeId);
     const existing = await this.findUserSurveyResponse(tenantId, id, userId);
@@ -311,6 +316,12 @@ export class SurveysService {
     const items: Array<{ id: string; title: string; description: string | null; alreadyResponded: boolean }> = [];
 
     for (const survey of surveys) {
+      if (!survey.privateLinkEnabled) continue;
+      try {
+        this.assertCanRespond(survey);
+      } catch {
+        continue;
+      }
       const audienceIds = await this.resolveSurveyAudienceEmployeeIds(tenantId, survey);
       if (!audienceIds.includes(employeeId)) {
         continue;
@@ -427,6 +438,7 @@ export class SurveysService {
 
   async publicSurvey(token: string) {
     const survey = await this.assertPublicSurvey(token);
+    this.assertCanRespond(survey);
     return this.serializeSurvey(survey, { responseCount: 0, privateResponses: 0, publicResponses: 0 });
   }
 
@@ -438,7 +450,11 @@ export class SurveysService {
     email: string
   ) {
     const survey = await this.assertSurvey(tenantId, surveyId);
+    if (!survey.privateLinkEnabled) {
+      throw new ForbiddenException("Linkul privat este dezactivat pentru acest sondaj.");
+    }
     this.assertCanRespond(survey);
+    await this.assertPrivateResponseLimit(tenantId, survey);
     const resolvedEmployeeId =
       clean(dto.employeeId) ?? (await findEmployeeIdForUserEmail(this.prisma, tenantId, email)) ?? undefined;
     await this.assertEmployeeMayRespondToSurvey(tenantId, survey, resolvedEmployeeId ?? null);
@@ -499,6 +515,28 @@ export class SurveysService {
     return this.buildStats(survey, responses);
   }
 
+  async listResponses(tenantId: string, id: string) {
+    await this.assertSurvey(tenantId, id);
+    const responses = await this.prisma.surveyResponse.findMany({
+      where: { tenantId, surveyId: id },
+      include: { employee: { select: { id: true, fullName: true } } },
+      orderBy: { submittedAt: "desc" },
+      take: 500
+    });
+    return {
+      surveyId: id,
+      items: responses.map((row) => ({
+        id: row.id,
+        submittedAt: row.submittedAt.toISOString(),
+        channel: row.publicToken ? ("PUBLIC" as const) : ("PRIVATE" as const),
+        employeeId: row.employeeId,
+        employeeName: row.employee?.fullName ?? null,
+        respondentUserId: row.respondentUserId,
+        answers: row.answersJson as Record<string, AnswerValue>
+      }))
+    };
+  }
+
   async exportJson(tenantId: string, id: string) {
     const rows = await this.exportRows(tenantId, id);
     return Buffer.from(JSON.stringify({ surveyId: id, rows }, null, 2), "utf8");
@@ -537,6 +575,23 @@ export class SurveysService {
   private assertCanRespond(survey: Survey) {
     if (survey.status !== SurveyStatus.ACTIVE) {
       throw new BadRequestException("Survey is not active.");
+    }
+    const now = Date.now();
+    if (survey.opensAt && survey.opensAt.getTime() > now) {
+      throw new BadRequestException("Sondajul nu este încă deschis pentru răspunsuri.");
+    }
+    if (survey.closesAt && survey.closesAt.getTime() < now) {
+      throw new BadRequestException("Perioada de răspuns pentru acest sondaj s-a încheiat.");
+    }
+  }
+
+  private async assertPrivateResponseLimit(tenantId: string, survey: Survey) {
+    if (!survey.responseLimit) return;
+    const privateCount = await this.prisma.surveyResponse.count({
+      where: { tenantId, surveyId: survey.id, publicToken: null }
+    });
+    if (privateCount >= survey.responseLimit) {
+      throw new BadRequestException("Limita de răspunsuri private a fost atinsă.");
     }
   }
 
@@ -641,6 +696,7 @@ export class SurveysService {
       description: survey.description,
       surveyType: survey.surveyType,
       status: survey.status,
+      opensAt: survey.opensAt,
       closesAt: survey.closesAt,
       audienceType: survey.audienceType,
       audienceRefId: survey.audienceRefId,
@@ -659,6 +715,7 @@ export class SurveysService {
       publicExpiresAt: survey.publicExpiresAt,
       publicResponseLimit: survey.publicResponseLimit,
       publicResponseCount: survey.publicResponseCount,
+      responseLimit: survey.responseLimit,
       createdAt: survey.createdAt,
       updatedAt: survey.updatedAt,
       stats: {

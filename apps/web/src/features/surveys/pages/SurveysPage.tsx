@@ -20,6 +20,7 @@ import {
   useCreatePublicSurveyLink,
   useCreateSurvey,
   useRespondedSurveyIds,
+  useSurveyResponses,
   useSurveyStats,
   useSurveys,
   useSurveysOverview,
@@ -46,13 +47,16 @@ const EMPTY_SURVEY: SurveyFormState = {
   autoTicketCategory: "",
   translationRoTitle: "",
   translationEnTitle: "",
-  closesAtInput: ""
+  opensAtInput: "",
+  closesAtInput: "",
+  responseLimitInput: ""
 };
 
 const EMPTY_QUESTION: QuestionFormState = {
   id: "q1",
   type: "SINGLE_CHOICE",
   title: "",
+  titleEn: "",
   required: true,
   options: [
     { value: "Foarte bine", label: "Foarte bine" },
@@ -109,6 +113,7 @@ export function SurveysPage() {
   const [surveyForm, setSurveyForm] = useState<SurveyFormState>(EMPTY_SURVEY);
   const [questionForm, setQuestionForm] = useState<QuestionFormState>(EMPTY_QUESTION);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
+  const [questionTitlesEn, setQuestionTitlesEn] = useState<Record<string, string>>({});
   const [conditionalLogic, setConditionalLogic] = useState<SurveyConditionalRule[]>([]);
   const [editingSurveyId, setEditingSurveyId] = useState<string | null>(null);
   const [selectedSurveyId, setSelectedSurveyId] = useState("");
@@ -121,6 +126,7 @@ export function SurveysPage() {
   const [openingSurveyId, setOpeningSurveyId] = useState<string | null>(null);
 
   const statsQuery = useSurveyStats(selectedSurveyId || undefined);
+  const responsesQuery = useSurveyResponses(tab === "manage" ? selectedSurveyId || undefined : undefined);
   const canComplete = canOpenSurveyToComplete(session?.roles);
   const respondedIdsQuery = useRespondedSurveyIds(canComplete);
   const respondedSurveyIds = respondedIdsQuery.data ?? new Set<string>();
@@ -187,8 +193,12 @@ export function SurveysPage() {
       setCreateFeedback({ type: "error", message: "Completează întrebarea și, dacă este cazul, opțiunile." });
       return;
     }
-    setQuestions((prev) => [...prev, buildQuestionFromForm(prev.length + 1)]);
-    setQuestionForm((prev) => ({ ...prev, id: `q${questions.length + 2}`, title: "" }));
+    const next = buildQuestionFromForm(questions.length + 1);
+    setQuestions((prev) => [...prev, next]);
+    if (questionForm.titleEn.trim()) {
+      setQuestionTitlesEn((prev) => ({ ...prev, [next.id]: questionForm.titleEn.trim() }));
+    }
+    setQuestionForm((prev) => ({ ...prev, id: `q${questions.length + 2}`, title: "", titleEn: "" }));
   };
 
   const onAudienceRefChange = (value: string) => {
@@ -200,6 +210,7 @@ export function SurveysPage() {
     setEditingSurveyId(null);
     setSurveyForm(EMPTY_SURVEY);
     setQuestions([]);
+    setQuestionTitlesEn({});
     setConditionalLogic([]);
     setQuestionForm(EMPTY_QUESTION);
     setCreateFeedback(null);
@@ -229,9 +240,12 @@ export function SurveysPage() {
       autoTicketCategory: survey.autoTicketCategory ?? "",
       translationRoTitle: survey.translations?.ro?.title ?? "",
       translationEnTitle: survey.translations?.en?.title ?? "",
-      closesAtInput: survey.closesAt ? survey.closesAt.slice(0, 10) : ""
+      opensAtInput: survey.opensAt ? survey.opensAt.slice(0, 10) : "",
+      closesAtInput: survey.closesAt ? survey.closesAt.slice(0, 10) : "",
+      responseLimitInput: survey.responseLimit != null ? String(survey.responseLimit) : ""
     });
     setQuestions(survey.questionSchema);
+    setQuestionTitlesEn(survey.translations?.en?.questions ?? {});
     setConditionalLogic(survey.conditionalLogic ?? []);
     setQuestionForm(EMPTY_QUESTION);
     setSelectedSurveyId(survey.id);
@@ -248,18 +262,33 @@ export function SurveysPage() {
 
   const buildSurveyPayload = (): CreateSurveyRequest => {
     const questionSchema = questions.length > 0 ? questions : [buildQuestionFromForm(1)];
+    const enQuestions: Record<string, string> = { ...questionTitlesEn };
+    if (questions.length === 0 && questionForm.titleEn.trim()) {
+      enQuestions[questionSchema[0]!.id] = questionForm.titleEn.trim();
+    }
     const translations: CreateSurveyRequest["translations"] = {};
     if (surveyForm.translationRoTitle.trim()) {
       translations.ro = { title: surveyForm.translationRoTitle.trim(), description: surveyForm.description };
     }
-    if (surveyForm.translationEnTitle.trim()) {
-      translations.en = { title: surveyForm.translationEnTitle.trim() };
+    const cleanedEnQuestions = Object.fromEntries(
+      Object.entries(enQuestions).filter(([, title]) => title.trim().length > 0)
+    );
+    if (surveyForm.translationEnTitle.trim() || Object.keys(cleanedEnQuestions).length > 0) {
+      translations.en = {
+        title: surveyForm.translationEnTitle.trim() || surveyForm.title.trim(),
+        ...(Object.keys(cleanedEnQuestions).length ? { questions: cleanedEnQuestions } : {})
+      };
     }
+    const responseLimit = surveyForm.responseLimitInput.trim()
+      ? Number(surveyForm.responseLimitInput)
+      : undefined;
     return {
       title: surveyForm.title.trim(),
       description: surveyForm.description?.trim() || undefined,
       surveyType: surveyForm.surveyType,
+      opensAt: surveyForm.opensAtInput ? new Date(`${surveyForm.opensAtInput}T00:00:00`).toISOString() : undefined,
       closesAt: surveyForm.closesAtInput ? new Date(`${surveyForm.closesAtInput}T23:59:59`).toISOString() : undefined,
+      responseLimit: responseLimit && Number.isFinite(responseLimit) && responseLimit > 0 ? responseLimit : undefined,
       audienceType: surveyForm.audienceType,
       audienceRefId: surveyForm.audienceRefId || undefined,
       audienceLabel: surveyForm.audienceLabel || undefined,
@@ -290,6 +319,9 @@ export function SurveysPage() {
     if (editingSurveyId) {
       const updatePayload: UpdateSurveyRequest = {
         ...payload,
+        opensAt: surveyForm.opensAtInput ? payload.opensAt! : null,
+        closesAt: surveyForm.closesAtInput ? payload.closesAt! : null,
+        responseLimit: payload.responseLimit ?? null,
         conditionalLogic: conditionalLogic
       };
       updateSurvey.mutate(
@@ -468,6 +500,7 @@ export function SurveysPage() {
           surveyForm={surveyForm}
           questionForm={questionForm}
           questions={questions}
+          questionTitlesEn={questionTitlesEn}
           conditionalLogic={conditionalLogic}
           audienceOptions={audienceOptions}
           canSave={canSaveSurvey}
@@ -475,6 +508,9 @@ export function SurveysPage() {
           feedback={createFeedback}
           onSurveyChange={(patch) => setSurveyForm((prev) => ({ ...prev, ...patch }))}
           onQuestionChange={(patch) => setQuestionForm((prev) => ({ ...prev, ...patch }))}
+          onQuestionTitleEnChange={(questionId, titleEn) =>
+            setQuestionTitlesEn((prev) => ({ ...prev, [questionId]: titleEn }))
+          }
           onAudienceRefChange={onAudienceRefChange}
           onAddQuestion={addQuestion}
           onUpdateOption={(index, label) =>
@@ -511,6 +547,8 @@ export function SurveysPage() {
           survey={selectedSurvey}
           stats={statsQuery.data?.questionStats}
           statsLoading={statsQuery.isLoading}
+          responses={responsesQuery.data?.items}
+          responsesLoading={responsesQuery.isLoading}
           canComplete={canComplete}
           responded={selectedSurvey ? respondedSurveyIds.has(selectedSurvey.id) : false}
           openingSurveyId={openingSurveyId}

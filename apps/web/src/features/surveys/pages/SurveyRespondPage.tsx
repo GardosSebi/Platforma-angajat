@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SurveyAnswerValue } from "@repo/shared-types/surveys";
+import { localizeSurveyContent } from "@repo/shared-types/surveys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { surveysApi } from "../api/surveys.api";
@@ -17,6 +18,7 @@ export function SurveyRespondPage() {
   const isEmployee = isEmployeePortalUser(session);
   const linkedEmployeeId = requireLinkedEmployeeId(session);
   const surveysHome = isEmployee ? "/portal?tab=surveys" : "/surveys";
+  const [locale, setLocale] = useState("ro");
 
   useEffect(() => {
     if (!surveyId) return;
@@ -112,6 +114,9 @@ export function SurveyRespondPage() {
     );
   }
 
+  const localized = localizeSurveyContent(survey, locale);
+  const localeOptions = Array.from(new Set(["ro", ...Object.keys(survey.translations ?? {})]));
+
   const handleSubmit = async (answers: Record<string, SurveyAnswerValue>) => {
     await surveysApi.submitResponse(surveyId, {
       answers,
@@ -140,10 +145,16 @@ export function SurveyRespondPage() {
           </p>
         ) : null}
         <SurveyFormFiller
-          title={survey.title}
-          description={survey.description}
-          questions={survey.questionSchema}
+          key={`${survey.id}-${locale}`}
+          title={localized.title}
+          description={localized.description}
+          questions={localized.questions}
           conditionalLogic={survey.conditionalLogic}
+          localeToggle={
+            localeOptions.length > 1
+              ? { available: localeOptions, value: locale, onChange: setLocale }
+              : undefined
+          }
           onSubmit={handleSubmit}
           onUploadFile={async (file) => {
             const uploaded = await surveysApi.uploadAnswerFile(surveyId, file);

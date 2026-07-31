@@ -13,6 +13,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested
 } from "class-validator";
 
@@ -151,7 +152,17 @@ export class CreateSurveyDto {
 
   @IsOptional()
   @IsDateString()
+  opensAt?: string;
+
+  @IsOptional()
+  @IsDateString()
   closesAt?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  responseLimit?: number;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -216,8 +227,21 @@ export class UpdateSurveyDto {
   surveyType?: SurveyTypeCode;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null)
   @IsDateString()
-  closesAt?: string;
+  opensAt?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsDateString()
+  closesAt?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  responseLimit?: number | null;
 
   @IsOptional()
   @IsIn(AUDIENCE_TYPES)
