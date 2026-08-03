@@ -1,4 +1,4 @@
-﻿-- AlterTable
+-- AlterTable
 ALTER TABLE "SsmDocumentTemplate" ADD COLUMN "fileName" TEXT;
 ALTER TABLE "SsmDocumentTemplate" ADD COLUMN "mimeType" TEXT;
 ALTER TABLE "SsmDocumentTemplate" ADD COLUMN "fileSize" INTEGER;

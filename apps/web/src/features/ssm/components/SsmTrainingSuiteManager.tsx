@@ -973,9 +973,21 @@ export function SsmTrainingSuiteManager() {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={async () => {
-                  const data = await ssmApi.employeeDigitalFile(digitalEmployeeId);
-                  setDossierData(data);
+                disabled={!digitalEmployeeId.trim()}
+                onClick={() => {
+                  const id = digitalEmployeeId.trim();
+                  if (!id) {
+                    setDownloadError("Selectează un angajat.");
+                    return;
+                  }
+                  setDownloadError(null);
+                  void ssmApi
+                    .employeeDigitalFile(id)
+                    .then((data) => setDossierData(data))
+                    .catch((err: unknown) => {
+                      setDossierData(null);
+                      setDownloadError(mutationErrorMessage(err));
+                    });
                 }}
               >
                 Încarcă dosar
@@ -983,15 +995,23 @@ export function SsmTrainingSuiteManager() {
               <button
                 type="button"
                 className="btn-secondary"
+                disabled={!digitalEmployeeId.trim()}
                 onClick={() => {
                   const id = digitalEmployeeId.trim();
-                  if (!id) return;
-                  void downloadWithAuth(ssmApi.getDigitalFileZipUrl(id), `dosar-${id}.zip`);
+                  if (!id) {
+                    setDownloadError("Selectează un angajat.");
+                    return;
+                  }
+                  setDownloadError(null);
+                  void downloadWithAuth(ssmApi.getDigitalFileZipUrl(id), `dosar-${id}.zip`).catch(
+                    (err: unknown) => setDownloadError(mutationErrorMessage(err))
+                  );
                 }}
               >
                 Export ZIP
               </button>
             </div>
+            {downloadError ? <p className="feedback error">{downloadError}</p> : null}
             {dossierData ? (
               <div className="ssm-history-list">
                 <p className="field-hint">{dossierData.trainings.length} instruiri în dosar</p>
