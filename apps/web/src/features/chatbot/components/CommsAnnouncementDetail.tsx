@@ -1,5 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import type { CommunicationAnnouncementItem } from "@repo/shared-types/communications";
 import { COMMUNICATION_CATEGORY_LABELS } from "@repo/shared-types/communications";
+import { chatbotApi } from "../api/chatbot.api";
 import {
   AUDIENCE_LABELS,
   CONTENT_TYPE_LABELS,
@@ -10,6 +12,7 @@ import {
   formatCommsDate,
   statusTone
 } from "../comms-shared";
+import { CommsMediaPreview } from "./CommsMediaPreview";
 
 type Props = {
   announcement: CommunicationAnnouncementItem | undefined;
@@ -41,6 +44,13 @@ export function CommsAnnouncementDetail({
   const translationEntries = Object.entries(announcement?.translations ?? {}).filter(
     ([, value]) => value.title?.trim() || value.body?.trim()
   );
+  const isQuestion = announcement?.messageType === "QUESTION";
+
+  const answersQuery = useQuery({
+    queryKey: ["chatbot", "announcement-answers", announcement?.id],
+    queryFn: () => chatbotApi.listAnnouncementAnswers(announcement!.id),
+    enabled: Boolean(announcement?.id && isQuestion)
+  });
 
   return (
     <div className="comms-modal-backdrop" role="presentation" onClick={onClose}>
@@ -120,11 +130,12 @@ export function CommsAnnouncementDetail({
             ) : null}
 
             {announcement.contentUrl ? (
-              <p className="comms-modal-link">
-                <a href={announcement.contentUrl} target="_blank" rel="noreferrer">
-                  Deschide link / document
-                </a>
-              </p>
+              <div className="comms-modal-link">
+                <CommsMediaPreview
+                  contentUrl={announcement.contentUrl}
+                  contentType={announcement.contentType}
+                />
+              </div>
             ) : null}
 
             {announcement.contentType === "BUTTON" && announcement.buttonUrl ? (
@@ -145,6 +156,10 @@ export function CommsAnnouncementDetail({
               </div>
               <p className="text-muted small">
                 {announcement.stats.readCount} din {announcement.stats.targetCount} angajați au citit
+                {" · "}
+                {announcement.stats.reminderCount ?? 0} remindere trimise
+                {isQuestion ? ` · ${announcement.stats.answerCount ?? 0} răspunsuri` : ""}
+                {announcement.stats.reactionCount ? ` · ${announcement.stats.reactionCount} reacții` : ""}
               </p>
             </div>
 
@@ -162,10 +177,45 @@ export function CommsAnnouncementDetail({
                 <dd>{formatCommsDate(announcement.reminderAt)}</dd>
               </div>
               <div>
+                <dt>Remindere</dt>
+                <dd>{announcement.stats.reminderCount ?? 0}</dd>
+              </div>
+              <div>
                 <dt>Creat</dt>
                 <dd>{formatCommsDate(announcement.createdAt)}</dd>
               </div>
+              {announcement.createdByName ? (
+                <div>
+                  <dt>Autor</dt>
+                  <dd>{announcement.createdByName}</dd>
+                </div>
+              ) : null}
             </dl>
+
+            {isQuestion ? (
+              <section className="comms-detail-section" aria-labelledby="comms-answers-heading">
+                <h3 id="comms-answers-heading" className="comms-detail-section-title">
+                  Răspunsuri ({announcement.stats.answerCount ?? answersQuery.data?.items.length ?? 0})
+                </h3>
+                {answersQuery.isLoading ? <p className="field-hint">Se încarcă răspunsurile…</p> : null}
+                {answersQuery.isError ? (
+                  <p className="feedback error">Nu s-au putut încărca răspunsurile.</p>
+                ) : null}
+                {(answersQuery.data?.items ?? []).length === 0 && !answersQuery.isLoading ? (
+                  <p className="field-hint">Niciun răspuns încă.</p>
+                ) : (
+                  <ul className="comms-answers-list">
+                    {(answersQuery.data?.items ?? []).map((answer) => (
+                      <li key={answer.id}>
+                        <strong>{answer.employeeName ?? answer.employeeId}</strong>
+                        <span className="text-muted small">{formatCommsDate(answer.createdAt)}</span>
+                        <p>{answer.answerText}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
 
             {canEdit ? (
               <div className="comms-modal-actions">

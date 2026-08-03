@@ -69,6 +69,7 @@ function useRefreshChatbot() {
       queryClient.invalidateQueries({ queryKey: ["chatbot", "dashboard"] }),
       queryClient.invalidateQueries({ queryKey: ["chatbot", "announcements"] }),
       queryClient.invalidateQueries({ queryKey: ["chatbot", "announcement"] }),
+      queryClient.invalidateQueries({ queryKey: ["chatbot", "announcement-answers"] }),
       queryClient.invalidateQueries({ queryKey: ["chatbot", "reminders"] }),
       queryClient.invalidateQueries({ queryKey: ["chatbot", "templates"] })
     ]);

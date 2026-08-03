@@ -1,4 +1,20 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  StreamableFile,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -14,6 +30,7 @@ import {
   CreateTemplateDto,
   MarkAnnouncementReadDto,
   SetAnnouncementReactionDto,
+  SubmitAnnouncementAnswerDto,
   UpdateAnnouncementDto,
   UpdateTemplateDto
 } from "./dto/communications.dto";
@@ -32,6 +49,42 @@ export class CommunicationsController {
   @RequirePermissions(Permission.COMMUNICATIONS_DASHBOARD_VIEW)
   dashboard(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
     return this.communications.dashboard(tenantId, user);
+  }
+
+  @Post("media")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_EDIT)
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: { fileSize: 50 * 1024 * 1024 }
+    })
+  )
+  uploadMedia(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    if (!file?.buffer) {
+      throw new BadRequestException("Missing multipart field 'file'");
+    }
+    return this.communications.uploadMedia(tenantId, user.sub, {
+      originalName: file.originalname,
+      buffer: file.buffer,
+      mimeType: file.mimetype
+    });
+  }
+
+  @Get("media")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
+  async streamMedia(@TenantId() tenantId: string, @Query("path") path?: string) {
+    if (!path?.trim()) {
+      throw new BadRequestException("Query param 'path' is required");
+    }
+    const { stream, mimeType, fileName } = await this.communications.streamMedia(tenantId, path);
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: `inline; filename="${fileName.replace(/"/g, "")}"`
+    });
   }
 
   @Get("announcements")
@@ -115,6 +168,23 @@ export class CommunicationsController {
     @Body() dto: SetAnnouncementReactionDto
   ) {
     return this.communications.setReaction(tenantId, id, dto, user);
+  }
+
+  @Post("announcements/:id/answer")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
+  submitAnswer(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: SubmitAnnouncementAnswerDto
+  ) {
+    return this.communications.submitAnswer(tenantId, id, dto, user);
+  }
+
+  @Get("announcements/:id/answers")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
+  listAnswers(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.communications.listAnswers(tenantId, id, user);
   }
 
   @Get("calendar")

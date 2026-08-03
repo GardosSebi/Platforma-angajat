@@ -50,6 +50,7 @@ import { CommsAnnouncementDetail } from "../components/CommsAnnouncementDetail";
 import { CommsAnnouncementForm, type AnnouncementFormState } from "../components/CommsAnnouncementForm";
 import { CommsAnnouncementList } from "../components/CommsAnnouncementList";
 import { CommsCalendarPanel } from "../components/CommsCalendarPanel";
+import { CommsLatestAnnouncementsPanel } from "../components/CommsLatestAnnouncementsPanel";
 import { CommsUsagePanel } from "../components/CommsUsagePanel";
 import { CommsRemindersPanel } from "../components/CommsRemindersPanel";
 import { CommsTemplatesPanel } from "../components/CommsTemplatesPanel";
@@ -477,6 +478,16 @@ export function ChatbotPage() {
             <strong>{kpi.activeEmployees}</strong>
           </div>
         </div>
+      ) : null}
+
+      {canViewDashboard && dashboardQuery.data?.latestAnnouncements ? (
+        <CommsLatestAnnouncementsPanel
+          items={dashboardQuery.data.latestAnnouncements}
+          onSelect={(id) => {
+            setOpenedAnnouncementId(id);
+            setTab("list");
+          }}
+        />
       ) : null}
 
       <nav className="comms-tabs comms-section-nav" aria-label="Secțiuni comunicări">

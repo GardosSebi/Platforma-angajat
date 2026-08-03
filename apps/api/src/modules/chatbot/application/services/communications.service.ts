@@ -18,6 +18,7 @@ import {
   CreateTemplateDto,
   MarkAnnouncementReadDto,
   SetAnnouncementReactionDto,
+  SubmitAnnouncementAnswerDto,
   UpdateAnnouncementDto,
   UpdateTemplateDto
 } from "../../api/dto/communications.dto";
@@ -32,6 +33,7 @@ import {
 } from "../../../../common/worksite-viewer-scope";
 import { CommunicationRightsService } from "./communication-rights.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
+import { LocalFileStorageService } from "../../../../infrastructure/files/local-file-storage.service";
 
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
@@ -86,7 +88,8 @@ export class CommunicationsService {
     private readonly auditLog: AuditLogService,
     private readonly notifications: NotificationsService,
     private readonly publishRights: CommunicationRightsService,
-    private readonly mail: MailService
+    private readonly mail: MailService,
+    private readonly files: LocalFileStorageService
   ) {}
 
   private async scopeFor(viewer?: JwtPayload, tenantId?: string): Promise<WorksiteViewerScope> {
@@ -108,8 +111,8 @@ export class CommunicationsService {
         include: { readReceipts: { select: { employeeId: true } } }
       }),
       this.prisma.communicationAnnouncement.findMany({
-        where: { tenantId },
-        orderBy: { createdAt: "desc" },
+        where: { tenantId, status: CommunicationAnnouncementStatus.PUBLISHED },
+        orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }],
         take: 5
       }),
       this.prisma.communicationAnnouncement.findMany({
@@ -134,7 +137,7 @@ export class CommunicationsService {
     const digitalizationRate = employeesWithAccounts
       ? Math.round((activeUsers / employeesWithAccounts) * 100)
       : 0;
-    const latestAnnouncements = await this.withStats(tenantId, latest, scope);
+    const latestAnnouncements = await this.withStats(tenantId, latest, scope, viewer);
     const totals = latestAnnouncements.reduce(
       (acc, item) => ({
         targetCount: acc.targetCount + item.stats.targetCount,
@@ -208,7 +211,7 @@ export class CommunicationsService {
     });
     const scopedRows = await this.filterAnnouncementsForScope(tenantId, allRows, scope);
     const pageRows = scopedRows.slice(p.skip, p.skip + p.take);
-    const items = await this.withStats(tenantId, pageRows, scope);
+    const items = await this.withStats(tenantId, pageRows, scope, viewer);
     return paginatedResult(items, scopedRows.length, p.page, p.pageSize);
   }
 
@@ -453,6 +456,141 @@ export class CommunicationsService {
     });
   }
 
+  async submitAnswer(
+    tenantId: string,
+    announcementId: string,
+    dto: SubmitAnnouncementAnswerDto,
+    viewer?: JwtPayload
+  ) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    const announcement = await this.assertAnnouncementVisible(tenantId, announcementId, scope);
+    if (announcement.messageType !== CommunicationMessageType.QUESTION) {
+      throw new BadRequestException("Doar mesajele de tip Întrebare acceptă răspunsuri.");
+    }
+    if (announcement.status !== CommunicationAnnouncementStatus.PUBLISHED) {
+      throw new BadRequestException("Poți răspunde doar la întrebări publicate.");
+    }
+    const answerText = dto.answerText.trim();
+    if (!answerText) {
+      throw new BadRequestException("Răspunsul nu poate fi gol.");
+    }
+    await assertEmployeeInWorksiteScope(this.prisma, tenantId, dto.employeeId, scope);
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: dto.employeeId, tenantId, active: true }
+    });
+    if (!employee) {
+      throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
+    }
+    const saved = await this.prisma.communicationAnnouncementAnswer.upsert({
+      where: { announcementId_employeeId: { announcementId, employeeId: employee.id } },
+      create: {
+        tenantId,
+        announcementId,
+        employeeId: employee.id,
+        answerText
+      },
+      update: { answerText }
+    });
+    await this.prisma.communicationAnnouncementRead.upsert({
+      where: { announcementId_employeeId: { announcementId, employeeId: employee.id } },
+      create: { tenantId, announcementId, employeeId: employee.id },
+      update: { readAt: new Date() }
+    });
+    return {
+      id: saved.id,
+      announcementId: saved.announcementId,
+      employeeId: saved.employeeId,
+      employeeName: employee.fullName,
+      answerText: saved.answerText,
+      createdAt: saved.createdAt,
+      updatedAt: saved.updatedAt
+    };
+  }
+
+  async listAnswers(tenantId: string, announcementId: string, viewer?: JwtPayload) {
+    const scope = await this.scopeFor(viewer, tenantId);
+    await this.assertAnnouncementVisible(tenantId, announcementId, scope);
+    const rows = await this.prisma.communicationAnnouncementAnswer.findMany({
+      where: { tenantId, announcementId },
+      include: { employee: { select: { id: true, fullName: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        announcementId: row.announcementId,
+        employeeId: row.employeeId,
+        employeeName: row.employee.fullName,
+        answerText: row.answerText,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt
+      }))
+    };
+  }
+
+  async uploadMedia(
+    tenantId: string,
+    actorId: string,
+    file: { originalName: string; buffer: Buffer; mimeType?: string }
+  ) {
+    if (!file.buffer?.length) {
+      throw new BadRequestException("Missing file content");
+    }
+    const allowed = /^(image\/|video\/|application\/pdf|application\/vnd\.|application\/msword|application\/octet-stream|text\/)/i;
+    if (file.mimeType && !allowed.test(file.mimeType)) {
+      throw new BadRequestException("Tip de fișier neacceptat. Folosește imagine, video, PDF sau document.");
+    }
+    const saved = await this.files.saveUploadedFile({
+      tenantId,
+      originalName: file.originalName,
+      buffer: file.buffer,
+      mimeType: file.mimeType
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "COMMUNICATIONS",
+      action: "MEDIA_UPLOADED",
+      entityType: "CommunicationMedia",
+      entityId: saved.id,
+      payload: { path: saved.relativePath, size: saved.size, fileName: file.originalName }
+    });
+    return {
+      fileId: saved.id,
+      path: saved.relativePath,
+      contentUrl: saved.relativePath,
+      fileName: file.originalName,
+      mimeType: file.mimeType ?? "application/octet-stream",
+      size: saved.size
+    };
+  }
+
+  async streamMedia(tenantId: string, relativePath: string) {
+    const opened = await this.files.openTenantFile(tenantId, relativePath);
+    const lower = opened.fileName.toLowerCase();
+    let mimeType = "application/octet-stream";
+    if (/\.(png|jpe?g|gif|webp|svg)$/.test(lower)) {
+      mimeType = lower.endsWith(".png")
+        ? "image/png"
+        : lower.endsWith(".gif")
+          ? "image/gif"
+          : lower.endsWith(".webp")
+            ? "image/webp"
+            : lower.endsWith(".svg")
+              ? "image/svg+xml"
+              : "image/jpeg";
+    } else if (/\.(mp4|webm|ogg)$/.test(lower)) {
+      mimeType = lower.endsWith(".webm") ? "video/webm" : lower.endsWith(".ogg") ? "video/ogg" : "video/mp4";
+    } else if (lower.endsWith(".pdf")) {
+      mimeType = "application/pdf";
+    }
+    return {
+      stream: opened.stream,
+      mimeType,
+      fileName: opened.fileName
+    };
+  }
+
   async publishDueScheduled(tenantId: string, actorId: string) {
     const now = new Date();
     const due = await this.prisma.communicationAnnouncement.findMany({
@@ -528,7 +666,7 @@ export class CommunicationsService {
       take: 80
     });
     const scopedRows = await this.filterAnnouncementsForScope(tenantId, rows, scope);
-    const withStats = await this.withStats(tenantId, scopedRows, scope);
+    const withStats = await this.withStats(tenantId, scopedRows, scope, viewer);
     return withStats.map((item) => ({
       announcementId: item.id,
       title: item.title,
@@ -772,7 +910,7 @@ export class CommunicationsService {
   async getAnnouncement(tenantId: string, id: string, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
     const row = await this.assertAnnouncementVisible(tenantId, id, scope);
-    const [item] = await this.withStats(tenantId, [row], scope);
+    const [item] = await this.withStats(tenantId, [row], scope, viewer);
     return item;
   }
 
@@ -954,7 +1092,8 @@ export class CommunicationsService {
   private async withStats(
     tenantId: string,
     rows: CommunicationAnnouncement[],
-    scope: WorksiteViewerScope = { mode: "tenant" }
+    scope: WorksiteViewerScope = { mode: "tenant" },
+    viewer?: JwtPayload
   ) {
     const creatorIds = [...new Set(rows.map((r) => r.createdBy))];
     const creators = creatorIds.length
@@ -965,15 +1104,37 @@ export class CommunicationsService {
       : [];
     const creatorById = new Map(creators.map((u) => [u.id, u]));
 
+    const linkedEmployee = viewer?.email
+      ? await this.prisma.employee.findFirst({
+          where: { tenantId, email: viewer.email, active: true },
+          select: { id: true }
+        })
+      : null;
+    const announcementIds = rows.map((r) => r.id);
+    const myAnswers =
+      linkedEmployee && announcementIds.length
+        ? await this.prisma.communicationAnnouncementAnswer.findMany({
+            where: {
+              tenantId,
+              employeeId: linkedEmployee.id,
+              announcementId: { in: announcementIds }
+            }
+          })
+        : [];
+    const myAnswerByAnnouncement = new Map(myAnswers.map((a) => [a.announcementId, a]));
+
     return Promise.all(
       rows.map(async (row) => {
-        const [targetCount, readCount, reactionCount] = await Promise.all([
+        const [targetCount, readCount, reactionCount, reminderCount, answerCount] = await Promise.all([
           this.audienceCount(tenantId, row, scope),
           this.prisma.communicationAnnouncementRead.count({ where: { tenantId, announcementId: row.id } }),
-          this.prisma.communicationAnnouncementReaction.count({ where: { tenantId, announcementId: row.id } })
+          this.prisma.communicationAnnouncementReaction.count({ where: { tenantId, announcementId: row.id } }),
+          this.prisma.communicationReminderDispatch.count({ where: { tenantId, announcementId: row.id } }),
+          this.prisma.communicationAnnouncementAnswer.count({ where: { tenantId, announcementId: row.id } })
         ]);
         const unreadCount = Math.max(targetCount - readCount, 0);
         const creator = creatorById.get(row.createdBy);
+        const myAnswer = myAnswerByAnnouncement.get(row.id);
         return {
           id: row.id,
           title: row.title,
@@ -1009,8 +1170,20 @@ export class CommunicationsService {
             readCount,
             unreadCount,
             readRate: targetCount ? Math.round((readCount / targetCount) * 100) : 0,
-            reactionCount
-          }
+            reactionCount,
+            reminderCount,
+            answerCount
+          },
+          myAnswer: myAnswer
+            ? {
+                id: myAnswer.id,
+                announcementId: myAnswer.announcementId,
+                employeeId: myAnswer.employeeId,
+                answerText: myAnswer.answerText,
+                createdAt: myAnswer.createdAt,
+                updatedAt: myAnswer.updatedAt
+              }
+            : null
         };
       })
     );

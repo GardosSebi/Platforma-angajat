@@ -3,16 +3,18 @@ import type {
   CreateCommunicationPublishRightRequest
 } from "@repo/shared-types/communication-rights";
 import type {
+  CommunicationAnnouncementAnswerItem,
   CommunicationAnnouncementItem,
   CommunicationCalendarEntry,
   CommunicationDashboardResponse,
-  CommunicationReaction,
+  CommunicationMediaUploadResponse,
   CommunicationReminderItem,
   CommunicationTemplateItem,
   CreateCommunicationAnnouncementRequest,
   CreateCommunicationTemplateRequest,
   MarkCommunicationReadRequest,
   SetCommunicationReactionRequest,
+  SubmitCommunicationAnswerRequest,
   UpdateCommunicationAnnouncementRequest,
   UpdateCommunicationTemplateRequest
 } from "@repo/shared-types/communications";
@@ -76,6 +78,28 @@ export const chatbotApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  submitAnnouncementAnswer(id: string, payload: SubmitCommunicationAnswerRequest) {
+    return httpClient<CommunicationAnnouncementAnswerItem>(`/chatbot/announcements/${id}/answer`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  listAnnouncementAnswers(id: string) {
+    return httpClient<{ items: CommunicationAnnouncementAnswerItem[] }>(
+      `/chatbot/announcements/${id}/answers`
+    );
+  },
+  uploadMedia(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    return httpClient<CommunicationMediaUploadResponse>("/chatbot/media", {
+      method: "POST",
+      body
+    });
+  },
+  mediaStreamPath(contentUrl: string) {
+    return `/chatbot/media?path=${encodeURIComponent(contentUrl)}`;
   },
   calendar() {
     return httpClient<{ items: CommunicationCalendarEntry[] }>("/chatbot/calendar");

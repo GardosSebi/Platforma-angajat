@@ -56,7 +56,7 @@ export class CreateAnnouncementDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(600)
+  @MaxLength(1000)
   contentUrl?: string;
 
   @IsOptional()
@@ -79,7 +79,7 @@ export class CreateAnnouncementDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(600)
+  @MaxLength(1000)
   buttonUrl?: string;
 
   @IsOptional()
@@ -153,7 +153,7 @@ export class UpdateAnnouncementDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(600)
+  @MaxLength(1000)
   contentUrl?: string;
 
   @IsOptional()
@@ -176,7 +176,7 @@ export class UpdateAnnouncementDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(600)
+  @MaxLength(1000)
   buttonUrl?: string;
 
   @IsOptional()
@@ -236,6 +236,17 @@ export class SetAnnouncementReactionDto {
 
   @IsIn(REACTIONS)
   reaction!: (typeof REACTIONS)[number];
+}
+
+export class SubmitAnnouncementAnswerDto {
+  @IsString()
+  @MinLength(2)
+  employeeId!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4000)
+  answerText!: string;
 }
 
 export class CreateTemplateDto {

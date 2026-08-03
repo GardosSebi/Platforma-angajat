@@ -1,4 +1,4 @@
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import type {
   CommunicationAudienceType,
   CommunicationCategory,
@@ -7,6 +7,7 @@ import type {
 import { COMMUNICATION_CATEGORIES, COMMUNICATION_CATEGORY_LABELS } from "@repo/shared-types/communications";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
+import { chatbotApi } from "../api/chatbot.api";
 import {
   AUDIENCE_LABELS,
   CONTENT_TYPE_LABELS,
@@ -61,6 +62,9 @@ export function CommsAnnouncementForm({
   onDelete,
   canDelete = false
 }: Props) {
+  const [uploadPending, setUploadPending] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const needsSegment = audienceOptions.length > 0;
   const needsCustomList = form.audienceType === "CUSTOM";
   const showLinkField =
@@ -72,6 +76,25 @@ export function CommsAnnouncementForm({
     Boolean(form.contentUrl);
   const showButtonFields = form.contentType === "BUTTON";
   const showSurveyLink = form.contentType === "SURVEY";
+  const showMediaUpload =
+    form.contentType === "DOCUMENT" ||
+    form.contentType === "IMAGE" ||
+    form.contentType === "VIDEO" ||
+    form.contentType === "SLIDE";
+
+  const onUpload = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadPending(true);
+    setUploadError(null);
+    try {
+      const uploaded = await chatbotApi.uploadMedia(file);
+      onChange({ contentUrl: uploaded.contentUrl });
+    } catch (error: unknown) {
+      setUploadError(error instanceof Error ? error.message : "Upload eșuat.");
+    } finally {
+      setUploadPending(false);
+    }
+  };
 
   return (
     <form className="card form-stack comms-panel comms-compose" onSubmit={onSubmit}>
@@ -132,6 +155,11 @@ export function CommsAnnouncementForm({
             label: MESSAGE_TYPE_LABELS[type]
           }))}
         />
+        {form.messageType === "QUESTION" ? (
+          <p className="field-hint">
+            Angajații vor putea trimite un răspuns text. Răspunsurile apar în detaliile anunțului.
+          </p>
+        ) : null}
         <div className="field">
           <label htmlFor="announcement-title">Titlu *</label>
           <input
@@ -169,14 +197,43 @@ export function CommsAnnouncementForm({
             label: CONTENT_TYPE_LABELS[type]
           }))}
         />
+        {showMediaUpload ? (
+          <div className="field">
+            <label htmlFor="content-file">Încarcă fișier (imagine, video, document, slide)</label>
+            <input
+              id="content-file"
+              type="file"
+              accept={
+                form.contentType === "IMAGE"
+                  ? "image/*"
+                  : form.contentType === "VIDEO"
+                    ? "video/*"
+                    : form.contentType === "SLIDE"
+                      ? ".pdf,.ppt,.pptx,application/pdf"
+                      : undefined
+              }
+              disabled={uploadPending || isPending}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                void onUpload(file);
+                event.target.value = "";
+              }}
+            />
+            {uploadPending ? <p className="field-hint">Se încarcă…</p> : null}
+            {uploadError ? <p className="feedback error">{uploadError}</p> : null}
+            {form.contentUrl && !/^https?:\/\//i.test(form.contentUrl) ? (
+              <p className="field-hint">Fișier încărcat: {form.contentUrl.split("/").pop()}</p>
+            ) : null}
+          </div>
+        ) : null}
         {showLinkField ? (
           <div className="field">
-            <label htmlFor="content-url">URL conținut (imagine, video, document, slide)</label>
+            <label htmlFor="content-url">URL conținut (sau lasă gol dacă ai încărcat fișier)</label>
             <input
               id="content-url"
               value={form.contentUrl ?? ""}
               onChange={(event) => onChange({ contentUrl: event.target.value })}
-              placeholder="https://..."
+              placeholder="https://... sau cale fișier încărcat"
             />
           </div>
         ) : null}
@@ -366,7 +423,7 @@ export function CommsAnnouncementForm({
       </details>
 
       <div className="comms-form-actions">
-        <button className="btn-primary" type="submit" disabled={isPending}>
+        <button className="btn-primary" type="submit" disabled={isPending || uploadPending}>
           {isPending
             ? "Se salvează..."
             : mode === "edit"

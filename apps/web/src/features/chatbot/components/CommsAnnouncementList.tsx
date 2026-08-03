@@ -157,7 +157,11 @@ export function CommsAnnouncementList({
                 <td>
                   <span className="comms-read-rate">{item.stats.readRate}%</span>
                   <span className="comms-read-count text-muted small">
-                    ({item.stats.readCount}/{item.stats.targetCount})
+                    ({item.stats.readCount}/{item.stats.targetCount}
+                    {typeof item.stats.reminderCount === "number"
+                      ? ` · ${item.stats.reminderCount} rem.`
+                      : ""}
+                    )
                   </span>
                 </td>
                 <td>{formatCommsDate(item.publishAt ?? item.createdAt)}</td>

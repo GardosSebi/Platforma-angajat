@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CommunicationReaction } from "@repo/shared-types/communications";
 import { COMMUNICATION_REACTION_LABELS } from "@repo/shared-types/communications";
 import { chatbotApi } from "../../chatbot/api/chatbot.api";
+import { CommsMediaPreview } from "../../chatbot/components/CommsMediaPreview";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
 import { formatRoDateTime, mutationErrorMessage } from "../utils";
@@ -16,6 +17,7 @@ export function EmployeeAnnouncementsPanel() {
   const employeeId = requireLinkedEmployeeId(session);
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
 
   const query = useQuery({
     queryKey: ["employee-portal", "announcements"],
@@ -40,6 +42,21 @@ export function EmployeeAnnouncementsPanel() {
     }
   });
 
+  const submitAnswer = useMutation({
+    mutationFn: ({ announcementId, answerText }: { announcementId: string; answerText: string }) =>
+      chatbotApi.submitAnnouncementAnswer(announcementId, { employeeId: employeeId!, answerText }),
+    onSuccess: async (_data, variables) => {
+      setFeedback("Răspuns trimis.");
+      setAnswerDrafts((prev) => {
+        const next = { ...prev };
+        delete next[variables.announcementId];
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ["employee-portal", "announcements"] });
+    },
+    onError: (error: unknown) => setFeedback(mutationErrorMessage(error))
+  });
+
   const published = (query.data?.items ?? []).filter((a) => a.status === "PUBLISHED");
 
   if (query.isLoading) {
@@ -58,6 +75,13 @@ export function EmployeeAnnouncementsPanel() {
     );
   }
 
+  const onAnswerSubmit = (event: FormEvent, announcementId: string) => {
+    event.preventDefault();
+    const answerText = (answerDrafts[announcementId] ?? "").trim();
+    if (!answerText || !employeeId) return;
+    submitAnswer.mutate({ announcementId, answerText });
+  };
+
   return (
     <div className="employee-portal-announcements">
       {!employeeId ? (
@@ -69,25 +93,17 @@ export function EmployeeAnnouncementsPanel() {
           const needsRead = item.requireReadConfirmation || item.messageType === "READ_CONFIRMATION";
           const isUnread = item.stats.unreadCount > 0;
           const text = resolveAnnouncementText(item);
+          const isQuestion = item.messageType === "QUESTION";
           return (
             <li key={item.id} className="card employee-announcement-item">
               <header>
                 <strong>{text.title}</strong>
                 <span className="field-hint">{formatRoDateTime(item.publishAt ?? item.createdAt)}</span>
               </header>
+              {isQuestion ? <span className="ssm-chip warn">Întrebare</span> : null}
               <p className="employee-announcement-body">{text.body}</p>
-              {item.contentType === "IMAGE" && item.contentUrl ? (
-                <img src={item.contentUrl} alt="" className="employee-announcement-media" />
-              ) : null}
-              {item.contentType === "VIDEO" && item.contentUrl ? (
-                <video src={item.contentUrl} controls className="employee-announcement-media" />
-              ) : null}
-              {item.contentUrl && item.contentType !== "IMAGE" && item.contentType !== "VIDEO" ? (
-                <p>
-                  <a href={item.contentUrl} target="_blank" rel="noreferrer" className="btn-text-link">
-                    Deschide atașamentul
-                  </a>
-                </p>
+              {item.contentUrl ? (
+                <CommsMediaPreview contentUrl={item.contentUrl} contentType={item.contentType} />
               ) : null}
               {item.contentType === "BUTTON" && item.buttonUrl ? (
                 <p>
@@ -106,7 +122,41 @@ export function EmployeeAnnouncementsPanel() {
               {item.contentType === "SURVEY" && !item.linkedSurveyId ? (
                 <p className="field-hint">Acest anunț conține un sondaj — vezi tab-ul Sondaje.</p>
               ) : null}
-              {employeeId && needsRead && isUnread ? (
+
+              {isQuestion && employeeId ? (
+                item.myAnswer ? (
+                  <div className="comms-my-answer">
+                    <p className="field-hint">Răspunsul tău</p>
+                    <p className="employee-announcement-body">{item.myAnswer.answerText}</p>
+                  </div>
+                ) : (
+                  <form
+                    className="comms-answer-form"
+                    onSubmit={(event) => onAnswerSubmit(event, item.id)}
+                  >
+                    <label htmlFor={`answer-${item.id}`}>Răspunsul tău</label>
+                    <textarea
+                      id={`answer-${item.id}`}
+                      rows={3}
+                      value={answerDrafts[item.id] ?? ""}
+                      onChange={(event) =>
+                        setAnswerDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                      }
+                      placeholder="Scrie răspunsul…"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      disabled={submitAnswer.isPending || !(answerDrafts[item.id] ?? "").trim()}
+                    >
+                      Trimite răspunsul
+                    </button>
+                  </form>
+                )
+              ) : null}
+
+              {!isQuestion && employeeId && needsRead && isUnread ? (
                 <button
                   type="button"
                   className="btn-primary"
@@ -115,7 +165,7 @@ export function EmployeeAnnouncementsPanel() {
                 >
                   Confirmă citirea *
                 </button>
-              ) : employeeId && isUnread ? (
+              ) : !isQuestion && employeeId && isUnread ? (
                 <button
                   type="button"
                   className="btn-secondary"
@@ -124,7 +174,7 @@ export function EmployeeAnnouncementsPanel() {
                 >
                   Confirm citire
                 </button>
-              ) : item.stats.readCount > 0 ? (
+              ) : !isQuestion && item.stats.readCount > 0 ? (
                 <span className="ssm-chip good">Citit</span>
               ) : null}
               {item.reactionsEnabled && employeeId ? (

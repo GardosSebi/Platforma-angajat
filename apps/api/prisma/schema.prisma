@@ -326,6 +326,7 @@ model Tenant {
   communicationAnnouncementReads CommunicationAnnouncementRead[]
   communicationReminderDispatches CommunicationReminderDispatch[]
   communicationAnnouncementReactions CommunicationAnnouncementReaction[]
+  communicationAnnouncementAnswers CommunicationAnnouncementAnswer[]
   surveys                    Survey[]
   surveyResponses            SurveyResponse[]
   helpdeskTickets            HelpdeskTicket[]
@@ -516,6 +517,7 @@ model Employee {
   ssmPsiResponsibles     SsmPsiResponsible[]
   communicationAnnouncementReads CommunicationAnnouncementRead[]
   communicationAnnouncementReactions CommunicationAnnouncementReaction[]
+  communicationAnnouncementAnswers CommunicationAnnouncementAnswer[]
   surveyResponses        SurveyResponse[]
   helpdeskTickets        HelpdeskTicket[]
 
@@ -1316,6 +1318,7 @@ model CommunicationAnnouncement {
   readReceipts     CommunicationAnnouncementRead[]
   reminderDispatches CommunicationReminderDispatch[]
   reactions        CommunicationAnnouncementReaction[]
+  answers          CommunicationAnnouncementAnswer[]
 
   @@index([tenantId, status, publishAt])
   @@index([tenantId, audienceType, audienceRefId])
@@ -1392,6 +1395,23 @@ model CommunicationAnnouncementReaction {
 
   @@unique([announcementId, employeeId])
   @@index([tenantId, announcementId])
+}
+
+model CommunicationAnnouncementAnswer {
+  id             String   @id @default(cuid())
+  tenantId       String
+  announcementId String
+  employeeId     String
+  answerText     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant       Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  announcement CommunicationAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  employee     Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, employeeId])
+  @@index([tenantId, announcementId, createdAt])
 }
 
 model Survey {

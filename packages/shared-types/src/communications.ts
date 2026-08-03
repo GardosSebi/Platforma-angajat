@@ -158,7 +158,34 @@ export interface CommunicationAnnouncementItem {
     unreadCount: number;
     readRate: number;
     reactionCount?: number;
+    reminderCount?: number;
+    answerCount?: number;
   };
+  myAnswer?: CommunicationAnnouncementAnswerItem | null;
+}
+
+export interface CommunicationAnnouncementAnswerItem {
+  id: string;
+  announcementId: string;
+  employeeId: string;
+  employeeName?: string | null;
+  answerText: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubmitCommunicationAnswerRequest {
+  employeeId: string;
+  answerText: string;
+}
+
+export interface CommunicationMediaUploadResponse {
+  fileId: string;
+  path: string;
+  contentUrl: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
 }
 
 export interface CommunicationCalendarEntry {
@@ -243,4 +270,10 @@ export interface MarkCommunicationReadRequest {
 export interface SetCommunicationReactionRequest {
   employeeId: string;
   reaction: CommunicationReaction;
+}
+
+/** True when contentUrl points to an uploaded (non-http) media path. */
+export function isCommsUploadedMedia(contentUrl?: string | null): boolean {
+  if (!contentUrl?.trim()) return false;
+  return !/^https?:\/\//i.test(contentUrl.trim());
 }
