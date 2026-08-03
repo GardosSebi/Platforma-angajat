@@ -2,6 +2,7 @@ import { randomBytes, createHash } from "crypto";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, Survey, SurveyAudienceType, SurveyStatus, SurveyType } from "@prisma/client";
 import PDFDocument from "pdfkit";
+import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
@@ -66,9 +67,10 @@ function pdfBuffer(title: string, rows: Record<string, unknown>[]): Promise<Buff
     const chunks: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.fontSize(16).text(title, { underline: true });
+    applyUnicodeFonts(doc);
+    doc.fontSize(16).font(PdfFont.bold).text(title, { underline: true });
     doc.moveDown();
-    doc.fontSize(9);
+    doc.fontSize(9).font(PdfFont.regular);
     const sample = rows.slice(0, 70);
     for (const row of sample) {
       doc.text(Object.entries(row).map(([key, value]) => `${key}: ${formatCell(value)}`).join(" | "));

@@ -7,6 +7,7 @@ import {
   SsmRiskTargetType
 } from "@prisma/client";
 import PDFDocument from "pdfkit";
+import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import {
@@ -390,9 +391,10 @@ export class SsmRiskService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      doc.fontSize(16).text("FIȘĂ DE EXPUNERE LA RISCURI PROFESIONALE", { align: "center" });
+      applyUnicodeFonts(doc);
+      doc.fontSize(16).font(PdfFont.bold).text("FIȘĂ DE EXPUNERE LA RISCURI PROFESIONALE", { align: "center" });
       doc.moveDown();
-      doc.fontSize(11);
+      doc.fontSize(11).font(PdfFont.regular);
       doc.text(`Angajat: ${employee.fullName}`);
       doc.text(`Funcție: ${employee.jobPosition?.name ?? "-"}`);
       doc.text(`Departament: ${employee.department?.name ?? "-"}`);

@@ -34,6 +34,7 @@
     "bcrypt": "latest",
     "class-transformer": "latest",
     "class-validator": "latest",
+    "dejavu-fonts-ttf": "2.37.3",
     "dotenv": "latest",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",

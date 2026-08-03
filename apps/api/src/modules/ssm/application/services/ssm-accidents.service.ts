@@ -6,6 +6,7 @@ import {
   SsmAccidentType
 } from "@prisma/client";
 import PDFDocument from "pdfkit";
+import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import {
@@ -263,12 +264,11 @@ export class SsmAccidentsService {
 
     const measuresSummary =
       dto.correctiveMeasures?.trim() ||
-      accidentCase.correctiveMeasureItems.map((m) => `${m.description} (${m.assignedTo ?? "n/a"}, due ${m.dueAt.toISOString()})`).join("\n") ||
-      undefined;
-
-    if (!measuresSummary && accidentCase.correctiveMeasureItems.length === 0) {
-      throw new BadRequestException("Add at least one corrective measure or provide correctiveMeasures text before closing.");
-    }
+      (accidentCase.correctiveMeasureItems.length
+        ? accidentCase.correctiveMeasureItems
+            .map((m) => `${m.description} (${m.assignedTo ?? "n/a"}, due ${m.dueAt.toISOString()})`)
+            .join("\n")
+        : null);
 
     const updated = await this.prisma.ssmAccidentCase.update({
       where: { id: caseId },
@@ -323,20 +323,24 @@ export class SsmAccidentsService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
+      applyUnicodeFonts(doc);
+
       const line = (label: string, value: string) => {
-        doc.font("Helvetica-Bold").text(`${label}: `, { continued: true });
-        doc.font("Helvetica").text(value);
+        doc.font(PdfFont.bold).text(`${label}: `, { continued: true });
+        doc.font(PdfFont.regular).text(value);
       };
       const section = (title: string) => {
         doc.moveDown(0.6);
-        doc.fontSize(13).font("Helvetica-Bold").text(title);
+        doc.fontSize(13).font(PdfFont.bold).text(title);
         doc.moveDown(0.2);
-        doc.fontSize(11).font("Helvetica");
+        doc.fontSize(11).font(PdfFont.regular);
       };
 
-      doc.fontSize(16).font("Helvetica-Bold").text("RAPORT DE CERCETARE", { align: "center" });
-      doc.fontSize(12).text("Accident de muncă / Incident periculos / Boală profesională", { align: "center" });
-      doc.fontSize(10).font("Helvetica").text("(conform cerințelor ITM – formular intern de cercetare)", { align: "center" });
+      doc.fontSize(16).font(PdfFont.bold).text("RAPORT DE CERCETARE", { align: "center" });
+      doc.fontSize(12).font(PdfFont.regular).text("Accident de muncă / Incident periculos / Boală profesională", {
+        align: "center"
+      });
+      doc.fontSize(10).text("(conform cerințelor ITM – formular intern de cercetare)", { align: "center" });
       doc.moveDown();
 
       section("1. Date angajator");

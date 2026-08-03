@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { SsmEipMovementType } from "@prisma/client";
 import PDFDocument from "pdfkit";
+import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
@@ -327,30 +328,33 @@ export class SsmEipService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      doc.fontSize(16).text("Registru de acordare EIP", { align: "center" });
+      applyUnicodeFonts(doc);
+      doc.fontSize(16).font(PdfFont.bold).text("Registru de acordare EIP", { align: "center" });
       doc.moveDown(0.4);
-      doc.fontSize(10).text(`Generat: ${new Date().toLocaleString("ro-RO")}`, { align: "center" });
+      doc.fontSize(10).font(PdfFont.regular).text(`Generat: ${new Date().toLocaleString("ro-RO")}`, {
+        align: "center"
+      });
       doc.moveDown();
 
       const colX = [36, 110, 250, 340, 420, 500, 580, 680];
       const drawHeader = () => {
-        doc.fontSize(8).font("Helvetica-Bold");
+        doc.fontSize(8).font(PdfFont.bold);
         doc.text("Data", colX[0], doc.y, { width: 70, continued: false });
         const y = doc.y - 10;
         doc.text("Angajat", colX[1], y, { width: 130 });
         doc.text("EIP", colX[2], y, { width: 85 });
-        doc.text("Operatie", colX[3], y, { width: 70 });
+        doc.text("Operație", colX[3], y, { width: 70 });
         doc.text("Cant.", colX[4], y, { width: 40 });
-        doc.text("Locatie", colX[5], y, { width: 75 });
-        doc.text("Inlocuire", colX[6], y, { width: 80 });
-        doc.text("Semnatura", colX[7], y, { width: 90 });
+        doc.text("Locație", colX[5], y, { width: 75 });
+        doc.text("Înlocuire", colX[6], y, { width: 80 });
+        doc.text("Semnătură", colX[7], y, { width: 90 });
         doc.moveDown(0.6);
         doc
           .moveTo(36, doc.y)
           .lineTo(806, doc.y)
           .stroke();
         doc.moveDown(0.4);
-        doc.font("Helvetica");
+        doc.font(PdfFont.regular);
       };
 
       drawHeader();

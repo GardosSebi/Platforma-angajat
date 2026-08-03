@@ -299,7 +299,10 @@ export function SsmTrainingSuiteManager() {
   const onCreatePlan = (event: FormEvent) => {
     event.preventDefault();
     createPlan.mutate(planForm, {
-      onSuccess: () => setTab("track")
+      onSuccess: (data) => {
+        setActivePlanId(data.id);
+        setTab("flow");
+      }
     });
   };
 
@@ -742,7 +745,20 @@ export function SsmTrainingSuiteManager() {
       {tab === "flow" ? (
         <div className="ssm-panel-layout">
           <div className="card ssm-doc-card">
-            <h4 className="card-title">Selectează instruirea</h4>
+            <div className="ssm-card-header">
+              <h4 className="card-title">Selectează instruirea</h4>
+              {showCatalogForms ? (
+                <button type="button" className="btn-secondary" onClick={() => setTab("plan")}>
+                  Planifică instruire
+                </button>
+              ) : null}
+            </div>
+            {plansQuery.isLoading ? <p className="field-hint">Se încarcă instruirile…</p> : null}
+            {plansQuery.isError ? (
+              <p className="feedback error" role="alert">
+                {mutationErrorMessage(plansQuery.error)}
+              </p>
+            ) : null}
             <div className="ssm-doc-items">
               {planOptions.map((plan) => (
                 <button
@@ -760,7 +776,20 @@ export function SsmTrainingSuiteManager() {
                   <span className={planStatusClass(plan.status)}>{planStatusLabel(plan.status)}</span>
                 </button>
               ))}
-              {!planOptions.length ? <p className="field-hint">Nicio instruire disponibilă.</p> : null}
+              {!plansQuery.isLoading && !planOptions.length ? (
+                <div className="form-stack">
+                  <p className="field-hint">
+                    Nicio instruire disponibilă. Fluxul e-learning folosește planurile deja alocate.
+                  </p>
+                  {showCatalogForms ? (
+                    <button type="button" className="btn-primary" onClick={() => setTab("plan")}>
+                      Mergi la Planificare
+                    </button>
+                  ) : (
+                    <p className="field-hint">Cere unui responsabil SSM să îți aloce o instruire.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
             <PaginationBar
               page={plansPaged.page}
@@ -775,7 +804,64 @@ export function SsmTrainingSuiteManager() {
 
           <div className="card form-stack ssm-doc-card">
             {!activePlan ? (
-              <p className="field-hint">Selectează o instruire din listă.</p>
+              showCatalogForms && !plansQuery.isLoading ? (
+                <form className="form-stack" onSubmit={onCreatePlan}>
+                  <h4 className="card-title">Planifică o instruire</h4>
+                  <p className="field-hint">
+                    Creează un plan, apoi poți parcurge materialul, testul și semnăturile aici.
+                  </p>
+                  <EmployeeSelect
+                    id="flow-plan-employee"
+                    label="Angajat"
+                    value={planForm.employeeId}
+                    required
+                    onChange={(employeeId) => setPlanForm((p) => ({ ...p, employeeId }))}
+                  />
+                  <TrainingTypeSelect
+                    id="flow-plan-type"
+                    label="Tip instruire"
+                    value={planForm.trainingTypeId}
+                    valueField="id"
+                    allowEmpty
+                    emptyLabel="Selectează tip"
+                    activeOnly={false}
+                    onChange={(trainingTypeId) => setPlanForm((p) => ({ ...p, trainingTypeId }))}
+                  />
+                  <div className="field">
+                    <label htmlFor="flow-plan-material-title">Titlu material</label>
+                    <input
+                      id="flow-plan-material-title"
+                      value={planForm.materialTitle ?? ""}
+                      onChange={(e) => setPlanForm((p) => ({ ...p, materialTitle: e.target.value }))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="flow-plan-due">Scadență</label>
+                    <input
+                      id="flow-plan-due"
+                      type="datetime-local"
+                      value={planForm.dueAt.slice(0, 16)}
+                      onChange={(e) =>
+                        setPlanForm((p) => ({ ...p, dueAt: new Date(e.target.value).toISOString() }))
+                      }
+                    />
+                  </div>
+                  <button
+                    className="btn-primary"
+                    type="submit"
+                    disabled={createPlan.isPending || !planForm.trainingTypeId || !planForm.employeeId}
+                  >
+                    {createPlan.isPending ? "Se planifică…" : "Planifică și deschide fluxul"}
+                  </button>
+                  {createPlan.isError ? (
+                    <p className="feedback error" role="alert">
+                      {mutationErrorMessage(createPlan.error)}
+                    </p>
+                  ) : null}
+                </form>
+              ) : (
+                <p className="field-hint">Selectează o instruire din listă.</p>
+              )
             ) : (
               <>
                 <h4 className="card-title">

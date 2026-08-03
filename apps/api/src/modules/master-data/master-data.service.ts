@@ -31,6 +31,7 @@ import {
 } from "../../common/worksite-viewer-scope";
 import { EmployeeEmploymentType } from "@prisma/client";
 import PDFDocument from "pdfkit";
+import { applyUnicodeFonts, PdfFont } from "../../common/pdf-unicode-font";
 import { SsmTrainingAutomationService } from "../ssm/application/services/ssm-training-automation.service";
 import { SsmMedicalService } from "../ssm/application/services/ssm-medical.service";
 import { CreateLegalEntityDto } from "./dto/create-legal-entity.dto";
@@ -1356,9 +1357,10 @@ export class MasterDataService {
       doc.on("data", (chunk: Buffer) => chunks.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
-      doc.fontSize(16).text("FIȘĂ POST", { align: "center" });
+      applyUnicodeFonts(doc);
+      doc.fontSize(16).font(PdfFont.bold).text("FIȘĂ POST", { align: "center" });
       doc.moveDown();
-      doc.fontSize(11);
+      doc.fontSize(11).font(PdfFont.regular);
       doc.text(`Cod post: ${job.code}`);
       doc.text(`Denumire: ${job.name}`);
       doc.text(`COR: ${job.corCode ?? "-"}`);

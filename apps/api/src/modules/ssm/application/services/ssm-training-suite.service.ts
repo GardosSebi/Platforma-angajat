@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import JSZip from "jszip";
+import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
@@ -1687,8 +1688,11 @@ export class SsmTrainingSuiteService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      doc.fontSize(16).text("FIȘA INDIVIDUALĂ DE INSTRUIRE", { align: "center" });
-      doc.fontSize(12).text("în domeniul securității și sănătății în muncă / PSI", { align: "center" });
+      applyUnicodeFonts(doc);
+      doc.fontSize(16).font(PdfFont.bold).text("FIȘA INDIVIDUALĂ DE INSTRUIRE", { align: "center" });
+      doc.fontSize(12).font(PdfFont.regular).text("în domeniul securității și sănătății în muncă / PSI", {
+        align: "center"
+      });
       doc.moveDown();
       doc.fontSize(11);
       doc.text(`Unitatea: ${plan.employee.worksite?.legalEntity?.name ?? "conform evidenței angajatului"}`);
@@ -1820,8 +1824,9 @@ export class SsmTrainingSuiteService {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      doc.fontSize(16).text("FIȘĂ COLECTIVĂ DE INSTRUCTAJ", { align: "center" });
-      doc.fontSize(11).text("Vizitatori / colaboratori externi", { align: "center" });
+      applyUnicodeFonts(doc);
+      doc.fontSize(16).font(PdfFont.bold).text("FIȘĂ COLECTIVĂ DE INSTRUCTAJ", { align: "center" });
+      doc.fontSize(11).font(PdfFont.regular).text("Vizitatori / colaboratori externi", { align: "center" });
       doc.moveDown();
       doc.fontSize(12).text(`Tematică: ${dto.title}`);
       doc.text(`Instructor: ${dto.trainerName ?? "-"}`);

@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
+import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { SsmEipService } from "./ssm-eip.service";
 
@@ -149,6 +150,7 @@ function pdfBuffer(title: string, rows: ReportRow[]): Promise<Buffer> {
     const chunks: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
+    applyUnicodeFonts(doc);
 
     const dataRows = rows.length ? rows : [{ message: "No rows" }];
     const headers = Object.keys(dataRows[0] ?? { message: "" });
@@ -156,16 +158,17 @@ function pdfBuffer(title: string, rows: ReportRow[]): Promise<Buffer> {
     const bottom = pageHeight - 48;
 
     const drawHeader = (pageIndex: number) => {
-      doc.fontSize(14).text(title, { underline: true });
+      doc.fontSize(14).font(PdfFont.bold).text(title, { underline: true });
       doc.moveDown(0.25);
       doc
         .fontSize(8)
+        .font(PdfFont.regular)
         .fillColor("#475569")
         .text(`Pagina ${pageIndex} · ${dataRows.length} rânduri · generat ${new Date().toLocaleString("ro-RO")}`);
       doc.fillColor("#000000");
       doc.moveDown(0.5);
-      doc.fontSize(8).font("Helvetica-Bold").text(headers.join(" | "), { width: doc.page.width - 72 });
-      doc.font("Helvetica");
+      doc.fontSize(8).font(PdfFont.bold).text(headers.join(" | "), { width: doc.page.width - 72 });
+      doc.font(PdfFont.regular);
       doc.moveDown(0.35);
     };
 
