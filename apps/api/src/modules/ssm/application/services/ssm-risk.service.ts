@@ -99,6 +99,29 @@ export class SsmRiskService {
       },
       include: { measures: true }
     });
+
+    const snapshot = plan.measures.map((m) => ({
+      description: m.description,
+      responsiblePerson: m.responsiblePerson,
+      dueDate: m.dueDate?.toISOString() ?? null,
+      status: m.status,
+      notes: m.notes
+    }));
+    const version = await tx.ssmPreventionPlanVersion.create({
+      data: {
+        tenantId: params.tenantId,
+        planId: plan.id,
+        versionNumber: 1,
+        updateReason: "Generat din evaluarea de risc",
+        notes: plan.notes,
+        measures: snapshot as unknown as Prisma.InputJsonValue,
+        createdBy: params.actorId
+      }
+    });
+    await tx.ssmPreventionPlan.update({
+      where: { id: plan.id },
+      data: { activeVersionId: version.id }
+    });
     return plan;
   }
 

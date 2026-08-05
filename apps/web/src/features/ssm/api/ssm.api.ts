@@ -176,6 +176,12 @@ export const ssmApi = {
       method: "PATCH"
     });
   },
+  approveDocument(documentId: string) {
+    return httpClient<{ status: "APPROVED"; approvedBy?: string | null; approvedAt?: string | null }>(
+      `/ssm/documents/${documentId}/approve`,
+      { method: "PATCH" }
+    );
+  },
   listTrainingTypes() {
     return httpClient<SsmTrainingTypeItem[]>("/ssm/training-suite/types");
   },
@@ -617,6 +623,17 @@ export const ssmApi = {
   },
   archivePreventionPlan(planId: string) {
     return httpClient<{ archived: boolean }>(`/ssm/prevention-plans/${planId}/archive`, { method: "PATCH" });
+  },
+  getPreventionPlanHistory(planId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmPreventionPlanHistoryResponse>(
+      `/ssm/prevention-plans/${planId}/history`
+    );
+  },
+  addPreventionPlanVersion(planId: string, payload: import("@repo/shared-types/ssm").AddSsmPreventionPlanVersionRequest) {
+    return httpClient<{ planId: string; versionId: string; versionNumber: number }>(
+      `/ssm/prevention-plans/${planId}/versions`,
+      { method: "POST", body: JSON.stringify(payload) }
+    );
   },
   createPreventionMeasure(payload: import("@repo/shared-types/ssm").CreateSsmPreventionMeasureRequest) {
     return httpClient<{ measureId: string }>("/ssm/prevention-measures", {

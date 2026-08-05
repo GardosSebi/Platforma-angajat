@@ -12,6 +12,7 @@ import type {
 } from "@repo/shared-types/ssm";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { useDepartmentsLookup, useWorksitesLookup } from "../../master-data/hooks/useMasterData";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
@@ -246,6 +247,18 @@ export function SsmAccidentsManager() {
     setTab("register");
   };
 
+  const closeCreateForm = () => {
+    setShowCreateForm(false);
+    setCaseForm({ ...EMPTY_CASE, occurredAt: new Date().toISOString() });
+    setWitnessesText("");
+  };
+
+  const openCreateForm = () => {
+    setCaseForm({ ...EMPTY_CASE, occurredAt: new Date().toISOString() });
+    setWitnessesText("");
+    setShowCreateForm(true);
+  };
+
   const onCreateCase = (event: FormEvent) => {
     event.preventDefault();
     const payload: CreateSsmAccidentCaseRequest = {
@@ -274,9 +287,7 @@ export function SsmAccidentsManager() {
     createCase.mutate(payload, {
       onSuccess: (created) => {
         selectCase(created.id, "research");
-        setCaseForm(EMPTY_CASE);
-        setWitnessesText("");
-        setShowCreateForm(false);
+        closeCreateForm();
       }
     });
   };
@@ -340,14 +351,14 @@ export function SsmAccidentsManager() {
       </header>
 
       {tab === "register" ? (
-        <div className="ssm-panel-layout">
+        <>
           <div className="card form-stack ssm-doc-card">
             <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
               <h4 className="card-title" style={{ margin: 0 }}>
                 Cazuri înregistrate
               </h4>
-              <button type="button" className="btn-primary" onClick={() => setShowCreateForm((v) => !v)}>
-                {showCreateForm ? "Ascunde formular" : "Caz nou"}
+              <button type="button" className="btn-primary" onClick={openCreateForm}>
+                Caz nou
               </button>
             </div>
 
@@ -392,249 +403,255 @@ export function SsmAccidentsManager() {
           </div>
 
           {showCreateForm ? (
-            <form className="card form-stack ssm-doc-card" onSubmit={onCreateCase}>
-              <h4 className="card-title">Înregistrare caz nou</h4>
-              <FieldSelect
-                id="acc-type"
-                label="Tip"
-                value={caseForm.type}
-                onChange={(type) => setCaseForm((p) => ({ ...p, type: type as SsmAccidentType }))}
-                options={ACCIDENT_TYPES.map((type) => ({ value: type, label: typeLabel(type) }))}
-              />
-              <FieldSelect
-                id="acc-severity"
-                label="Severitate"
-                value={caseForm.severity}
-                onChange={(severity) => setCaseForm((p) => ({ ...p, severity: severity as SsmAccidentSeverity }))}
-                options={ACCIDENT_SEVERITIES.map((severity) => ({ value: severity, label: severityLabel(severity) }))}
-              />
-              <div className="field">
-                <label htmlFor="acc-title">Titlu</label>
-                <input
-                  id="acc-title"
-                  required
-                  value={caseForm.title}
-                  onChange={(e) => setCaseForm((p) => ({ ...p, title: e.target.value }))}
+            <MasterDataCreateModal
+              title="Înregistrare caz nou"
+              titleId="ssm-accident-create-title"
+              size="wide"
+              onClose={closeCreateForm}
+            >
+              <form className="form-stack" onSubmit={onCreateCase}>
+                <FieldSelect
+                  id="acc-type"
+                  label="Tip"
+                  value={caseForm.type}
+                  onChange={(type) => setCaseForm((p) => ({ ...p, type: type as SsmAccidentType }))}
+                  options={ACCIDENT_TYPES.map((type) => ({ value: type, label: typeLabel(type) }))}
                 />
-              </div>
-              <EmployeeSelect
-                id="acc-emp"
-                label="Angajat (opțional)"
-                value={caseForm.employeeId ?? ""}
-                allowEmpty
-                emptyLabel="Fără angajat asociat"
-                onChange={(employeeId) => setCaseForm((p) => ({ ...p, employeeId: employeeId || undefined }))}
-              />
-              <div className="field">
-                <label htmlFor="acc-occ">Data și ora evenimentului</label>
-                <input
-                  id="acc-occ"
-                  type="datetime-local"
-                  required
-                  value={occurredLocal}
-                  onChange={(e) =>
+                <FieldSelect
+                  id="acc-severity"
+                  label="Severitate"
+                  value={caseForm.severity}
+                  onChange={(severity) => setCaseForm((p) => ({ ...p, severity: severity as SsmAccidentSeverity }))}
+                  options={ACCIDENT_SEVERITIES.map((severity) => ({ value: severity, label: severityLabel(severity) }))}
+                />
+                <div className="field">
+                  <label htmlFor="acc-title">Titlu</label>
+                  <input
+                    id="acc-title"
+                    required
+                    value={caseForm.title}
+                    onChange={(e) => setCaseForm((p) => ({ ...p, title: e.target.value }))}
+                  />
+                </div>
+                <EmployeeSelect
+                  id="acc-emp"
+                  label="Angajat (opțional)"
+                  value={caseForm.employeeId ?? ""}
+                  allowEmpty
+                  emptyLabel="Fără angajat asociat"
+                  onChange={(employeeId) => setCaseForm((p) => ({ ...p, employeeId: employeeId || undefined }))}
+                />
+                <div className="field">
+                  <label htmlFor="acc-occ">Data și ora evenimentului</label>
+                  <input
+                    id="acc-occ"
+                    type="datetime-local"
+                    required
+                    value={occurredLocal}
+                    onChange={(e) =>
+                      setCaseForm((p) => ({
+                        ...p,
+                        occurredAt: e.target.value ? fromDatetimeLocalValue(e.target.value) : p.occurredAt
+                      }))
+                    }
+                  />
+                </div>
+                <FieldSelect
+                  id="acc-worksite"
+                  label="Punct de lucru"
+                  value={caseForm.worksiteId ?? ""}
+                  allowEmpty
+                  emptyLabel="Selectează punct de lucru"
+                  onChange={(worksiteId) => {
+                    const site = worksites.data?.items.find((item) => item.id === worksiteId);
                     setCaseForm((p) => ({
                       ...p,
-                      occurredAt: e.target.value ? fromDatetimeLocalValue(e.target.value) : p.occurredAt
-                    }))
-                  }
+                      worksiteId: worksiteId || undefined,
+                      location: site ? `${site.code} — ${site.name}` : p.location
+                    }));
+                  }}
+                  options={mapToOptions(
+                    worksites.data?.items ?? [],
+                    (item) => item.id,
+                    (item) => `${item.code} — ${item.name}`
+                  )}
                 />
-              </div>
-              <FieldSelect
-                id="acc-worksite"
-                label="Punct de lucru"
-                value={caseForm.worksiteId ?? ""}
-                allowEmpty
-                emptyLabel="Selectează punct de lucru"
-                onChange={(worksiteId) => {
-                  const site = worksites.data?.items.find((item) => item.id === worksiteId);
-                  setCaseForm((p) => ({
-                    ...p,
-                    worksiteId: worksiteId || undefined,
-                    location: site ? `${site.code} — ${site.name}` : p.location
-                  }));
-                }}
-                options={mapToOptions(
-                  worksites.data?.items ?? [],
-                  (item) => item.id,
-                  (item) => `${item.code} — ${item.name}`
-                )}
-              />
-              <FieldSelect
-                id="acc-department"
-                label="Departament"
-                value={caseForm.departmentId ?? ""}
-                allowEmpty
-                emptyLabel="Selectează departament"
-                onChange={(departmentId) => setCaseForm((p) => ({ ...p, departmentId: departmentId || undefined }))}
-                options={mapToOptions(
-                  departments.data?.items ?? [],
-                  (item) => item.id,
-                  (item) => `${item.code} — ${item.name}`
-                )}
-              />
-              <div className="field">
-                <label htmlFor="acc-location">Loc eveniment</label>
-                <input
-                  id="acc-location"
-                  value={caseForm.location ?? ""}
-                  onChange={(e) => setCaseForm((p) => ({ ...p, location: e.target.value }))}
-                  placeholder="Ex: Hale producție, linia 2"
+                <FieldSelect
+                  id="acc-department"
+                  label="Departament"
+                  value={caseForm.departmentId ?? ""}
+                  allowEmpty
+                  emptyLabel="Selectează departament"
+                  onChange={(departmentId) => setCaseForm((p) => ({ ...p, departmentId: departmentId || undefined }))}
+                  options={mapToOptions(
+                    departments.data?.items ?? [],
+                    (item) => item.id,
+                    (item) => `${item.code} — ${item.name}`
+                  )}
                 />
-              </div>
-              <div className="field">
-                <label htmlFor="acc-research">Responsabil cercetare</label>
-                <input
-                  id="acc-research"
-                  value={caseForm.researchResponsible ?? ""}
-                  onChange={(e) => setCaseForm((p) => ({ ...p, researchResponsible: e.target.value }))}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="acc-witnesses">Martori (separați prin virgulă)</label>
-                <input id="acc-witnesses" value={witnessesText} onChange={(e) => setWitnessesText(e.target.value)} />
-              </div>
+                <div className="field">
+                  <label htmlFor="acc-location">Loc eveniment</label>
+                  <input
+                    id="acc-location"
+                    value={caseForm.location ?? ""}
+                    onChange={(e) => setCaseForm((p) => ({ ...p, location: e.target.value }))}
+                    placeholder="Ex: Hale producție, linia 2"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="acc-research">Responsabil cercetare</label>
+                  <input
+                    id="acc-research"
+                    value={caseForm.researchResponsible ?? ""}
+                    onChange={(e) => setCaseForm((p) => ({ ...p, researchResponsible: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="acc-witnesses">Martori (separați prin virgulă)</label>
+                  <input id="acc-witnesses" value={witnessesText} onChange={(e) => setWitnessesText(e.target.value)} />
+                </div>
 
-              {caseForm.type === "ACCIDENT" ? (
-                <>
-                  <div className="field">
-                    <label htmlFor="acc-itm-days">Zile ITM</label>
-                    <input
-                      id="acc-itm-days"
-                      type="number"
-                      min={0}
-                      value={caseForm.itmDaysOff ?? ""}
-                      onChange={(e) =>
-                        setCaseForm((p) => ({
-                          ...p,
-                          itmDaysOff: e.target.value === "" ? undefined : Number(e.target.value)
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="ssm-form-grid">
+                {caseForm.type === "ACCIDENT" ? (
+                  <>
+                    <div className="field">
+                      <label htmlFor="acc-itm-days">Zile ITM</label>
+                      <input
+                        id="acc-itm-days"
+                        type="number"
+                        min={0}
+                        value={caseForm.itmDaysOff ?? ""}
+                        onChange={(e) =>
+                          setCaseForm((p) => ({
+                            ...p,
+                            itmDaysOff: e.target.value === "" ? undefined : Number(e.target.value)
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="ssm-form-grid">
+                      <div className="field inline-check">
+                        <input
+                          id="acc-disability"
+                          type="checkbox"
+                          checked={caseForm.hasPermanentDisability ?? false}
+                          onChange={(e) => setCaseForm((p) => ({ ...p, hasPermanentDisability: e.target.checked }))}
+                        />
+                        <label htmlFor="acc-disability">Invaliditate permanentă</label>
+                      </div>
+                      <div className="field inline-check">
+                        <input
+                          id="acc-fatality"
+                          type="checkbox"
+                          checked={caseForm.isFatality ?? false}
+                          onChange={(e) => setCaseForm((p) => ({ ...p, isFatality: e.target.checked }))}
+                        />
+                        <label htmlFor="acc-fatality">Deces</label>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+
+                {caseForm.type === "INCIDENT" ? (
+                  <>
+                    <div className="field">
+                      <label htmlFor="acc-factors">Factori contribuitori</label>
+                      <textarea
+                        id="acc-factors"
+                        rows={3}
+                        value={caseForm.contributingFactors ?? ""}
+                        onChange={(e) => setCaseForm((p) => ({ ...p, contributingFactors: e.target.value }))}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="acc-immediate">Măsuri imediate</label>
+                      <textarea
+                        id="acc-immediate"
+                        rows={3}
+                        value={caseForm.immediateMeasures ?? ""}
+                        onChange={(e) => setCaseForm((p) => ({ ...p, immediateMeasures: e.target.value }))}
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                {caseForm.type === "OCCUPATIONAL_DISEASE" ? (
+                  <>
                     <div className="field inline-check">
                       <input
-                        id="acc-disability"
+                        id="acc-disease-confirmed"
                         type="checkbox"
-                        checked={caseForm.hasPermanentDisability ?? false}
-                        onChange={(e) => setCaseForm((p) => ({ ...p, hasPermanentDisability: e.target.checked }))}
+                        checked={caseForm.diseaseConfirmed ?? false}
+                        onChange={(e) => setCaseForm((p) => ({ ...p, diseaseConfirmed: e.target.checked }))}
                       />
-                      <label htmlFor="acc-disability">Invaliditate permanentă</label>
+                      <label htmlFor="acc-disease-confirmed">Boală profesională confirmată</label>
                     </div>
-                    <div className="field inline-check">
-                      <input
-                        id="acc-fatality"
-                        type="checkbox"
-                        checked={caseForm.isFatality ?? false}
-                        onChange={(e) => setCaseForm((p) => ({ ...p, isFatality: e.target.checked }))}
-                      />
-                      <label htmlFor="acc-fatality">Deces</label>
-                    </div>
-                  </div>
-                </>
-              ) : null}
+                    {caseForm.diseaseConfirmed ? (
+                      <>
+                        <div className="field">
+                          <label htmlFor="acc-disease-at">Data confirmării</label>
+                          <input
+                            id="acc-disease-at"
+                            type="datetime-local"
+                            required
+                            value={diseaseConfirmedLocal}
+                            onChange={(e) =>
+                              setCaseForm((p) => ({
+                                ...p,
+                                diseaseConfirmedAt: e.target.value
+                                  ? fromDatetimeLocalValue(e.target.value)
+                                  : undefined
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="acc-disease-by">Autoritate / medic</label>
+                          <input
+                            id="acc-disease-by"
+                            value={caseForm.diseaseConfirmedBy ?? ""}
+                            onChange={(e) => setCaseForm((p) => ({ ...p, diseaseConfirmedBy: e.target.value }))}
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="acc-disease-doc">Document / referință</label>
+                          <input
+                            id="acc-disease-doc"
+                            value={caseForm.diseaseDocumentRef ?? ""}
+                            onChange={(e) => setCaseForm((p) => ({ ...p, diseaseDocumentRef: e.target.value }))}
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
 
-              {caseForm.type === "INCIDENT" ? (
-                <>
-                  <div className="field">
-                    <label htmlFor="acc-factors">Factori contribuitori</label>
-                    <textarea
-                      id="acc-factors"
-                      rows={3}
-                      value={caseForm.contributingFactors ?? ""}
-                      onChange={(e) => setCaseForm((p) => ({ ...p, contributingFactors: e.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="acc-immediate">Măsuri imediate</label>
-                    <textarea
-                      id="acc-immediate"
-                      rows={3}
-                      value={caseForm.immediateMeasures ?? ""}
-                      onChange={(e) => setCaseForm((p) => ({ ...p, immediateMeasures: e.target.value }))}
-                    />
-                  </div>
-                </>
-              ) : null}
-
-              {caseForm.type === "OCCUPATIONAL_DISEASE" ? (
-                <>
-                  <div className="field inline-check">
-                    <input
-                      id="acc-disease-confirmed"
-                      type="checkbox"
-                      checked={caseForm.diseaseConfirmed ?? false}
-                      onChange={(e) => setCaseForm((p) => ({ ...p, diseaseConfirmed: e.target.checked }))}
-                    />
-                    <label htmlFor="acc-disease-confirmed">Boală profesională confirmată</label>
-                  </div>
-                  {caseForm.diseaseConfirmed ? (
-                    <>
-                      <div className="field">
-                        <label htmlFor="acc-disease-at">Data confirmării</label>
-                        <input
-                          id="acc-disease-at"
-                          type="datetime-local"
-                          required
-                          value={diseaseConfirmedLocal}
-                          onChange={(e) =>
-                            setCaseForm((p) => ({
-                              ...p,
-                              diseaseConfirmedAt: e.target.value
-                                ? fromDatetimeLocalValue(e.target.value)
-                                : undefined
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="acc-disease-by">Autoritate / medic</label>
-                        <input
-                          id="acc-disease-by"
-                          value={caseForm.diseaseConfirmedBy ?? ""}
-                          onChange={(e) => setCaseForm((p) => ({ ...p, diseaseConfirmedBy: e.target.value }))}
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="acc-disease-doc">Document / referință</label>
-                        <input
-                          id="acc-disease-doc"
-                          value={caseForm.diseaseDocumentRef ?? ""}
-                          onChange={(e) => setCaseForm((p) => ({ ...p, diseaseDocumentRef: e.target.value }))}
-                        />
-                      </div>
-                    </>
-                  ) : null}
-                </>
-              ) : null}
-
-              <div className="field">
-                <label htmlFor="acc-desc">Descriere</label>
-                <textarea
-                  id="acc-desc"
-                  rows={3}
-                  required
-                  value={caseForm.description}
-                  onChange={(e) => setCaseForm((p) => ({ ...p, description: e.target.value }))}
-                />
-              </div>
-              <button className="btn-primary" type="submit" disabled={createCase.isPending}>
-                {createCase.isPending ? "Se salvează..." : "Salvează caz"}
-              </button>
-              {createCase.isSuccess ? (
-                <p className="feedback success" role="status">
-                  Cazul a fost creat. Continuă cu cercetarea.
-                </p>
-              ) : null}
-              {createCase.isError ? (
-                <p className="feedback error" role="alert">
-                  {mutationErrorMessage(createCase.error)}
-                </p>
-              ) : null}
-            </form>
+                <div className="field">
+                  <label htmlFor="acc-desc">Descriere</label>
+                  <textarea
+                    id="acc-desc"
+                    rows={3}
+                    required
+                    value={caseForm.description}
+                    onChange={(e) => setCaseForm((p) => ({ ...p, description: e.target.value }))}
+                  />
+                </div>
+                <div className="comms-compose-actions">
+                  <button className="btn-primary" type="submit" disabled={createCase.isPending}>
+                    {createCase.isPending ? "Se salvează..." : "Salvează caz"}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={closeCreateForm}>
+                    Anulează
+                  </button>
+                </div>
+                {createCase.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(createCase.error)}
+                  </p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
           ) : null}
-        </div>
+        </>
       ) : null}
 
       {tab === "research" ? (

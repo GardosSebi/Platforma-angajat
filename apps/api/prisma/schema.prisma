@@ -37,6 +37,7 @@ enum SsmDocumentType {
 
 enum SsmDocumentStatus {
   ACTIVE
+  APPROVED
   ARCHIVED
 }
 
@@ -318,6 +319,7 @@ model Tenant {
   ssmPsiResponsibles         SsmPsiResponsible[]
   ssmEvacuationDrills        SsmEvacuationDrill[]
   ssmPreventionPlans         SsmPreventionPlan[]
+  ssmPreventionPlanVersions  SsmPreventionPlanVersion[]
   ssmPreventionMeasures      SsmPreventionMeasure[]
   ssmDocumentTemplates       SsmDocumentTemplate[]
   ssmDocumentTypePolicies    SsmDocumentTypePolicy[]
@@ -637,6 +639,8 @@ model SsmDocument {
   status          SsmDocumentStatus     @default(ACTIVE)
   isControlFolder Boolean               @default(false)
   activeVersionId String?
+  approvedBy      String?
+  approvedAt      DateTime?
   createdBy       String
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
@@ -1221,22 +1225,45 @@ model SsmPreventionPlan {
   departmentId     String?
   riskAssessmentId String?
   status           SsmPreventionPlanStatus @default(ACTIVE)
+  activeVersionId  String?
   reviewDate       DateTime?
   notes            String?
   createdBy        String
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
 
-  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  jobPosition    JobPosition?          @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
-  worksite       Worksite?             @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
-  department     Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  riskAssessment SsmRiskAssessment?    @relation(fields: [riskAssessmentId], references: [id], onDelete: SetNull)
+  tenant         Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobPosition    JobPosition?               @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+  worksite       Worksite?                  @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  department     Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  riskAssessment SsmRiskAssessment?         @relation(fields: [riskAssessmentId], references: [id], onDelete: SetNull)
   measures       SsmPreventionMeasure[]
+  versions       SsmPreventionPlanVersion[] @relation("PreventionPlanVersions")
+  activeVersion  SsmPreventionPlanVersion?  @relation("ActivePreventionPlanVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status])
   @@index([tenantId, targetType])
   @@index([tenantId, riskAssessmentId])
+}
+
+model SsmPreventionPlanVersion {
+  id            String   @id @default(cuid())
+  tenantId      String
+  planId        String
+  versionNumber Int
+  updateReason  String
+  reviewDate    DateTime?
+  notes         String?
+  measures      Json
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan           SsmPreventionPlan   @relation("PreventionPlanVersions", fields: [planId], references: [id], onDelete: Cascade)
+  activeForPlans SsmPreventionPlan[] @relation("ActivePreventionPlanVersion")
+
+  @@unique([planId, versionNumber])
+  @@index([tenantId, planId, createdAt])
 }
 
 model SsmPreventionMeasure {

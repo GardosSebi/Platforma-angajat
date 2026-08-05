@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsInt,
@@ -6,8 +7,10 @@ import {
   IsString,
   MaxLength,
   Min,
-  MinLength
+  MinLength,
+  ValidateNested
 } from "class-validator";
+import { Type } from "class-transformer";
 import { SsmPreventionMeasureStatus, SsmPreventionPlanStatus, SsmRiskTargetType } from "@prisma/client";
 
 export class CreateSsmPreventionPlanDto {
@@ -43,6 +46,52 @@ export class CreateSsmPreventionPlanDto {
   @IsString()
   @MaxLength(1000)
   notes?: string;
+}
+
+export class PreventionMeasureSnapshotDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  description!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  responsiblePerson?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsEnum(SsmPreventionMeasureStatus)
+  status?: SsmPreventionMeasureStatus;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
+
+export class AddSsmPreventionPlanVersionDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  updateReason!: string;
+
+  @IsOptional()
+  @IsDateString()
+  reviewDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PreventionMeasureSnapshotDto)
+  measures!: PreventionMeasureSnapshotDto[];
 }
 
 export class CreateSsmPreventionMeasureDto {

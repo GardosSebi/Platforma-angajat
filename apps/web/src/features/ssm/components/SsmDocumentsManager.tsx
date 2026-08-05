@@ -14,6 +14,7 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import {
   useAddSsmDocumentVersion,
+  useApproveSsmDocument,
   useArchiveSsmDocument,
   useCreateSsmDocument,
   useRevertSsmDocumentVersion,
@@ -49,7 +50,17 @@ const SSM_DOCUMENT_TARGET_TYPES: ReadonlyArray<CreateSsmDocumentRequest["targetT
   "ALL"
 ];
 
-const STATUS_OPTIONS: Array<SsmDocumentStatus | ""> = ["", "ACTIVE", "ARCHIVED"];
+function documentStatusLabel(status: SsmDocumentStatus): string {
+  if (status === "APPROVED") return "Aprobat";
+  if (status === "ARCHIVED") return "Arhivat";
+  return "Neaprobat";
+}
+
+function documentStatusChip(status: SsmDocumentStatus): string {
+  if (status === "APPROVED") return "good";
+  if (status === "ARCHIVED") return "bad";
+  return "warn";
+}
 
 const TYPE_HINTS: Partial<Record<CreateSsmDocumentRequest["type"], string>> = {
   RISK_ASSESSMENT: "→ Evaluări risc",
@@ -496,6 +507,7 @@ export function SsmDocumentsManager() {
   const addVersionMutation = useAddSsmDocumentVersion();
   const revertMutation = useRevertSsmDocumentVersion();
   const archiveMutation = useArchiveSsmDocument();
+  const approveMutation = useApproveSsmDocument();
 
   const selectedDoc = useMemo(
     () => docsPaged.items.find((item) => item.id === selectedDocumentId),
@@ -664,7 +676,11 @@ export function SsmDocumentsManager() {
                   onChange={(status) => setFilters((prev) => ({ ...prev, status }))}
                   allowEmpty
                   emptyLabel="Toate statusurile"
-                  options={stringOptions(STATUS_OPTIONS.filter(Boolean) as string[])}
+                  options={[
+                    { value: "ACTIVE", label: "Neaprobat" },
+                    { value: "APPROVED", label: "Aprobat" },
+                    { value: "ARCHIVED", label: "Arhivat" }
+                  ]}
                 />
                 <div className="field">
                   <label htmlFor="doc-filter-entity">Entitate</label>
@@ -747,7 +763,9 @@ export function SsmDocumentsManager() {
                         {doc.type} · {doc.targetLabel ?? doc.targetType} · v{doc.activeVersion.versionNumber}
                       </div>
                     </div>
-                    <span className={`ssm-chip ${doc.status === "ACTIVE" ? "good" : "bad"}`}>{doc.status}</span>
+                    <span className={`ssm-chip ${documentStatusChip(doc.status)}`}>
+                      {documentStatusLabel(doc.status)}
+                    </span>
                   </button>
                 ))}
                 {!docsQuery.isLoading && !docsPaged.items.length ? (
@@ -792,7 +810,10 @@ export function SsmDocumentsManager() {
                     {selectedDoc.type}
                     {TYPE_HINTS[selectedDoc.type] ? ` ${TYPE_HINTS[selectedDoc.type]}` : ""} ·{" "}
                     {selectedDoc.targetLabel ?? selectedDoc.targetType} · v
-                    {selectedDoc.activeVersion.versionNumber} · {selectedDoc.status}
+                    {selectedDoc.activeVersion.versionNumber} · {documentStatusLabel(selectedDoc.status)}
+                    {selectedDoc.approvedAt
+                      ? ` · aprobat ${new Date(selectedDoc.approvedAt).toLocaleDateString("ro-RO")}`
+                      : ""}
                     {selectedDoc.isControlFolder ? " · ITM/ISU" : ""}
                   </p>
 
@@ -836,14 +857,32 @@ export function SsmDocumentsManager() {
 
                   {canApproveDocuments ? (
                     <div className="ssm-inline-actions">
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => selectedDocumentId && archiveMutation.mutate(selectedDocumentId)}
-                        disabled={archiveMutation.isPending}
-                      >
-                        Arhivează
-                      </button>
+                      {selectedDoc?.status !== "APPROVED" && selectedDoc?.status !== "ARCHIVED" ? (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => selectedDocumentId && approveMutation.mutate(selectedDocumentId)}
+                          disabled={approveMutation.isPending}
+                        >
+                          {approveMutation.isPending ? "Se aprobă…" : "Aprobă document"}
+                        </button>
+                      ) : null}
+                      {selectedDoc?.status !== "ARCHIVED" ? (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => selectedDocumentId && archiveMutation.mutate(selectedDocumentId)}
+                          disabled={archiveMutation.isPending}
+                        >
+                          Arhivează
+                        </button>
+                      ) : null}
+                      {approveMutation.isSuccess ? (
+                        <span className="feedback success">Document aprobat.</span>
+                      ) : null}
+                      {approveMutation.isError ? (
+                        <span className="feedback error">{mutationErrorMessage(approveMutation.error)}</span>
+                      ) : null}
                       {archiveMutation.isSuccess ? (
                         <span className="feedback success">Document arhivat.</span>
                       ) : null}

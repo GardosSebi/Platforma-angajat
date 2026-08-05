@@ -36,7 +36,7 @@ export const SSM_DOCUMENT_TARGET_TYPES = [
 
 export type SsmDocumentTargetType = (typeof SSM_DOCUMENT_TARGET_TYPES)[number];
 
-export type SsmDocumentStatus = "ACTIVE" | "ARCHIVED";
+export type SsmDocumentStatus = "ACTIVE" | "APPROVED" | "ARCHIVED";
 
 export interface CreateSsmDocumentRequest {
   title: string;
@@ -80,6 +80,8 @@ export interface SsmDocumentListItem {
   targetRefId?: string | null;
   targetLabel?: string | null;
   isControlFolder: boolean;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   activeVersion: SsmDocumentVersion;
@@ -1056,6 +1058,9 @@ export interface SsmPreventionPlanItem {
   riskAssessmentId?: string | null;
   riskAssessmentTitle?: string | null;
   status: SsmPreventionPlanStatus;
+  activeVersionId?: string | null;
+  activeVersionNumber?: number | null;
+  updateReason?: string | null;
   reviewDate?: string | null;
   notes?: string | null;
   measureCount: number;
@@ -1063,6 +1068,43 @@ export interface SsmPreventionPlanItem {
   measures: SsmPreventionMeasureItem[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SsmPreventionPlanVersionItem {
+  id: string;
+  versionNumber: number;
+  updateReason: string;
+  reviewDate?: string | null;
+  notes?: string | null;
+  measures: Array<{
+    description: string;
+    responsiblePerson?: string | null;
+    dueDate?: string | null;
+    status?: SsmPreventionMeasureStatus;
+    notes?: string | null;
+  }>;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SsmPreventionPlanHistoryResponse {
+  planId: string;
+  title: string;
+  activeVersionId?: string | null;
+  versions: SsmPreventionPlanVersionItem[];
+}
+
+export interface AddSsmPreventionPlanVersionRequest {
+  updateReason: string;
+  reviewDate?: string;
+  notes?: string;
+  measures: Array<{
+    description: string;
+    responsiblePerson?: string;
+    dueDate?: string;
+    status?: SsmPreventionMeasureStatus;
+    notes?: string;
+  }>;
 }
 
 export interface CreateSsmPreventionPlanRequest {

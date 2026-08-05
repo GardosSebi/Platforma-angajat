@@ -37,12 +37,42 @@ export function useArchivePreventionPlan() {
   });
 }
 
+export function usePreventionPlanHistory(planId?: string | null) {
+  return useQuery({
+    queryKey: ["ssm", "prevention-plans", planId, "history"],
+    queryFn: () => ssmApi.getPreventionPlanHistory(planId!),
+    enabled: Boolean(planId)
+  });
+}
+
+export function useAddPreventionPlanVersion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      planId,
+      payload
+    }: {
+      planId: string;
+      payload: import("@repo/shared-types/ssm").AddSsmPreventionPlanVersionRequest;
+    }) => ssmApi.addPreventionPlanVersion(planId, payload),
+    onSuccess: async (_, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans", variables.planId, "history"] })
+      ]);
+    }
+  });
+}
+
 export function useCreatePreventionMeasure() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateSsmPreventionMeasureRequest) => ssmApi.createPreventionMeasure(payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans"] });
+    onSuccess: async (_, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "prevention-plans", variables.planId, "history"] })
+      ]);
     }
   });
 }

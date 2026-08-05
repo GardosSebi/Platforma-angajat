@@ -5,9 +5,11 @@ import { useDepartmentsLookup, useJobPositionsLookup, useWorksitesLookup } from 
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import {
+  useAddPreventionPlanVersion,
   useArchivePreventionPlan,
   useCreatePreventionMeasure,
   useCreatePreventionPlan,
+  usePreventionPlanHistory,
   usePreventionPlans,
   useUpdatePreventionMeasure
 } from "../hooks/useSsmPpp";
@@ -61,12 +63,15 @@ export function SsmPppManager() {
   const archivePlan = useArchivePreventionPlan();
   const createMeasure = useCreatePreventionMeasure();
   const updateMeasure = useUpdatePreventionMeasure();
+  const addVersion = useAddPreventionPlanVersion();
 
   const [planForm, setPlanForm] = useState(EMPTY_PLAN);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [measureDescription, setMeasureDescription] = useState("");
   const [measureResponsible, setMeasureResponsible] = useState("");
   const [measureDueDate, setMeasureDueDate] = useState("");
+  const [versionReason, setVersionReason] = useState("");
+  const historyQuery = usePreventionPlanHistory(selectedPlanId);
 
   const items = plansQuery.data?.items ?? [];
   const activePlans = items.filter((plan) => plan.status === "ACTIVE");
@@ -103,6 +108,7 @@ export function SsmPppManager() {
     setMeasureDescription("");
     setMeasureResponsible("");
     setMeasureDueDate("");
+    setVersionReason("");
   };
 
   useEffect(() => {
@@ -158,6 +164,31 @@ export function SsmPppManager() {
           setMeasureResponsible("");
           setMeasureDueDate("");
         }
+      }
+    );
+  };
+
+  const onSaveVersion = (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedPlan || !versionReason.trim()) return;
+    addVersion.mutate(
+      {
+        planId: selectedPlan.id,
+        payload: {
+          updateReason: versionReason.trim(),
+          reviewDate: selectedPlan.reviewDate ?? undefined,
+          notes: selectedPlan.notes ?? undefined,
+          measures: selectedPlan.measures.map((measure) => ({
+            description: measure.description,
+            responsiblePerson: measure.responsiblePerson ?? undefined,
+            dueDate: measure.dueDate ?? undefined,
+            status: measure.status,
+            notes: measure.notes ?? undefined
+          }))
+        }
+      },
+      {
+        onSuccess: () => setVersionReason("")
       }
     );
   };
@@ -310,6 +341,7 @@ export function SsmPppManager() {
                 </div>
                 <p className="ssm-ppp-plan-meta">
                   {targetTypeLabel(plan.targetType)} · {planTargetLabel(plan)}
+                  {plan.activeVersionNumber ? ` · v${plan.activeVersionNumber}` : ""}
                   {plan.riskAssessmentTitle ? ` · Eval: ${plan.riskAssessmentTitle}` : ""}
                 </p>
                 <div className="ssm-ppp-plan-stats">
@@ -343,6 +375,7 @@ export function SsmPppManager() {
                     </h3>
                     <p className="ssm-ppp-detail-meta">
                       {targetTypeLabel(selectedPlan.targetType)} · {planTargetLabel(selectedPlan)}
+                      {selectedPlan.activeVersionNumber ? ` · v${selectedPlan.activeVersionNumber}` : ""}
                       {selectedPlan.reviewDate ? ` · revizie ${formatRoDate(selectedPlan.reviewDate)}` : ""}
                       {selectedPlan.riskAssessmentTitle
                         ? ` · evaluare: ${selectedPlan.riskAssessmentTitle}`
@@ -448,6 +481,67 @@ export function SsmPppManager() {
                       ))}
                     </ul>
                   )}
+                </div>
+
+                <form className="ssm-ppp-measure-add" onSubmit={onSaveVersion}>
+                  <h4 className="ssm-ppp-subtitle">Salvează versiune PPP</h4>
+                  <p className="field-hint">
+                    Creează un snapshot al măsurilor curente (ca la evaluările de risc). Motivul modificării este obligatoriu.
+                  </p>
+                  <div className="field">
+                    <label htmlFor="ppp-version-reason">Motiv actualizare</label>
+                    <input
+                      id="ppp-version-reason"
+                      required
+                      value={versionReason}
+                      placeholder="Ex. Actualizare după control ITM"
+                      onChange={(event) => setVersionReason(event.target.value)}
+                    />
+                  </div>
+                  <div className="ssm-ppp-measure-add-actions">
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      disabled={addVersion.isPending || !versionReason.trim()}
+                    >
+                      {addVersion.isPending ? "Se salvează…" : "Salvează versiune"}
+                    </button>
+                  </div>
+                  {addVersion.isSuccess ? (
+                    <p className="feedback success" role="status">
+                      Versiune PPP salvată.
+                    </p>
+                  ) : null}
+                  {addVersion.isError ? (
+                    <p className="feedback error">{mutationErrorMessage(addVersion.error)}</p>
+                  ) : null}
+                </form>
+
+                <div className="ssm-ppp-measures-section">
+                  <h4 className="ssm-ppp-subtitle">
+                    Istoric versiuni
+                    <span className="ssm-chip">{historyQuery.data?.versions.length ?? 0}</span>
+                  </h4>
+                  {historyQuery.isLoading ? <p className="ssm-ppp-empty">Se încarcă istoricul…</p> : null}
+                  <div className="ssm-history-list">
+                    {(historyQuery.data?.versions ?? []).map((version) => (
+                      <div key={version.id} className="ssm-history-item">
+                        <div>
+                          <strong>
+                            v{version.versionNumber}
+                            {version.id === historyQuery.data?.activeVersionId ? " · Activă" : ""}
+                          </strong>
+                          <div className="field-hint">
+                            {version.updateReason} · {formatRoDate(version.createdAt)} ·{" "}
+                            {version.measures.length} măsuri
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!historyQuery.isLoading && !(historyQuery.data?.versions.length ?? 0) ? (
+                      <p className="ssm-ppp-empty">Nu există versiuni încă.</p>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>,

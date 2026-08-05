@@ -113,3 +113,16 @@ export function useArchiveSsmDocument() {
     }
   });
 }
+
+export function useApproveSsmDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentId: string) => ssmApi.approveDocument(documentId),
+    onSuccess: async (_, documentId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "documents", "history", documentId] })
+      ]);
+    }
+  });
+}

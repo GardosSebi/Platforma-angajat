@@ -231,6 +231,16 @@ export class SsmDocumentsController {
     return this.documentsService.revertToVersion(tenantId, user.sub, id, dto.versionId, dto.changeNote);
   }
 
+  @Patch(":id/approve")
+  @RequirePermissions(Permission.SSM_DOCUMENT_APPROVE)
+  approve(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string
+  ) {
+    return this.documentsService.approveDocument(tenantId, user.sub, id, user);
+  }
+
   @Patch(":id/archive")
   @RequirePermissions(Permission.SSM_DOCUMENT_APPROVE)
   archive(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Param("id") id: string) {

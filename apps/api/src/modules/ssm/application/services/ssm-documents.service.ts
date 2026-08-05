@@ -73,7 +73,7 @@ function ssmDocumentVisibleToEmployee(
   },
   employee: EmployeePlacementNames
 ): boolean {
-  if (doc.status !== SsmDocumentStatus.ACTIVE) {
+  if (doc.status !== SsmDocumentStatus.APPROVED) {
     return false;
   }
   if (doc.targetType === SsmDocumentTargetType.ALL) {
@@ -361,7 +361,12 @@ export class SsmDocumentsService {
     });
     await this.prisma.ssmDocument.update({
       where: { id: documentId },
-      data: { activeVersionId: version.id }
+      data: {
+        activeVersionId: version.id,
+        status: SsmDocumentStatus.ACTIVE,
+        approvedBy: null,
+        approvedAt: null
+      }
     });
 
     await this.auditLog.write({
@@ -397,7 +402,9 @@ export class SsmDocumentsService {
       where: { id: documentId },
       data: {
         activeVersionId: version.id,
-        status: SsmDocumentStatus.ACTIVE
+        status: SsmDocumentStatus.ACTIVE,
+        approvedBy: null,
+        approvedAt: null
       }
     });
 
@@ -414,10 +421,68 @@ export class SsmDocumentsService {
     return { documentId, activeVersionId: version.id, activeVersionNumber: version.versionNumber };
   }
 
+  async approveDocument(tenantId: string, actorId: string, documentId: string, viewer: JwtPayload) {
+    const document = await this.prisma.ssmDocument.findFirst({
+      where: { id: documentId, tenantId }
+    });
+    if (!document) {
+      throw new NotFoundException("Document not found.");
+    }
+    if (document.status === SsmDocumentStatus.ARCHIVED) {
+      throw new BadRequestException("Cannot approve an archived document.");
+    }
+    if (document.status === SsmDocumentStatus.APPROVED) {
+      return {
+        documentId,
+        status: SsmDocumentStatus.APPROVED,
+        approvedBy: document.approvedBy,
+        approvedAt: document.approvedAt?.toISOString() ?? null
+      };
+    }
+
+    const policies = await this.loadTypePolicies(tenantId);
+    assertDocumentTypeAccess(viewer, document.type, "approve", policies);
+
+    const approvedAt = new Date();
+    await this.prisma.ssmDocument.update({
+      where: { id: documentId },
+      data: {
+        status: SsmDocumentStatus.APPROVED,
+        approvedBy: actorId,
+        approvedAt
+      }
+    });
+
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "DOCUMENT_APPROVED",
+      entityType: "SsmDocument",
+      entityId: documentId,
+      payload: { type: document.type, title: document.title }
+    });
+
+    return {
+      documentId,
+      status: SsmDocumentStatus.APPROVED,
+      approvedBy: actorId,
+      approvedAt: approvedAt.toISOString()
+    };
+  }
+
   async archiveDocument(tenantId: string, actorId: string, documentId: string) {
     const updated = await this.prisma.ssmDocument.updateMany({
-      where: { id: documentId, tenantId, status: SsmDocumentStatus.ACTIVE },
-      data: { status: SsmDocumentStatus.ARCHIVED }
+      where: {
+        id: documentId,
+        tenantId,
+        status: { in: [SsmDocumentStatus.ACTIVE, SsmDocumentStatus.APPROVED] }
+      },
+      data: {
+        status: SsmDocumentStatus.ARCHIVED,
+        approvedBy: null,
+        approvedAt: null
+      }
     });
     if (!updated.count) {
       throw new NotFoundException("Active document not found.");
@@ -621,7 +686,7 @@ export class SsmDocumentsService {
       const filtered = rows
         .filter((row) => row.activeVersion)
         .filter((row) => {
-          if (row.status !== SsmDocumentStatus.ACTIVE) return false;
+          if (row.status !== SsmDocumentStatus.APPROVED) return false;
           if (row.targetType === SsmDocumentTargetType.ALL) return true;
           if (row.targetType === SsmDocumentTargetType.ENTITY) return true;
           if (row.targetType === SsmDocumentTargetType.WORKSITE) {
@@ -748,7 +813,7 @@ export class SsmDocumentsService {
           targetType: document.targetType,
           targetLabel: document.targetLabel,
           entityName: document.entityName,
-          status: SsmDocumentStatus.ACTIVE
+          status: SsmDocumentStatus.APPROVED
         },
         ctx.employee
       )
@@ -801,7 +866,7 @@ export class SsmDocumentsService {
           targetType: document.targetType,
           targetLabel: document.targetLabel,
           entityName: document.entityName,
-          status: document.status === SsmDocumentStatus.ARCHIVED ? SsmDocumentStatus.ACTIVE : document.status
+          status: document.status === SsmDocumentStatus.ARCHIVED ? SsmDocumentStatus.APPROVED : document.status
         },
         ctx.employee
       )
@@ -846,7 +911,7 @@ export class SsmDocumentsService {
       where: {
         tenantId,
         isControlFolder: true,
-        status: SsmDocumentStatus.ACTIVE
+        status: SsmDocumentStatus.APPROVED
       },
       include: {
         activeVersion: true

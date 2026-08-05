@@ -15,6 +15,7 @@ import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { TrainingTypeSelect } from "./TrainingTypeSelect";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
@@ -140,7 +141,7 @@ export function SsmTrainingSuiteManager() {
   const dispatchReminders = useDispatchTrainingReminders();
 
   const defaultTypeMeta = trainingCategoryMeta("PERIODIC");
-  const [typeForm, setTypeForm] = useState<CreateSsmTrainingTypeRequest>({
+  const emptyTypeForm = (): CreateSsmTrainingTypeRequest => ({
     code: "GEN-SSM",
     name: "Instruire generală SSM",
     category: "PERIODIC",
@@ -149,6 +150,7 @@ export function SsmTrainingSuiteManager() {
     reminderDays: defaultTypeMeta?.defaultReminderDays ?? [30, 15, 7],
     testQuestions: []
   });
+  const [typeForm, setTypeForm] = useState<CreateSsmTrainingTypeRequest>(emptyTypeForm);
   const [editingTypeId, setEditingTypeId] = useState("");
   const [planForm, setPlanForm] = useState<CreateSsmTrainingPlanRequest>(defaultPlan());
   const [collectiveForm, setCollectiveForm] = useState({
@@ -241,6 +243,20 @@ export function SsmTrainingSuiteManager() {
     }));
   };
 
+  const closeTypeForm = () => {
+    setShowTypeForm(false);
+    setEditingTypeId("");
+    setShowTestEditor(false);
+    setTypeForm(emptyTypeForm());
+  };
+
+  const openNewTypeForm = () => {
+    setEditingTypeId("");
+    setShowTestEditor(false);
+    setTypeForm(emptyTypeForm());
+    setShowTypeForm(true);
+  };
+
   const onCreateType = (event: FormEvent) => {
     event.preventDefault();
     const payload: CreateSsmTrainingTypeRequest = {
@@ -264,8 +280,7 @@ export function SsmTrainingSuiteManager() {
         },
         {
           onSuccess: () => {
-            setEditingTypeId("");
-            setShowTypeForm(false);
+            closeTypeForm();
           }
         }
       );
@@ -274,7 +289,7 @@ export function SsmTrainingSuiteManager() {
     createType.mutate(payload, {
       onSuccess: (created) => {
         setPlanForm((prev) => ({ ...prev, trainingTypeId: created.id }));
-        setShowTypeForm(false);
+        closeTypeForm();
       }
     });
   };
@@ -625,12 +640,12 @@ export function SsmTrainingSuiteManager() {
       ) : null}
 
       {tab === "types" && showCatalogForms ? (
-        <div className="ssm-panel-layout">
+        <>
           <div className="card form-stack ssm-doc-card">
             <div className="ssm-card-header">
               <h4 className="card-title">Tipuri configurate</h4>
-              <button type="button" className="btn-primary" onClick={() => setShowTypeForm((v) => !v)}>
-                {showTypeForm ? "Ascunde formular" : "Tip nou"}
+              <button type="button" className="btn-primary" onClick={openNewTypeForm}>
+                Tip nou
               </button>
             </div>
             <div className="ssm-history-list">
@@ -647,7 +662,7 @@ export function SsmTrainingSuiteManager() {
                       {t.testQuestions?.length ? ` · ${t.testQuestions.length} întrebări custom` : ""}
                     </div>
                   </div>
-                  <button type="button" className="btn-text-link" onClick={() => onLoadTypeForEdit(t.id)}>
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => onLoadTypeForEdit(t.id)}>
                     Editează
                   </button>
                 </div>
@@ -657,89 +672,100 @@ export function SsmTrainingSuiteManager() {
           </div>
 
           {showTypeForm ? (
-            <form className="card form-stack ssm-doc-card" onSubmit={onCreateType}>
-              <h4 className="card-title">{editingTypeId ? "Editează tip" : "Tip instruire nou"}</h4>
-              <div className="field">
-                <label htmlFor="training-code">Cod</label>
-                <input
-                  id="training-code"
-                  value={typeForm.code}
-                  disabled={Boolean(editingTypeId)}
-                  onChange={(e) => setTypeForm((p) => ({ ...p, code: e.target.value }))}
+            <MasterDataCreateModal
+              title={editingTypeId ? "Editează tip" : "Tip instruire nou"}
+              titleId="ssm-training-type-modal-title"
+              size={showTestEditor ? "wide" : "default"}
+              onClose={closeTypeForm}
+            >
+              <form className="form-stack" onSubmit={onCreateType}>
+                <div className="field">
+                  <label htmlFor="training-code">Cod</label>
+                  <input
+                    id="training-code"
+                    value={typeForm.code}
+                    disabled={Boolean(editingTypeId)}
+                    onChange={(e) => setTypeForm((p) => ({ ...p, code: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="training-name">Denumire</label>
+                  <input
+                    id="training-name"
+                    value={typeForm.name}
+                    onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
+                  />
+                </div>
+                <FieldSelect
+                  id="training-category"
+                  label="Categorie legală"
+                  value={typeForm.category ?? "PERIODIC"}
+                  onChange={(category) => onCategoryChange(category as SsmTrainingCategory)}
+                  options={TRAINING_CATEGORIES.map((category) => ({
+                    value: category,
+                    label: trainingCategoryLabel(category)
+                  }))}
                 />
-              </div>
-              <div className="field">
-                <label htmlFor="training-name">Denumire</label>
-                <input
-                  id="training-name"
-                  value={typeForm.name}
-                  onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
-                />
-              </div>
-              <FieldSelect
-                id="training-category"
-                label="Categorie legală"
-                value={typeForm.category ?? "PERIODIC"}
-                onChange={(category) => onCategoryChange(category as SsmTrainingCategory)}
-                options={TRAINING_CATEGORIES.map((category) => ({
-                  value: category,
-                  label: trainingCategoryLabel(category)
-                }))}
-              />
-              <div className="field">
-                <label htmlFor="training-legal-hours">Ore minime</label>
-                <input
-                  id="training-legal-hours"
-                  type="number"
-                  min={0}
-                  value={typeForm.legalMinDurationHours ?? ""}
-                  onChange={(e) =>
-                    setTypeForm((p) => ({
-                      ...p,
-                      legalMinDurationHours: e.target.value ? Number(e.target.value) : undefined
-                    }))
-                  }
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="training-rec">Recurență (zile)</label>
-                <input
-                  id="training-rec"
-                  type="number"
-                  value={typeForm.recurrenceDays ?? ""}
-                  onChange={(e) =>
-                    setTypeForm((p) => ({
-                      ...p,
-                      recurrenceDays: e.target.value ? Number(e.target.value) : undefined
-                    }))
-                  }
-                />
-              </div>
-              <button type="button" className="btn-text-link" onClick={() => setShowTestEditor((v) => !v)}>
-                {showTestEditor ? "Ascunde editorul de test" : "Test personalizat (opțional)"}
-              </button>
-              {showTestEditor ? (
-                <TrainingTestQuestionsEditor
-                  value={typeForm.testQuestions ?? []}
-                  onChange={(testQuestions) => setTypeForm((p) => ({ ...p, testQuestions }))}
-                />
-              ) : null}
-              <button
-                className="btn-primary"
-                type="submit"
-                disabled={createType.isPending || updateType.isPending}
-              >
-                {editingTypeId
-                  ? updateType.isPending
-                    ? "Se salvează…"
-                    : "Salvează tip"
-                  : createType.isPending
-                    ? "Se creează…"
-                    : "Adaugă tip"}
-              </button>
-            </form>
+                <div className="field">
+                  <label htmlFor="training-legal-hours">Ore minime</label>
+                  <input
+                    id="training-legal-hours"
+                    type="number"
+                    min={0}
+                    value={typeForm.legalMinDurationHours ?? ""}
+                    onChange={(e) =>
+                      setTypeForm((p) => ({
+                        ...p,
+                        legalMinDurationHours: e.target.value ? Number(e.target.value) : undefined
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="training-rec">Recurență (zile)</label>
+                  <input
+                    id="training-rec"
+                    type="number"
+                    value={typeForm.recurrenceDays ?? ""}
+                    onChange={(e) =>
+                      setTypeForm((p) => ({
+                        ...p,
+                        recurrenceDays: e.target.value ? Number(e.target.value) : undefined
+                      }))
+                    }
+                  />
+                </div>
+                <button type="button" className="btn-secondary" onClick={() => setShowTestEditor((v) => !v)}>
+                  {showTestEditor ? "Ascunde editorul de test" : "Test personalizat (opțional)"}
+                </button>
+                {showTestEditor ? (
+                  <TrainingTestQuestionsEditor
+                    value={typeForm.testQuestions ?? []}
+                    onChange={(testQuestions) => setTypeForm((p) => ({ ...p, testQuestions }))}
+                  />
+                ) : null}
+                <div className="comms-compose-actions">
+                  <button
+                    className="btn-primary"
+                    type="submit"
+                    disabled={createType.isPending || updateType.isPending}
+                  >
+                    {editingTypeId
+                      ? updateType.isPending
+                        ? "Se salvează…"
+                        : "Salvează tip"
+                      : createType.isPending
+                        ? "Se creează…"
+                        : "Adaugă tip"}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={closeTypeForm}>
+                    Anulează
+                  </button>
+                </div>
+              </form>
+            </MasterDataCreateModal>
           ) : null}
-        </div>
+        </>
       ) : null}
 
       {tab === "flow" ? (

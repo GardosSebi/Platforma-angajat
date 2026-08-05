@@ -11,6 +11,7 @@ import {
   CreateSsmEvacuationDrillDto,
   CreateSsmPreventionMeasureDto,
   CreateSsmPreventionPlanDto,
+  AddSsmPreventionPlanVersionDto,
   ListSsmPreventionPlansDto,
   UpdateSsmPreventionMeasureDto
 } from "./dto/ssm-ppp.dto";
@@ -34,6 +35,23 @@ export class SsmPppController {
     @Body() dto: CreateSsmPreventionPlanDto
   ) {
     return this.pppService.createPlan(tenantId, user.sub, dto);
+  }
+
+  @Get("prevention-plans/:id/history")
+  @RequirePermissions(Permission.SSM_RISK_VIEW)
+  planHistory(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.pppService.history(tenantId, id);
+  }
+
+  @Post("prevention-plans/:id/versions")
+  @RequirePermissions(Permission.SSM_RISK_EDIT)
+  addPlanVersion(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("id") id: string,
+    @Body() dto: AddSsmPreventionPlanVersionDto
+  ) {
+    return this.pppService.addVersion(tenantId, user.sub, id, dto);
   }
 
   @Patch("prevention-plans/:id/archive")

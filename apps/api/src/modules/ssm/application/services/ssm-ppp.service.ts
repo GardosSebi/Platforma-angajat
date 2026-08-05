@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  Prisma,
   SsmPreventionMeasureStatus,
   SsmPreventionPlanStatus,
   SsmRiskTargetType
@@ -7,12 +8,21 @@ import {
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import {
+  AddSsmPreventionPlanVersionDto,
   CreateSsmEvacuationDrillDto,
   CreateSsmPreventionMeasureDto,
   CreateSsmPreventionPlanDto,
   ListSsmPreventionPlansDto,
   UpdateSsmPreventionMeasureDto
 } from "../../api/dto/ssm-ppp.dto";
+
+type MeasureSnapshot = {
+  description: string;
+  responsiblePerson?: string | null;
+  dueDate?: string | null;
+  status?: SsmPreventionMeasureStatus | string;
+  notes?: string | null;
+};
 
 function parseDate(value: string): Date {
   const d = new Date(value);
@@ -22,9 +32,29 @@ function parseDate(value: string): Date {
   return d;
 }
 
-function parseOptionalDate(value?: string): Date | undefined {
+function parseOptionalDate(value?: string | null): Date | undefined {
   if (!value?.trim()) return undefined;
   return parseDate(value);
+}
+
+function asMeasureSnapshots(value: unknown): MeasureSnapshot[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const description = typeof row.description === "string" ? row.description.trim() : "";
+      if (!description) return null;
+      return {
+        description,
+        responsiblePerson:
+          typeof row.responsiblePerson === "string" ? row.responsiblePerson.trim() || null : null,
+        dueDate: typeof row.dueDate === "string" ? row.dueDate : null,
+        status: typeof row.status === "string" ? row.status : SsmPreventionMeasureStatus.OPEN,
+        notes: typeof row.notes === "string" ? row.notes.trim() || null : null
+      } satisfies MeasureSnapshot;
+    })
+    .filter((item): item is MeasureSnapshot => Boolean(item));
 }
 
 @Injectable()
@@ -60,50 +90,6 @@ export class SsmPppService {
     }
   }
 
-  async listPlans(tenantId: string, query?: ListSsmPreventionPlansDto) {
-    const rows = await this.prisma.ssmPreventionPlan.findMany({
-      where: {
-        tenantId,
-        ...(query?.targetType ? { targetType: query.targetType } : {}),
-        ...(query?.status ? { status: query.status } : {}),
-        ...(query?.riskAssessmentId ? { riskAssessmentId: query.riskAssessmentId } : {})
-      },
-      include: {
-        jobPosition: { select: { code: true, name: true } },
-        worksite: { select: { code: true, name: true } },
-        department: { select: { code: true, name: true } },
-        riskAssessment: { select: { id: true, title: true } },
-        measures: {
-          orderBy: [{ status: "asc" }, { dueDate: "asc" }]
-        }
-      },
-      orderBy: { updatedAt: "desc" }
-    });
-    return {
-      items: rows.map((row) => ({
-        id: row.id,
-        title: row.title,
-        targetType: row.targetType,
-        jobPositionId: row.jobPositionId,
-        worksiteId: row.worksiteId,
-        departmentId: row.departmentId,
-        jobPositionName: row.jobPosition?.name ?? null,
-        worksiteName: row.worksite?.name ?? null,
-        departmentName: row.department?.name ?? null,
-        riskAssessmentId: row.riskAssessmentId,
-        riskAssessmentTitle: row.riskAssessment?.title ?? null,
-        status: row.status,
-        reviewDate: row.reviewDate?.toISOString() ?? null,
-        notes: row.notes,
-        measureCount: row.measures.length,
-        openMeasures: row.measures.filter((m) => m.status !== SsmPreventionMeasureStatus.COMPLETED).length,
-        measures: row.measures.map((m) => this.mapMeasure(m)),
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString()
-      }))
-    };
-  }
-
   private mapMeasure(m: {
     id: string;
     planId: string;
@@ -130,6 +116,129 @@ export class SsmPppService {
     };
   }
 
+  private snapshotFromLiveMeasures(
+    measures: Array<{
+      description: string;
+      responsiblePerson: string | null;
+      dueDate: Date | null;
+      status: SsmPreventionMeasureStatus;
+      notes: string | null;
+    }>
+  ): MeasureSnapshot[] {
+    return measures.map((m) => ({
+      description: m.description,
+      responsiblePerson: m.responsiblePerson,
+      dueDate: m.dueDate?.toISOString() ?? null,
+      status: m.status,
+      notes: m.notes
+    }));
+  }
+
+  private async syncActiveVersionSnapshot(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    planId: string,
+    actorId: string
+  ) {
+    const plan = await tx.ssmPreventionPlan.findFirst({
+      where: { id: planId, tenantId },
+      include: { measures: { orderBy: { createdAt: "asc" } }, activeVersion: true }
+    });
+    if (!plan?.activeVersionId) return;
+
+    const snapshot = this.snapshotFromLiveMeasures(plan.measures);
+    await tx.ssmPreventionPlanVersion.update({
+      where: { id: plan.activeVersionId },
+      data: {
+        measures: snapshot as unknown as Prisma.InputJsonValue,
+        reviewDate: plan.reviewDate,
+        notes: plan.notes,
+        ...(plan.activeVersion?.updateReason ? {} : { updateReason: "Actualizare măsuri" }),
+        createdBy: plan.activeVersion?.createdBy ?? actorId
+      }
+    });
+  }
+
+  private async replaceLiveMeasures(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    planId: string,
+    actorId: string,
+    measures: MeasureSnapshot[]
+  ) {
+    await tx.ssmPreventionMeasure.deleteMany({ where: { tenantId, planId } });
+    if (!measures.length) return;
+    await tx.ssmPreventionMeasure.createMany({
+      data: measures.map((measure) => {
+        const status =
+          measure.status === SsmPreventionMeasureStatus.COMPLETED ||
+          measure.status === SsmPreventionMeasureStatus.OVERDUE ||
+          measure.status === SsmPreventionMeasureStatus.OPEN
+            ? measure.status
+            : SsmPreventionMeasureStatus.OPEN;
+        return {
+          tenantId,
+          planId,
+          description: measure.description.trim(),
+          responsiblePerson: measure.responsiblePerson?.trim() || undefined,
+          dueDate: parseOptionalDate(measure.dueDate ?? undefined),
+          status,
+          completedAt: status === SsmPreventionMeasureStatus.COMPLETED ? new Date() : undefined,
+          notes: measure.notes?.trim() || undefined,
+          createdBy: actorId
+        };
+      })
+    });
+  }
+
+  async listPlans(tenantId: string, query?: ListSsmPreventionPlansDto) {
+    const rows = await this.prisma.ssmPreventionPlan.findMany({
+      where: {
+        tenantId,
+        ...(query?.targetType ? { targetType: query.targetType } : {}),
+        ...(query?.status ? { status: query.status } : {}),
+        ...(query?.riskAssessmentId ? { riskAssessmentId: query.riskAssessmentId } : {})
+      },
+      include: {
+        jobPosition: { select: { code: true, name: true } },
+        worksite: { select: { code: true, name: true } },
+        department: { select: { code: true, name: true } },
+        riskAssessment: { select: { id: true, title: true } },
+        activeVersion: true,
+        measures: {
+          orderBy: [{ status: "asc" }, { dueDate: "asc" }]
+        }
+      },
+      orderBy: { updatedAt: "desc" }
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        targetType: row.targetType,
+        jobPositionId: row.jobPositionId,
+        worksiteId: row.worksiteId,
+        departmentId: row.departmentId,
+        jobPositionName: row.jobPosition?.name ?? null,
+        worksiteName: row.worksite?.name ?? null,
+        departmentName: row.department?.name ?? null,
+        riskAssessmentId: row.riskAssessmentId,
+        riskAssessmentTitle: row.riskAssessment?.title ?? null,
+        status: row.status,
+        activeVersionId: row.activeVersionId,
+        activeVersionNumber: row.activeVersion?.versionNumber ?? null,
+        updateReason: row.activeVersion?.updateReason ?? null,
+        reviewDate: row.reviewDate?.toISOString() ?? null,
+        notes: row.notes,
+        measureCount: row.measures.length,
+        openMeasures: row.measures.filter((m) => m.status !== SsmPreventionMeasureStatus.COMPLETED).length,
+        measures: row.measures.map((m) => this.mapMeasure(m)),
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString()
+      }))
+    };
+  }
+
   async createPlan(tenantId: string, actorId: string, dto: CreateSsmPreventionPlanDto) {
     await this.assertTarget(tenantId, dto.targetType, dto.jobPositionId, dto.worksiteId, dto.departmentId);
     if (dto.riskAssessmentId) {
@@ -138,30 +247,145 @@ export class SsmPppService {
       });
       if (!assessment) throw new BadRequestException("riskAssessmentId nevalid.");
     }
-    const plan = await this.prisma.ssmPreventionPlan.create({
-      data: {
-        tenantId,
-        title: dto.title.trim(),
-        targetType: dto.targetType,
-        jobPositionId: dto.jobPositionId,
-        worksiteId: dto.worksiteId,
-        departmentId: dto.departmentId,
-        riskAssessmentId: dto.riskAssessmentId,
-        reviewDate: parseOptionalDate(dto.reviewDate),
-        notes: dto.notes?.trim(),
-        createdBy: actorId
-      }
+
+    const planId = await this.prisma.$transaction(async (tx) => {
+      const plan = await tx.ssmPreventionPlan.create({
+        data: {
+          tenantId,
+          title: dto.title.trim(),
+          targetType: dto.targetType,
+          jobPositionId: dto.jobPositionId,
+          worksiteId: dto.worksiteId,
+          departmentId: dto.departmentId,
+          riskAssessmentId: dto.riskAssessmentId,
+          reviewDate: parseOptionalDate(dto.reviewDate),
+          notes: dto.notes?.trim(),
+          createdBy: actorId
+        }
+      });
+      const version = await tx.ssmPreventionPlanVersion.create({
+        data: {
+          tenantId,
+          planId: plan.id,
+          versionNumber: 1,
+          updateReason: "Versiune inițială",
+          reviewDate: parseOptionalDate(dto.reviewDate),
+          notes: dto.notes?.trim(),
+          measures: [] as unknown as Prisma.InputJsonValue,
+          createdBy: actorId
+        }
+      });
+      await tx.ssmPreventionPlan.update({
+        where: { id: plan.id },
+        data: { activeVersionId: version.id }
+      });
+      return plan.id;
     });
+
     await this.auditLog.write({
       tenantId,
       actorId,
       module: "SSM",
       action: "PPP_PLAN_CREATED",
       entityType: "SsmPreventionPlan",
-      entityId: plan.id,
-      payload: { riskAssessmentId: dto.riskAssessmentId ?? null }
+      entityId: planId,
+      payload: { riskAssessmentId: dto.riskAssessmentId ?? null, version: 1 }
     });
-    return { planId: plan.id };
+    return { planId };
+  }
+
+  async addVersion(tenantId: string, actorId: string, planId: string, dto: AddSsmPreventionPlanVersionDto) {
+    const plan = await this.prisma.ssmPreventionPlan.findFirst({
+      where: { id: planId, tenantId }
+    });
+    if (!plan) throw new NotFoundException("Plan PPP negăsit.");
+    if (plan.status === SsmPreventionPlanStatus.ARCHIVED) {
+      throw new BadRequestException("Cannot version an archived PPP plan.");
+    }
+
+    const measures = (dto.measures ?? [])
+      .map((m) => ({
+        description: m.description.trim(),
+        responsiblePerson: m.responsiblePerson?.trim() || null,
+        dueDate: m.dueDate ?? null,
+        status: m.status ?? SsmPreventionMeasureStatus.OPEN,
+        notes: m.notes?.trim() || null
+      }))
+      .filter((m) => m.description.length > 0);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const lastVersion = await tx.ssmPreventionPlanVersion.findFirst({
+        where: { tenantId, planId },
+        orderBy: { versionNumber: "desc" }
+      });
+      const nextVersion = (lastVersion?.versionNumber ?? 0) + 1;
+      const reviewDate = parseOptionalDate(dto.reviewDate) ?? plan.reviewDate ?? undefined;
+      const notes = dto.notes?.trim() ?? plan.notes ?? undefined;
+
+      const version = await tx.ssmPreventionPlanVersion.create({
+        data: {
+          tenantId,
+          planId,
+          versionNumber: nextVersion,
+          updateReason: dto.updateReason.trim(),
+          reviewDate,
+          notes,
+          measures: measures as unknown as Prisma.InputJsonValue,
+          createdBy: actorId
+        }
+      });
+
+      await tx.ssmPreventionPlan.update({
+        where: { id: planId },
+        data: {
+          activeVersionId: version.id,
+          reviewDate: reviewDate ?? null,
+          notes: notes ?? null
+        }
+      });
+
+      await this.replaceLiveMeasures(tx, tenantId, planId, actorId, measures);
+      return { versionId: version.id, versionNumber: nextVersion };
+    });
+
+    await this.syncMeasureOverdue(tenantId);
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "PPP_PLAN_VERSION_ADDED",
+      entityType: "SsmPreventionPlan",
+      entityId: planId,
+      payload: { version: result.versionNumber, measureCount: measures.length, reason: dto.updateReason.trim() }
+    });
+
+    return { planId, versionId: result.versionId, versionNumber: result.versionNumber };
+  }
+
+  async history(tenantId: string, planId: string) {
+    const plan = await this.prisma.ssmPreventionPlan.findFirst({
+      where: { id: planId, tenantId },
+      include: {
+        versions: { orderBy: { versionNumber: "desc" } },
+        activeVersion: true
+      }
+    });
+    if (!plan) throw new NotFoundException("Plan PPP negăsit.");
+    return {
+      planId: plan.id,
+      title: plan.title,
+      activeVersionId: plan.activeVersionId,
+      versions: plan.versions.map((version) => ({
+        id: version.id,
+        versionNumber: version.versionNumber,
+        updateReason: version.updateReason,
+        reviewDate: version.reviewDate?.toISOString() ?? null,
+        notes: version.notes,
+        measures: asMeasureSnapshots(version.measures),
+        createdBy: version.createdBy,
+        createdAt: version.createdAt.toISOString()
+      }))
+    };
   }
 
   async archivePlan(tenantId: string, actorId: string, planId: string) {
@@ -187,16 +411,20 @@ export class SsmPppService {
       where: { id: dto.planId, tenantId, status: SsmPreventionPlanStatus.ACTIVE }
     });
     if (!plan) throw new NotFoundException("Plan PPP activ negăsit.");
-    const measure = await this.prisma.ssmPreventionMeasure.create({
-      data: {
-        tenantId,
-        planId: dto.planId,
-        description: dto.description.trim(),
-        responsiblePerson: dto.responsiblePerson?.trim(),
-        dueDate: parseOptionalDate(dto.dueDate),
-        notes: dto.notes?.trim(),
-        createdBy: actorId
-      }
+    const measure = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.ssmPreventionMeasure.create({
+        data: {
+          tenantId,
+          planId: dto.planId,
+          description: dto.description.trim(),
+          responsiblePerson: dto.responsiblePerson?.trim(),
+          dueDate: parseOptionalDate(dto.dueDate),
+          notes: dto.notes?.trim(),
+          createdBy: actorId
+        }
+      });
+      await this.syncActiveVersionSnapshot(tx, tenantId, dto.planId, actorId);
+      return created;
     });
     await this.syncMeasureOverdue(tenantId);
     await this.auditLog.write({
@@ -220,16 +448,20 @@ export class SsmPppService {
         : status === SsmPreventionMeasureStatus.OPEN
           ? null
           : existing.completedAt;
-    const updated = await this.prisma.ssmPreventionMeasure.update({
-      where: { id: measureId },
-      data: {
-        ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
-        ...(dto.responsiblePerson !== undefined ? { responsiblePerson: dto.responsiblePerson?.trim() || null } : {}),
-        ...(dto.dueDate !== undefined ? { dueDate: parseOptionalDate(dto.dueDate) ?? null } : {}),
-        ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
-        status,
-        completedAt
-      }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.ssmPreventionMeasure.update({
+        where: { id: measureId },
+        data: {
+          ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
+          ...(dto.responsiblePerson !== undefined ? { responsiblePerson: dto.responsiblePerson?.trim() || null } : {}),
+          ...(dto.dueDate !== undefined ? { dueDate: parseOptionalDate(dto.dueDate) ?? null } : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+          status,
+          completedAt
+        }
+      });
+      await this.syncActiveVersionSnapshot(tx, tenantId, existing.planId, actorId);
+      return row;
     });
     await this.syncMeasureOverdue(tenantId);
     await this.auditLog.write({
