@@ -39,22 +39,22 @@ function parseOptionalDate(value?: string | null): Date | undefined {
 
 function asMeasureSnapshots(value: unknown): MeasureSnapshot[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const row = item as Record<string, unknown>;
-      const description = typeof row.description === "string" ? row.description.trim() : "";
-      if (!description) return null;
-      return {
-        description,
-        responsiblePerson:
-          typeof row.responsiblePerson === "string" ? row.responsiblePerson.trim() || null : null,
-        dueDate: typeof row.dueDate === "string" ? row.dueDate : null,
-        status: typeof row.status === "string" ? row.status : SsmPreventionMeasureStatus.OPEN,
-        notes: typeof row.notes === "string" ? row.notes.trim() || null : null
-      } satisfies MeasureSnapshot;
-    })
-    .filter((item): item is MeasureSnapshot => Boolean(item));
+  const result: MeasureSnapshot[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const description = typeof row.description === "string" ? row.description.trim() : "";
+    if (!description) continue;
+    result.push({
+      description,
+      responsiblePerson:
+        typeof row.responsiblePerson === "string" ? row.responsiblePerson.trim() || null : null,
+      dueDate: typeof row.dueDate === "string" ? row.dueDate : null,
+      status: typeof row.status === "string" ? row.status : SsmPreventionMeasureStatus.OPEN,
+      notes: typeof row.notes === "string" ? row.notes.trim() || null : null
+    });
+  }
+  return result;
 }
 
 @Injectable()
