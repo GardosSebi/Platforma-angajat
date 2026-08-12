@@ -31,15 +31,21 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
 
   const plans = plansQuery.data?.items ?? [];
   const pending = plans.filter((p) => p.status === "PENDING" || p.status === "OVERDUE");
-  const blocked = plans.some((p) => p.blockedAdmission);
+  const trainingBlocked = plans.some((p) => p.blockedAdmission);
+  const medicalBlocked = Boolean(contextQuery.data?.employee?.medicalBlockedAdmission);
+  const blocked = trainingBlocked || medicalBlocked;
   const openSurveys = (surveysQuery.data?.items ?? []).filter((s) => !s.alreadyResponded).length;
 
   return (
     <div className="employee-portal-home">
       {blocked ? (
         <div className="feedback error employee-portal-alert" role="alert">
-          <strong>Atenție:</strong> ai instruiri nevalidate sau expirate. Reluarea activității poate fi restricționată
-          până la finalizarea instruirilor SSM.
+          <strong>Atenție:</strong>{" "}
+          {medicalBlocked && trainingBlocked
+            ? "ai restricții de admitere din cauza aptitudinii medicale și a instruirilor SSM nevalidate."
+            : medicalBlocked
+              ? "aptitudinea medicală (inapt) blochează admiterea la muncă până la reevaluare."
+              : "ai instruiri nevalidate sau expirate. Reluarea activității poate fi restricționată până la finalizarea instruirilor SSM."}
         </div>
       ) : null}
 

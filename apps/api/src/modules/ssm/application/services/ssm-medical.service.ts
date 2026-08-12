@@ -51,6 +51,12 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]+/g, "_");
 }
 
+function medicalBlocksAdmission(result?: SsmMedicalControlResult | null): boolean {
+  return (
+    result === SsmMedicalControlResult.UNFIT || result === SsmMedicalControlResult.TEMPORARY_UNFIT
+  );
+}
+
 @Injectable()
 export class SsmMedicalService {
   constructor(
@@ -320,6 +326,8 @@ export class SsmMedicalService {
       orderBy: { scheduledAt: "desc" }
     });
 
+    const blockedAdmission = medicalBlocksAdmission(dto.result);
+
     const created = await this.prisma.ssmMedicalControl.create({
       data: {
         tenantId,
@@ -331,6 +339,7 @@ export class SsmMedicalService {
         recommendations: dto.recommendations?.trim(),
         validityUntil,
         nextDueAt,
+        blockedAdmission,
         createdBy: actorId
       }
     });
@@ -348,6 +357,8 @@ export class SsmMedicalService {
       });
     }
 
+    await this.syncEmployeeMedicalBlock(tenantId, employee.id);
+
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -357,9 +368,23 @@ export class SsmMedicalService {
       entityId: created.id,
       payload: {
         employeeId: employee.id,
-        result: dto.result ?? null
+        result: dto.result ?? null,
+        blockedAdmission
       }
     });
+
+    if (blockedAdmission) {
+      await this.notifications.notifyEmployee({
+        tenantId,
+        employeeId: employee.id,
+        category: "SSM_MEDICAL",
+        title: "Blocare admitere — aptitudine medicală",
+        body: `Rezultat control: ${dto.result}. Reluarea activității este restricționată până la reevaluare.`,
+        linkPath: "/portal?tab=dossier",
+        entityType: "SsmMedicalControl",
+        entityId: created.id
+      });
+    }
 
     if (
       dto.result === SsmMedicalControlResult.FIT &&
@@ -405,12 +430,15 @@ export class SsmMedicalService {
         ? new Date(baseDate.getTime() + existing.controlType.recurrenceDays * DAY_MS)
         : existing.nextDueAt;
 
+    const blockedAdmission = medicalBlocksAdmission(result);
+
     const data: {
       performedAt?: Date | null;
       result?: SsmMedicalControlResult | null;
       recommendations?: string | null;
       validityUntil?: Date | null;
       nextDueAt?: Date | null;
+      blockedAdmission?: boolean;
       aptitudeSheetPath?: string;
       aptitudeSheetName?: string;
       aptitudeSheetMime?: string;
@@ -421,7 +449,8 @@ export class SsmMedicalService {
       recommendations:
         dto.recommendations !== undefined ? dto.recommendations.trim() || null : existing.recommendations,
       validityUntil: validityUntil ?? null,
-      nextDueAt: nextDueAt ?? null
+      nextDueAt: nextDueAt ?? null,
+      blockedAdmission
     };
 
     if (aptitudeSheet) {
@@ -437,6 +466,8 @@ export class SsmMedicalService {
       data
     });
 
+    await this.syncEmployeeMedicalBlock(tenantId, existing.employeeId);
+
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -446,9 +477,23 @@ export class SsmMedicalService {
       entityId: updated.id,
       payload: {
         result: updated.result,
+        blockedAdmission,
         aptitudeReplaced: Boolean(aptitudeSheet)
       }
     });
+
+    if (blockedAdmission && !existing.blockedAdmission) {
+      await this.notifications.notifyEmployee({
+        tenantId,
+        employeeId: existing.employeeId,
+        category: "SSM_MEDICAL",
+        title: "Blocare admitere — aptitudine medicală",
+        body: `Rezultat control: ${result}. Reluarea activității este restricționată până la reevaluare.`,
+        linkPath: "/portal?tab=dossier",
+        entityType: "SsmMedicalControl",
+        entityId: updated.id
+      });
+    }
 
     if (
       result === SsmMedicalControlResult.FIT &&
@@ -458,6 +503,17 @@ export class SsmMedicalService {
     }
 
     return updated;
+  }
+
+  /** Sync employee-level medical admission block from any open UNFIT/TEMPORARY_UNFIT controls. */
+  private async syncEmployeeMedicalBlock(tenantId: string, employeeId: string) {
+    const blockedCount = await this.prisma.ssmMedicalControl.count({
+      where: { tenantId, employeeId, blockedAdmission: true }
+    });
+    await this.prisma.employee.updateMany({
+      where: { id: employeeId, tenantId },
+      data: { medicalBlockedAdmission: blockedCount > 0 }
+    });
   }
 
   async canEmployeeDownloadAptitudeSheet(tenantId: string, controlId: string, userEmail: string) {
@@ -514,7 +570,8 @@ export class SsmMedicalService {
         validityUntil: row.validityUntil,
         nextDueAt: row.nextDueAt,
         aptitudeSheetName: row.aptitudeSheetName,
-        hasAptitudeSheet: Boolean(row.aptitudeSheetPath)
+        hasAptitudeSheet: Boolean(row.aptitudeSheetPath),
+        blockedAdmission: row.blockedAdmission
       }))
     };
   }

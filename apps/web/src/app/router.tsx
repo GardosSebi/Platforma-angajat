@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { LoginPage } from "../features/auth/pages/LoginPage";
+import { ForgotPasswordPage } from "../features/auth/pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "../features/auth/pages/ResetPasswordPage";
 import { AppLayout } from "./AppLayout";
 import { MasterDataPage } from "../features/master-data/pages/MasterDataPage";
 import { useAuthSession } from "../shared/auth/use-auth-session";
@@ -54,6 +56,8 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/surveys/public/:token" element={<PublicSurveyPage />} />
         <Route path="/surveys/respond/:surveyId" element={<SurveyRespondPage />} />
         <Route element={<AppLayout />}>

@@ -87,3 +87,23 @@ export async function loginAzureCallback(tenantId: string, code: string): Promis
   });
   return response.json() as Promise<LoginResponse>;
 }
+
+export async function forgotPasswordRequest(tenantId: string, email: string): Promise<{ ok: boolean; message: string }> {
+  const response = await authFetch(tenantId, "/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+  return response.json() as Promise<{ ok: boolean; message: string }>;
+}
+
+export async function resetPasswordRequest(
+  tenantId: string,
+  token: string,
+  password: string
+): Promise<{ ok: boolean; message: string }> {
+  const response = await authFetch(tenantId, "/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password })
+  });
+  return response.json() as Promise<{ ok: boolean; message: string }>;
+}

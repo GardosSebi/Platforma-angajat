@@ -5,7 +5,7 @@ let redirecting = false;
 
 function isPublicPath(): boolean {
   const path = window.location.pathname;
-  return path === "/login" || path.startsWith("/surveys/public/");
+  return path === "/login" || path.startsWith("/forgot-password") || path.startsWith("/reset-password") || path.startsWith("/surveys/public/");
 }
 
 /** Șterge sesiunea și redirecționează la login (idempotent). */

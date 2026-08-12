@@ -487,6 +487,18 @@ export interface SsmAccidentCorrectiveMeasureItem {
   completedAt?: string | null;
 }
 
+export type SsmAccidentAttachmentKind = "PHOTO" | "PV" | "EXPERTISE" | "OTHER";
+
+export interface SsmAccidentAttachmentItem {
+  id: string;
+  kind: SsmAccidentAttachmentKind;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  notes?: string | null;
+  createdAt: string;
+}
+
 export interface SsmAccidentCaseItem {
   id: string;
   employeeId?: string | null;
@@ -518,6 +530,7 @@ export interface SsmAccidentCaseItem {
   correctiveMeasures?: string | null;
   tasks: SsmAccidentTaskItem[];
   correctiveMeasureItems: SsmAccidentCorrectiveMeasureItem[];
+  attachments?: SsmAccidentAttachmentItem[];
 }
 
 export interface SsmAccidentStatsBucket {
@@ -603,6 +616,7 @@ export interface SsmMedicalControlItem {
   nextDueAt?: string | null;
   aptitudeSheetName?: string | null;
   hasAptitudeSheet?: boolean;
+  blockedAdmission?: boolean;
 }
 
 export interface SsmMedicalReminderItem {

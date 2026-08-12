@@ -3,7 +3,8 @@ import type {
   CloseSsmAccidentCaseRequest,
   CreateSsmAccidentCaseRequest,
   CreateSsmAccidentCorrectiveMeasureRequest,
-  CreateSsmAccidentTaskRequest
+  CreateSsmAccidentTaskRequest,
+  SsmAccidentAttachmentKind
 } from "@repo/shared-types/ssm";
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { ssmApi } from "../api/ssm.api";
@@ -25,7 +26,8 @@ export function useAccidentStats(params?: { from?: string; to?: string }) {
 function invalidateAccidentQueries(queryClient: ReturnType<typeof useQueryClient>) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: ["ssm", "accidents", "cases"] }),
-    queryClient.invalidateQueries({ queryKey: ["ssm", "accidents", "stats"] })
+    queryClient.invalidateQueries({ queryKey: ["ssm", "accidents", "stats"] }),
+    queryClient.invalidateQueries({ queryKey: ["ssm", "accidents", "attachments"] })
   ]);
 }
 
@@ -89,6 +91,35 @@ export function useCloseAccidentCase() {
       caseId: string;
       payload: CloseSsmAccidentCaseRequest;
     }) => ssmApi.closeAccidentCase(caseId, payload),
+    onSuccess: async () => {
+      await invalidateAccidentQueries(queryClient);
+    }
+  });
+}
+
+export function useAccidentAttachments(caseId: string) {
+  return useQuery({
+    queryKey: ["ssm", "accidents", "attachments", caseId],
+    queryFn: () => ssmApi.listAccidentAttachments(caseId),
+    enabled: Boolean(caseId)
+  });
+}
+
+export function useUploadAccidentAttachment(caseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { kind: SsmAccidentAttachmentKind; notes?: string; file: File }) =>
+      ssmApi.uploadAccidentAttachment(caseId, { kind: payload.kind, notes: payload.notes }, payload.file),
+    onSuccess: async () => {
+      await invalidateAccidentQueries(queryClient);
+    }
+  });
+}
+
+export function useDeleteAccidentAttachment(caseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (attachmentId: string) => ssmApi.deleteAccidentAttachment(caseId, attachmentId),
     onSuccess: async () => {
       await invalidateAccidentQueries(queryClient);
     }

@@ -1,5 +1,22 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFile, UseGuards } from "@nestjs/common";
-import { IsDateString, IsOptional } from "class-validator";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Header,
+  Param,
+  Patch,
+  Post,
+  Query,
+  StreamableFile,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { IsDateString, IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import { SsmAccidentAttachmentKind } from "@prisma/client";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
@@ -24,6 +41,16 @@ class AccidentStatsQueryDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+}
+
+class AccidentAttachmentBodyDto {
+  @IsEnum(SsmAccidentAttachmentKind)
+  kind!: SsmAccidentAttachmentKind;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
 }
 
 @Controller("ssm/accidents")
@@ -79,6 +106,49 @@ export class SsmAccidentsController {
   @RequirePermissions(Permission.SSM_ACCIDENT_VIEW)
   stats(@TenantId() tenantId: string, @Query() query: AccidentStatsQueryDto) {
     return this.accidents.stats(tenantId, { from: query.from, to: query.to });
+  }
+
+  @Get(":caseId/attachments")
+  @RequirePermissions(Permission.SSM_ACCIDENT_VIEW)
+  listAttachments(@TenantId() tenantId: string, @Param("caseId") caseId: string) {
+    return this.accidents.listAttachments(tenantId, caseId);
+  }
+
+  @Post(":caseId/attachments")
+  @UseInterceptors(FileInterceptor("file"))
+  @RequirePermissions(Permission.SSM_ACCIDENT_EDIT, Permission.FILES_UPLOAD)
+  uploadAttachment(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("caseId") caseId: string,
+    @Body() dto: AccidentAttachmentBodyDto,
+    @UploadedFile() file?: Express.Multer.File
+  ) {
+    if (!file) {
+      throw new BadRequestException("File is required.");
+    }
+    return this.accidents.uploadAttachment(tenantId, user.sub, caseId, dto.kind, file, dto.notes);
+  }
+
+  @Get(":caseId/attachments/:attachmentId")
+  @RequirePermissions(Permission.SSM_ACCIDENT_VIEW)
+  downloadAttachment(
+    @TenantId() tenantId: string,
+    @Param("caseId") caseId: string,
+    @Param("attachmentId") attachmentId: string
+  ) {
+    return this.accidents.downloadAttachment(tenantId, caseId, attachmentId);
+  }
+
+  @Delete(":caseId/attachments/:attachmentId")
+  @RequirePermissions(Permission.SSM_ACCIDENT_EDIT)
+  deleteAttachment(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("caseId") caseId: string,
+    @Param("attachmentId") attachmentId: string
+  ) {
+    return this.accidents.deleteAttachment(tenantId, user.sub, caseId, attachmentId);
   }
 
   @Patch(":caseId/close")

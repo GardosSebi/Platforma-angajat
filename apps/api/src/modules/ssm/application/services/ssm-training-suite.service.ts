@@ -140,6 +140,7 @@ type MedicalControlForDossier = {
   result: string | null;
   aptitudeSheetName: string | null;
   aptitudeSheetPath: string | null;
+  blockedAdmission: boolean;
   controlType: {
     name: string;
   };
@@ -1498,7 +1499,8 @@ export class SsmTrainingSuiteService {
         fullName: employee.fullName,
         department: employee.department?.name,
         jobPosition: employee.jobPosition?.name,
-        worksite: employee.worksite?.name
+        worksite: employee.worksite?.name,
+        medicalBlockedAdmission: employee.medicalBlockedAdmission
       },
       trainings: trainings.map((t) => ({
         id: t.id,
@@ -1535,7 +1537,8 @@ export class SsmTrainingSuiteService {
         nextDueAt: control.nextDueAt,
         result: control.result,
         aptitudeSheetName: control.aptitudeSheetName,
-        hasAptitudeSheet: Boolean(control.aptitudeSheetPath)
+        hasAptitudeSheet: Boolean(control.aptitudeSheetPath),
+        blockedAdmission: control.blockedAdmission
       })),
       eipRecords: eipMovements.map((movement) => ({
         id: movement.id,

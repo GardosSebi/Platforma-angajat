@@ -136,6 +136,7 @@ export interface EmployeeMyContextResponse {
     id: string;
     fullName: string;
     email: string;
+    medicalBlockedAdmission?: boolean;
     worksite: { id: string; code: string; name: string } | null;
     department: { id: string; code: string; name: string } | null;
     jobPosition: { id: string; code: string; name: string } | null;

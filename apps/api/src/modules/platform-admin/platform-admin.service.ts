@@ -639,6 +639,7 @@ export class PlatformAdminService {
         id: employee.id,
         fullName: employee.fullName,
         email: employee.email,
+        medicalBlockedAdmission: employee.medicalBlockedAdmission,
         worksite: employee.worksite,
         department: employee.department,
         jobPosition: employee.jobPosition

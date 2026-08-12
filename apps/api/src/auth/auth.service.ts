@@ -1,9 +1,11 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
+import { createHash, randomBytes } from "crypto";
 import { Client as LdapClient } from "ldapts";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
+import { MailService } from "../infrastructure/mail/mail.service";
 import { JwtPayload } from "./jwt.strategy";
 import { SystemRole } from "../common/prisma-enums";
 
@@ -19,6 +21,8 @@ type UserRow = {
   externalId: string | null;
 };
 
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -26,11 +30,24 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly mail: MailService
   ) {}
 
   private jwtExpiresInLabel(): string {
     return this.config.get<string>("JWT_EXPIRES_IN")?.trim() || "8h";
+  }
+
+  private hashResetToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+  }
+
+  private frontendBaseUrl(): string {
+    return (
+      this.config.get<string>("FRONTEND_URL")?.trim() ||
+      this.config.get<string>("APP_URL")?.trim() ||
+      "http://localhost:5173"
+    );
   }
 
   async login(tenantId: string, email: string, password: string) {
@@ -52,6 +69,102 @@ export class AuthService {
     }
 
     return this.issueSession(user as UserRow);
+  }
+
+  /**
+   * Always returns the same generic message to avoid account enumeration.
+   * Only LOCAL active users receive an email with a one-time reset link.
+   */
+  async requestPasswordReset(tenantId: string, email: string) {
+    const generic = {
+      ok: true as const,
+      message: "Dacă adresa este asociată unui cont local activ, veți primi un e-mail cu instrucțiuni."
+    };
+
+    const user = await this.prisma.user.findUnique({
+      where: { tenantId_email: { tenantId, email: email.toLowerCase() } }
+    });
+
+    if (!user || !user.active || user.authProvider !== "LOCAL") {
+      return generic;
+    }
+
+    const rawToken = randomBytes(32).toString("hex");
+    const tokenHash = this.hashResetToken(rawToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+    await this.prisma.passwordResetToken.updateMany({
+      where: { tenantId, userId: user.id, usedAt: null },
+      data: { usedAt: new Date() }
+    });
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        tenantId,
+        userId: user.id,
+        tokenHash,
+        expiresAt
+      }
+    });
+
+    const resetUrl = `${this.frontendBaseUrl()}/reset-password?token=${encodeURIComponent(rawToken)}&tenantId=${encodeURIComponent(tenantId)}`;
+    try {
+      await this.mail.sendMail({
+        to: user.email,
+        subject: "Resetare parolă — platformă angajați",
+        text: [
+          "Ați solicitat resetarea parolei.",
+          "",
+          `Deschideți linkul (valid 1 oră): ${resetUrl}`,
+          "",
+          "Dacă nu ați cerut resetarea, ignorați acest mesaj."
+        ].join("\n"),
+        html: `<p>Ați solicitat resetarea parolei.</p><p><a href="${resetUrl}">Setați o parolă nouă</a> (link valid 1 oră).</p><p>Dacă nu ați cerut resetarea, ignorați acest mesaj.</p>`
+      });
+    } catch (error) {
+      this.logger.warn(`Password reset mail failed for ${user.email}: ${String(error)}`);
+    }
+
+    return generic;
+  }
+
+  async resetPassword(tenantId: string, token: string, password: string) {
+    if (!password || password.length < 8) {
+      throw new BadRequestException("Parola trebuie să aibă cel puțin 8 caractere.");
+    }
+
+    const tokenHash = this.hashResetToken(token);
+    const row = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        tenantId,
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() }
+      },
+      include: { user: true }
+    });
+
+    if (!row || !row.user.active || row.user.authProvider !== "LOCAL") {
+      throw new BadRequestException("Link invalid sau expirat. Solicitați o nouă resetare.");
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: row.userId },
+        data: { passwordHash }
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: row.id },
+        data: { usedAt: new Date() }
+      }),
+      this.prisma.passwordResetToken.updateMany({
+        where: { tenantId, userId: row.userId, usedAt: null, id: { not: row.id } },
+        data: { usedAt: new Date() }
+      })
+    ]);
+
+    return { ok: true as const, message: "Parola a fost actualizată. Vă puteți autentifica." };
   }
 
   async getSsoStatus(tenantId: string) {

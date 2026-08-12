@@ -313,7 +313,13 @@ export const ssmApi = {
         result?: string | null;
         aptitudeSheetName?: string | null;
         hasAptitudeSheet?: boolean;
+        blockedAdmission?: boolean;
       }>;
+      employee?: {
+        id: string;
+        fullName: string;
+        medicalBlockedAdmission?: boolean;
+      };
     }>(`/ssm/training-suite/employees/${employeeId}/digital-file`);
   },
   getMedicalAptitudeSheetUrl(controlId: string) {
@@ -419,6 +425,33 @@ export const ssmApi = {
   },
   getAccidentReportUrl(caseId: string) {
     return `/ssm/accidents/${caseId}/report.pdf`;
+  },
+  listAccidentAttachments(caseId: string) {
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmAccidentAttachmentItem[] }>(
+      `/ssm/accidents/${caseId}/attachments`
+    );
+  },
+  uploadAccidentAttachment(
+    caseId: string,
+    payload: { kind: import("@repo/shared-types/ssm").SsmAccidentAttachmentKind; notes?: string },
+    file: File
+  ) {
+    const body = new FormData();
+    body.append("kind", payload.kind);
+    if (payload.notes) body.append("notes", payload.notes);
+    body.append("file", file);
+    return httpClient<{ id: string }>(`/ssm/accidents/${caseId}/attachments`, {
+      method: "POST",
+      body
+    });
+  },
+  getAccidentAttachmentUrl(caseId: string, attachmentId: string) {
+    return `/ssm/accidents/${caseId}/attachments/${attachmentId}`;
+  },
+  deleteAccidentAttachment(caseId: string, attachmentId: string) {
+    return httpClient<{ deleted: boolean }>(`/ssm/accidents/${caseId}/attachments/${attachmentId}`, {
+      method: "DELETE"
+    });
   },
   listMedicalControlTypes() {
     return httpClient<SsmMedicalControlTypeItem[]>("/ssm/medical/control-types");

@@ -107,6 +107,7 @@ export function EmployeeDossierPanel() {
                         : c.result === "UNFIT"
                           ? "Inapt permanent"
                           : (c.result ?? "—")}
+                  {c.blockedAdmission ? " · blocare admitere" : ""}
                   {c.nextDueAt ? ` · următor control ${formatRoDate(c.nextDueAt)}` : ""}
                 </span>
                 {c.hasAptitudeSheet || c.aptitudeSheetName ? (

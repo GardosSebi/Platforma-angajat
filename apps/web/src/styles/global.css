@@ -3507,7 +3507,8 @@ button.ssm-doc-item:hover {
   font-size: 0.9rem;
 }
 
-.login-back a {
+.login-back a,
+.login-back .btn-text {
   font-weight: 600;
   color: var(--color-primary);
 }

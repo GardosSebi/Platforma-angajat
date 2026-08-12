@@ -1,6 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, StreamableFile } from "@nestjs/common";
+import { createReadStream } from "fs";
+import { mkdir, writeFile } from "fs/promises";
+import { extname, resolve } from "path";
 import {
   Prisma,
+  SsmAccidentAttachmentKind,
   SsmAccidentCaseStatus,
   SsmAccidentSeverity,
   SsmAccidentType
@@ -17,10 +21,32 @@ import {
 } from "../../api/dto/ssm-accidents.dto";
 import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
 
+const ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
+  ".pdf",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".heic",
+  ".doc",
+  ".docx"
+]);
+const ATTACHMENT_ALLOWED_MIME_PREFIXES = [
+  "application/pdf",
+  "image/",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+];
+const ATTACHMENT_MAX_FILE_BYTES = 25 * 1024 * 1024;
+
 function parseDate(value: string): Date {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) throw new BadRequestException(`Invalid date: ${value}`);
   return d;
+}
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "_");
 }
 
 function formatRoDate(value: Date | null | undefined): string {
@@ -62,7 +88,8 @@ export class SsmAccidentsService {
           worksite: { select: { name: true, code: true } },
           department: { select: { name: true, code: true } },
           tasks: { orderBy: { dueAt: "asc" } },
-          correctiveMeasureItems: { orderBy: { dueAt: "asc" } }
+          correctiveMeasureItems: { orderBy: { dueAt: "asc" } },
+          attachments: { orderBy: { createdAt: "desc" } }
         },
         orderBy: [{ occurredAt: "desc" }],
         skip: p.skip,
@@ -311,10 +338,24 @@ export class SsmAccidentsService {
         department: { select: { name: true, code: true } },
         tasks: { orderBy: { dueAt: "asc" } },
         correctiveMeasureItems: { orderBy: { dueAt: "asc" } },
+        attachments: { orderBy: { createdAt: "asc" } },
         tenant: { select: { name: true } }
       }
     });
     if (!accidentCase) throw new NotFoundException("Case not found.");
+
+    const attachmentKindRo = (kind: SsmAccidentAttachmentKind) => {
+      switch (kind) {
+        case SsmAccidentAttachmentKind.PHOTO:
+          return "Poză";
+        case SsmAccidentAttachmentKind.PV:
+          return "Proces-verbal";
+        case SsmAccidentAttachmentKind.EXPERTISE:
+          return "Expertiză";
+        default:
+          return "Alt document";
+      }
+    };
 
     return new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -370,6 +411,17 @@ export class SsmAccidentsService {
 
       section("5. Martori");
       doc.text(accidentCase.witnesses.length ? accidentCase.witnesses.join(", ") : "-");
+
+      section("5b. Probe / atașamente pe dosar");
+      if (!accidentCase.attachments.length) {
+        doc.text("-");
+      } else {
+        accidentCase.attachments.forEach((att, idx) => {
+          doc.text(
+            `${idx + 1}. [${attachmentKindRo(att.kind)}] ${att.fileName}${att.notes ? ` — ${att.notes}` : ""}`
+          );
+        });
+      }
 
       if (accidentCase.type === SsmAccidentType.INCIDENT) {
         section("6. Factori contribuitori (near-miss)");
@@ -539,6 +591,144 @@ export class SsmAccidentsService {
     };
   }
 
+  async listAttachments(tenantId: string, caseId: string) {
+    const accidentCase = await this.prisma.ssmAccidentCase.findFirst({
+      where: { id: caseId, tenantId },
+      select: { id: true }
+    });
+    if (!accidentCase) throw new NotFoundException("Accident case not found.");
+
+    const rows = await this.prisma.ssmAccidentAttachment.findMany({
+      where: { tenantId, accidentCaseId: caseId },
+      orderBy: { createdAt: "desc" }
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        accidentCaseId: row.accidentCaseId,
+        kind: row.kind,
+        fileName: row.fileName,
+        mimeType: row.mimeType,
+        fileSize: row.fileSize,
+        notes: row.notes,
+        createdAt: row.createdAt,
+        uploadedBy: row.uploadedBy
+      }))
+    };
+  }
+
+  async uploadAttachment(
+    tenantId: string,
+    actorId: string,
+    caseId: string,
+    kind: SsmAccidentAttachmentKind,
+    file: Express.Multer.File,
+    notes?: string
+  ) {
+    if (!file) throw new BadRequestException("File is required.");
+    if (file.size > ATTACHMENT_MAX_FILE_BYTES) {
+      throw new BadRequestException("Attachment too large. Max 25MB.");
+    }
+    const extension = extname(file.originalname).toLowerCase();
+    if (!ATTACHMENT_ALLOWED_EXTENSIONS.has(extension)) {
+      throw new BadRequestException("Allowed attachments: PDF, JPG/PNG/WEBP, DOC/DOCX.");
+    }
+    if (!ATTACHMENT_ALLOWED_MIME_PREFIXES.some((prefix) => file.mimetype.startsWith(prefix))) {
+      throw new BadRequestException("Unsupported attachment format.");
+    }
+
+    const accidentCase = await this.prisma.ssmAccidentCase.findFirst({
+      where: { id: caseId, tenantId }
+    });
+    if (!accidentCase) throw new NotFoundException("Accident case not found.");
+    if (accidentCase.status === SsmAccidentCaseStatus.CLOSED) {
+      throw new BadRequestException("Cannot add attachments to a closed case.");
+    }
+
+    const safeName = sanitizeFilename(file.originalname);
+    const targetDir = resolve(process.cwd(), "uploads", "ssm-accidents", tenantId, caseId);
+    await mkdir(targetDir, { recursive: true });
+    const absolutePath = resolve(targetDir, `${Date.now()}-${safeName}`);
+    await writeFile(absolutePath, file.buffer);
+
+    const created = await this.prisma.ssmAccidentAttachment.create({
+      data: {
+        tenantId,
+        accidentCaseId: caseId,
+        kind,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        storagePath: absolutePath,
+        notes: notes?.trim() || null,
+        uploadedBy: actorId
+      }
+    });
+
+    if (accidentCase.status === SsmAccidentCaseStatus.OPEN) {
+      await this.prisma.ssmAccidentCase.update({
+        where: { id: caseId },
+        data: { status: SsmAccidentCaseStatus.IN_RESEARCH }
+      });
+    }
+
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "ACCIDENT_ATTACHMENT_UPLOADED",
+      entityType: "SsmAccidentAttachment",
+      entityId: created.id,
+      payload: { caseId, kind, fileName: created.fileName }
+    });
+
+    return {
+      id: created.id,
+      accidentCaseId: created.accidentCaseId,
+      kind: created.kind,
+      fileName: created.fileName,
+      mimeType: created.mimeType,
+      fileSize: created.fileSize,
+      notes: created.notes,
+      createdAt: created.createdAt
+    };
+  }
+
+  async downloadAttachment(tenantId: string, caseId: string, attachmentId: string) {
+    const attachment = await this.prisma.ssmAccidentAttachment.findFirst({
+      where: { id: attachmentId, tenantId, accidentCaseId: caseId }
+    });
+    if (!attachment) throw new NotFoundException("Attachment not found.");
+    if (attachment.filePurgedAt) {
+      throw new NotFoundException("Attachment file was purged.");
+    }
+
+    const stream = createReadStream(attachment.storagePath);
+    return new StreamableFile(stream, {
+      type: attachment.mimeType || "application/octet-stream",
+      disposition: `attachment; filename="${sanitizeFilename(attachment.fileName)}"`
+    });
+  }
+
+  async deleteAttachment(tenantId: string, actorId: string, caseId: string, attachmentId: string) {
+    const attachment = await this.prisma.ssmAccidentAttachment.findFirst({
+      where: { id: attachmentId, tenantId, accidentCaseId: caseId }
+    });
+    if (!attachment) throw new NotFoundException("Attachment not found.");
+
+    await this.prisma.ssmAccidentAttachment.delete({ where: { id: attachment.id } });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "ACCIDENT_ATTACHMENT_DELETED",
+      entityType: "SsmAccidentAttachment",
+      entityId: attachment.id,
+      payload: { caseId, kind: attachment.kind, fileName: attachment.fileName }
+    });
+    return { deleted: true };
+  }
+
   private mapCase(
     row: Prisma.SsmAccidentCaseGetPayload<{
       include: {
@@ -547,6 +737,7 @@ export class SsmAccidentsService {
         department: { select: { name: true; code: true } };
         tasks: true;
         correctiveMeasureItems: true;
+        attachments: true;
       };
     }>
   ) {
@@ -593,6 +784,15 @@ export class SsmAccidentsService {
         assignedTo: measure.assignedTo,
         dueAt: measure.dueAt,
         completedAt: measure.completedAt
+      })),
+      attachments: (row.attachments ?? []).map((att) => ({
+        id: att.id,
+        kind: att.kind,
+        fileName: att.fileName,
+        mimeType: att.mimeType,
+        fileSize: att.fileSize,
+        notes: att.notes,
+        createdAt: att.createdAt
       }))
     };
   }

@@ -2,7 +2,13 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LocaleSwitcher } from "../../../shared/components/LocaleSwitcher";
-import { getSsoStatus, loginAzureCallback, loginLdap, loginRequest } from "../api/auth.api";
+import {
+  forgotPasswordRequest,
+  getSsoStatus,
+  loginAzureCallback,
+  loginLdap,
+  loginRequest
+} from "../api/auth.api";
 import { authStore, getStoredExpiresInLabel, type SessionData } from "../../../shared/auth/auth-store";
 import { clearUserScopedQueryCache } from "../../../shared/auth/clear-user-query-cache";
 import { getAppHomePath } from "../../../shared/auth/roles";
@@ -72,10 +78,14 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const returnUrl = useMemo(() => safeReturnPath(searchParams.get("returnUrl")), [searchParams]);
   const sessionExpired = searchParams.get("expired") === "1";
+  const passwordResetOk = searchParams.get("reset") === "1";
   const azureCallbackHandled = useRef(false);
 
-  const [tenantId, setTenantId] = useState("e01");
-  const [debouncedTenantId, setDebouncedTenantId] = useState("e01");
+  const [panel, setPanel] = useState<"login" | "forgot">(
+    searchParams.get("forgot") === "1" ? "forgot" : "login"
+  );
+  const [tenantId, setTenantId] = useState(searchParams.get("tenantId")?.trim() || "e01");
+  const [debouncedTenantId, setDebouncedTenantId] = useState(searchParams.get("tenantId")?.trim() || "e01");
   const [email, setEmail] = useState("admin@company.local");
   const [password, setPassword] = useState("");
   const [ldapUsername, setLdapUsername] = useState("");
@@ -83,6 +93,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [forgotDone, setForgotDone] = useState(false);
   const [ssoStatus, setSsoStatus] = useState<TenantSsoStatusResponse | null>(null);
   const [ssoLoading, setSsoLoading] = useState(false);
 
@@ -144,6 +155,20 @@ export function LoginPage() {
       });
   }, [navigate, returnUrl, searchParams, tenantId]);
 
+  const openForgotPanel = () => {
+    setPanel("forgot");
+    setError(null);
+    setForgotDone(false);
+    setPending(false);
+  };
+
+  const openLoginPanel = () => {
+    setPanel("login");
+    setError(null);
+    setForgotDone(false);
+    setPending(false);
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -154,6 +179,20 @@ export function LoginPage() {
       navigate(returnUrl ?? getAppHomePath(session), { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Autentificarea a eșuat.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const onForgotSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setPending(true);
+    try {
+      await forgotPasswordRequest(tenantId.trim(), email.trim());
+      setForgotDone(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cererea a eșuat.");
     } finally {
       setPending(false);
     }
@@ -219,7 +258,7 @@ export function LoginPage() {
         </div>
       </section>
 
-      <aside className="login-panel" aria-label="Autentificare">
+      <aside className="login-panel" aria-label={panel === "forgot" ? "Resetare parolă" : "Autentificare"}>
         <div className="login-card">
           <div className="login-locale-row">
             <LocaleSwitcher />
@@ -229,121 +268,190 @@ export function LoginPage() {
               EP
             </span>
             <div>
-              <h2 className="login-title">{t("auth.login")}</h2>
-              <p className="login-sub">Introduceți organizația, e-mailul și parola contului.</p>
+              <h2 className="login-title">{panel === "forgot" ? "Resetare parolă" : t("auth.login")}</h2>
+              <p className="login-sub">
+                {panel === "forgot"
+                  ? "Trimitem un link pe e-mail dacă există un cont local activ."
+                  : "Introduceți organizația, e-mailul și parola contului."}
+              </p>
             </div>
           </header>
 
-          <form onSubmit={onSubmit} className="login-form">
-            <div className="field">
-              <label htmlFor="tenant-id">{t("auth.tenant")}</label>
-              <input
-                id="tenant-id"
-                name="tenantId"
-                autoComplete="organization"
-                placeholder="ex: e01"
-                value={tenantId}
-                onChange={(event) => setTenantId(event.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="email">{t("auth.email")}</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="username"
-                placeholder="nume@companie.ro"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="password">{t("auth.password")}</label>
-              <div className="password-field-row">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-                <button
-                  type="button"
-                  className="password-toggle-btn"
-                  onClick={() => setShowPassword((current) => !current)}
-                  aria-label={showPassword ? "Ascunde parola" : "Afișează parola"}
-                  title={showPassword ? "Ascunde parola" : "Afișează parola"}
-                >
-                  <EyeIcon open={showPassword} />
+          {panel === "forgot" ? (
+            <>
+              {forgotDone ? (
+                <p className="feedback success" role="status">
+                  Dacă adresa este asociată unui cont, veți primi un e-mail cu instrucțiuni.
+                </p>
+              ) : (
+                <form onSubmit={onForgotSubmit} className="login-form">
+                  <div className="field">
+                    <label htmlFor="forgot-tenant">{t("auth.tenant")}</label>
+                    <input
+                      id="forgot-tenant"
+                      name="tenantId"
+                      autoComplete="organization"
+                      placeholder="ex: e01"
+                      value={tenantId}
+                      onChange={(event) => setTenantId(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="forgot-email">{t("auth.email")}</label>
+                    <input
+                      id="forgot-email"
+                      name="email"
+                      type="email"
+                      autoComplete="username"
+                      placeholder="nume@companie.ro"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      required
+                    />
+                  </div>
+                  {error ? (
+                    <p className="login-alert error" role="alert">
+                      {error}
+                    </p>
+                  ) : null}
+                  <button type="submit" className="btn-primary login-submit" disabled={pending}>
+                    {pending ? "Se trimite…" : "Trimite link de resetare"}
+                  </button>
+                </form>
+              )}
+              <p className="login-back">
+                <button type="button" className="btn-text" onClick={openLoginPanel}>
+                  Înapoi la autentificare
                 </button>
-              </div>
-            </div>
-
-            {sessionExpired && !error ? (
-              <p className="login-alert error" role="status">
-                Sesiunea a expirat ({getStoredExpiresInLabel()}). Autentificați-vă din nou.
               </p>
-            ) : null}
-            {error ? (
-              <p className="login-alert error" role="alert">
-                {error}
+            </>
+          ) : (
+            <>
+              <form onSubmit={onSubmit} className="login-form">
+                <div className="field">
+                  <label htmlFor="tenant-id">{t("auth.tenant")}</label>
+                  <input
+                    id="tenant-id"
+                    name="tenantId"
+                    autoComplete="organization"
+                    placeholder="ex: e01"
+                    value={tenantId}
+                    onChange={(event) => setTenantId(event.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="email">{t("auth.email")}</label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="username"
+                    placeholder="nume@companie.ro"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="password">{t("auth.password")}</label>
+                  <div className="password-field-row">
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowPassword((current) => !current)}
+                      aria-label={showPassword ? "Ascunde parola" : "Afișează parola"}
+                      title={showPassword ? "Ascunde parola" : "Afișează parola"}
+                    >
+                      <EyeIcon open={showPassword} />
+                    </button>
+                  </div>
+                </div>
+
+                {passwordResetOk && !error ? (
+                  <p className="login-alert success" role="status">
+                    Parola a fost actualizată. Autentificați-vă cu parola nouă.
+                  </p>
+                ) : null}
+
+                {sessionExpired && !error ? (
+                  <p className="login-alert error" role="status">
+                    Sesiunea a expirat ({getStoredExpiresInLabel()}). Autentificați-vă din nou.
+                  </p>
+                ) : null}
+                {error ? (
+                  <p className="login-alert error" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+
+                <button type="submit" className="btn-primary login-submit" disabled={pending}>
+                  {pending ? "Se conectează…" : t("auth.submit")}
+                </button>
+              </form>
+
+              <p className="login-back">
+                <button type="button" className="btn-text" onClick={openForgotPanel}>
+                  Am uitat parola
+                </button>
               </p>
-            ) : null}
 
-            <button type="submit" className="btn-primary login-submit" disabled={pending}>
-              {pending ? "Se conectează…" : t("auth.submit")}
-            </button>
-          </form>
+              {ssoLoading ? <p className="login-hint">Se verifică opțiunile SSO...</p> : null}
 
-          {ssoLoading ? <p className="login-hint">Se verifică opțiunile SSO...</p> : null}
+              {showAzure ? (
+                <div className="login-sso-block">
+                  <button type="button" className="btn-secondary login-sso-btn" disabled={pending} onClick={onAzureLogin}>
+                    Conectare cu Microsoft (Azure AD)
+                  </button>
+                  <p className="login-hint">{t("auth.ssoAzure")}</p>
+                </div>
+              ) : null}
 
-          {showAzure ? (
-            <div className="login-sso-block">
-              <button type="button" className="btn-secondary login-sso-btn" disabled={pending} onClick={onAzureLogin}>
-                Conectare cu Microsoft (Azure AD)
-              </button>
-              <p className="login-hint">{t("auth.ssoAzure")}</p>
-            </div>
-          ) : null}
+              {showLdap ? (
+                <form className="login-form login-sso-block" onSubmit={onLdapSubmit}>
+                  <h3 className="login-sso-title">Autentificare LDAP</h3>
+                  <div className="field">
+                    <label htmlFor="ldap-username">Utilizator LDAP</label>
+                    <input
+                      id="ldap-username"
+                      name="ldapUsername"
+                      autoComplete="username"
+                      value={ldapUsername}
+                      onChange={(event) => setLdapUsername(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="ldap-password">Parolă LDAP</label>
+                    <input
+                      id="ldap-password"
+                      name="ldapPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      value={ldapPassword}
+                      onChange={(event) => setLdapPassword(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="btn-secondary login-submit" disabled={pending}>
+                    {pending ? "Se conectează…" : t("auth.ssoLdap")}
+                  </button>
+                </form>
+              ) : null}
 
-          {showLdap ? (
-            <form className="login-form login-sso-block" onSubmit={onLdapSubmit}>
-              <h3 className="login-sso-title">Autentificare LDAP</h3>
-              <div className="field">
-                <label htmlFor="ldap-username">Utilizator LDAP</label>
-                <input
-                  id="ldap-username"
-                  name="ldapUsername"
-                  autoComplete="username"
-                  value={ldapUsername}
-                  onChange={(event) => setLdapUsername(event.target.value)}
-                  required
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="ldap-password">Parolă LDAP</label>
-                <input
-                  id="ldap-password"
-                  name="ldapPassword"
-                  type="password"
-                  autoComplete="current-password"
-                  value={ldapPassword}
-                  onChange={(event) => setLdapPassword(event.target.value)}
-                  required
-                />
-              </div>
-              <button type="submit" className="btn-secondary login-submit" disabled={pending}>
-                {pending ? "Se conectează…" : t("auth.ssoLdap")}
-              </button>
-            </form>
-          ) : null}
-
-          <p className="login-hint">
-            Cont demo: <code>e01</code> · <code>admin@company.local</code>
-          </p>
+              <p className="login-hint">
+                Cont demo: <code>e01</code> · <code>admin@company.local</code>
+              </p>
+            </>
+          )}
         </div>
       </aside>
     </div>

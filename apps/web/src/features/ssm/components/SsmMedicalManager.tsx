@@ -343,10 +343,12 @@ export function SsmMedicalManager() {
                       {item.controlTypeName}
                       {item.controlTypeCategory ? ` · ${categoryLabel(item.controlTypeCategory)}` : ""} ·{" "}
                       {resultLabel(item.result)}
+                      {item.blockedAdmission ? " · blocare admitere" : ""}
                       {item.nextDueAt ? ` · scadență ${item.nextDueAt}` : ""}
                     </div>
                   </div>
                   <div className="ssm-inline-actions">
+                    {item.blockedAdmission ? <span className="badge-bad">Blocare admitere</span> : null}
                     {item.hasAptitudeSheet || item.aptitudeSheetName ? (
                       <button
                         type="button"

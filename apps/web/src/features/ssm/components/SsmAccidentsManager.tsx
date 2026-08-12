@@ -6,6 +6,7 @@ import type {
   CreateSsmAccidentCaseRequest,
   CreateSsmAccidentCorrectiveMeasureRequest,
   CreateSsmAccidentTaskRequest,
+  SsmAccidentAttachmentKind,
   SsmAccidentCaseItem,
   SsmAccidentSeverity,
   SsmAccidentType
@@ -18,6 +19,7 @@ import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { ssmApi } from "../api/ssm.api";
 import {
+  useAccidentAttachments,
   useAccidentCases,
   useAccidentStats,
   useAddAccidentCorrectiveMeasure,
@@ -25,17 +27,22 @@ import {
   useCloseAccidentCase,
   useCompleteAccidentCorrectiveMeasure,
   useCompleteAccidentTask,
-  useCreateAccidentCase
+  useCreateAccidentCase,
+  useDeleteAccidentAttachment,
+  useUploadAccidentAttachment
 } from "../hooks/useSsmAccidents";
 
-type AccidentsTab = "register" | "research" | "measures" | "stats";
+type AccidentsTab = "register" | "research" | "evidence" | "measures" | "stats";
 
 const ACCIDENT_TABS: Array<{ id: AccidentsTab; title: string; caption: string }> = [
   { id: "register", title: "Registru", caption: "Listă și înregistrare caz" },
   { id: "research", title: "Cercetare", caption: "Task-uri și responsabili" },
+  { id: "evidence", title: "Probe", caption: "Poze, PV, expertize" },
   { id: "measures", title: "Măsuri & închidere", caption: "Corecții, concluzii, PDF" },
   { id: "stats", title: "Statistici", caption: "Frecvență și distribuții" }
 ];
+
+const ATTACHMENT_KINDS: SsmAccidentAttachmentKind[] = ["PHOTO", "PV", "EXPERTISE", "OTHER"];
 
 const EMPTY_CASE: CreateSsmAccidentCaseRequest = {
   employeeId: "",
@@ -151,6 +158,21 @@ function statusLabel(status: string): string {
   }
 }
 
+function attachmentKindLabel(kind: SsmAccidentAttachmentKind): string {
+  switch (kind) {
+    case "PHOTO":
+      return "Poză / imagine";
+    case "PV":
+      return "Proces-verbal";
+    case "EXPERTISE":
+      return "Expertiză";
+    case "OTHER":
+      return "Alt document";
+    default:
+      return kind;
+  }
+}
+
 function CaseContextBanner({
   selectedCase,
   onClear
@@ -161,7 +183,7 @@ function CaseContextBanner({
   if (!selectedCase) {
     return (
       <p className="field-hint" role="status">
-        Selectează un caz din Registru pentru a lucra pe cercetare sau măsuri.
+        Selectează un caz din Registru pentru a lucra pe cercetare, probe sau măsuri.
       </p>
     );
   }
@@ -220,6 +242,13 @@ export function SsmAccidentsManager() {
   const [witnessesText, setWitnessesText] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [attachmentKind, setAttachmentKind] = useState<SsmAccidentAttachmentKind>("PHOTO");
+  const [attachmentNotes, setAttachmentNotes] = useState("");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+
+  const attachmentsQuery = useAccidentAttachments(selectedCaseId);
+  const uploadAttachment = useUploadAccidentAttachment(selectedCaseId);
+  const deleteAttachment = useDeleteAccidentAttachment(selectedCaseId);
 
   const selectedCase = useMemo(
     () => casesPaged.items.find((item) => item.id === selectedCaseId),
@@ -752,6 +781,144 @@ export function SsmAccidentsManager() {
                   ))}
                   {!selectedCase.tasks.length ? <p className="field-hint">Niciun task încă.</p> : null}
                 </div>
+
+                <button type="button" className="btn-secondary" onClick={() => setTab("evidence")}>
+                  Continuă la probe
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "evidence" ? (
+        <div className="ssm-panel-layout">
+          <div className="card form-stack ssm-doc-card">
+            <CaseContextBanner selectedCase={selectedCase} onClear={clearSelectedCase} />
+            {!selectedCaseId ? (
+              <FieldSelect
+                id="evidence-case"
+                label="Alege cazul"
+                value={selectedCaseId}
+                onChange={(id) => selectCase(id)}
+                allowEmpty
+                emptyLabel="Selectează caz"
+                options={mapToOptions(
+                  casesPaged.items ?? [],
+                  (item) => item.id,
+                  (item) => `${item.title} (${statusLabel(item.status)})`
+                )}
+              />
+            ) : null}
+
+            {selectedCase ? (
+              <>
+                {selectedCase.status !== "CLOSED" ? (
+                  <form
+                    className="form-stack"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (!attachmentFile || !selectedCaseId) return;
+                      uploadAttachment.mutate(
+                        { kind: attachmentKind, notes: attachmentNotes.trim() || undefined, file: attachmentFile },
+                        {
+                          onSuccess: () => {
+                            setAttachmentFile(null);
+                            setAttachmentNotes("");
+                          }
+                        }
+                      );
+                    }}
+                  >
+                    <h4 className="card-title">Încarcă probă / atașament</h4>
+                    <FieldSelect
+                      id="att-kind"
+                      label="Tip"
+                      value={attachmentKind}
+                      onChange={(kind) => setAttachmentKind(kind as SsmAccidentAttachmentKind)}
+                      options={ATTACHMENT_KINDS.map((kind) => ({
+                        value: kind,
+                        label: attachmentKindLabel(kind)
+                      }))}
+                    />
+                    <div className="field">
+                      <label htmlFor="att-file">Fișier (PDF, imagine, DOC)</label>
+                      <input
+                        id="att-file"
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,image/*,application/pdf"
+                        required
+                        onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="att-notes">Note (opțional)</label>
+                      <input
+                        id="att-notes"
+                        value={attachmentNotes}
+                        onChange={(e) => setAttachmentNotes(e.target.value)}
+                        placeholder="Ex: PV cercetare semnat, expertiză tehnică"
+                      />
+                    </div>
+                    <button
+                      className="btn-primary"
+                      type="submit"
+                      disabled={uploadAttachment.isPending || !attachmentFile}
+                    >
+                      {uploadAttachment.isPending ? "Se încarcă..." : "Încarcă atașament"}
+                    </button>
+                    {uploadAttachment.isError ? (
+                      <p className="feedback error" role="alert">
+                        {mutationErrorMessage(uploadAttachment.error)}
+                      </p>
+                    ) : null}
+                  </form>
+                ) : (
+                  <p className="field-hint">Cazul este închis — atașamentele rămân disponibile la descărcare.</p>
+                )}
+
+                <h4 className="card-title">Probe pe dosar</h4>
+                <div className="ssm-history-list">
+                  {(attachmentsQuery.data?.items ?? selectedCase.attachments ?? []).map((att) => (
+                    <div key={att.id} className="ssm-history-item">
+                      <div>
+                        <strong>{attachmentKindLabel(att.kind)}</strong>
+                        <div className="field-hint">
+                          {att.fileName}
+                          {att.notes ? ` · ${att.notes}` : ""}
+                          {att.createdAt ? ` · ${new Date(att.createdAt).toLocaleString("ro-RO")}` : ""}
+                        </div>
+                      </div>
+                      <div className="ssm-inline-actions">
+                        <button
+                          type="button"
+                          className="btn-text"
+                          onClick={() => {
+                            setDownloadError(null);
+                            void downloadWithAuth(
+                              ssmApi.getAccidentAttachmentUrl(selectedCase.id, att.id),
+                              att.fileName
+                            ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)));
+                          }}
+                        >
+                          Descarcă
+                        </button>
+                        {selectedCase.status !== "CLOSED" ? (
+                          <button type="button" className="btn-text" onClick={() => deleteAttachment.mutate(att.id)}>
+                            Șterge
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                  {!(attachmentsQuery.data?.items ?? selectedCase.attachments ?? []).length ? (
+                    <p className="field-hint">Nicio poză, PV sau expertiză pe dosar.</p>
+                  ) : null}
+                </div>
+                {downloadError ? <p className="feedback error">{downloadError}</p> : null}
+                {deleteAttachment.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(deleteAttachment.error)}</p>
+                ) : null}
 
                 <button type="button" className="btn-secondary" onClick={() => setTab("measures")}>
                   Continuă la măsuri
