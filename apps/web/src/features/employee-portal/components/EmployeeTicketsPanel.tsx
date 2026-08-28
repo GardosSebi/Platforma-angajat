@@ -2,15 +2,14 @@ import { FormEvent, useMemo, useState } from "react";
 import type {
   CreateHelpdeskTicketRequest,
   HelpdeskTicketItem,
-  HelpdeskTicketPriority,
-  HelpdeskTicketStatus
+  HelpdeskTicketPriority
 } from "@repo/shared-types/ticketing";
 import { HELPDESK_TICKET_STATUSES } from "@repo/shared-types/ticketing";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
-import { useCreateTicket, useTicketingKanban } from "../../ticketing/hooks/useTicketing";
-import { formatRoDate, mutationErrorMessage } from "../utils";
+import { useAddTicketComment, useCreateTicket, useTicketComments, useTicketingKanban } from "../../ticketing/hooks/useTicketing";
+import { formatRoDate, formatRoDateTime, mutationErrorMessage } from "../utils";
 import { STATUS_LABELS, TICKET_CATEGORY_LABELS } from "../../ticketing/ticketing-shared";
 
 const EMPLOYEE_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const satisfies readonly HelpdeskTicketPriority[];
@@ -39,6 +38,8 @@ export function EmployeeTicketsPanel() {
   const employeeId = requireLinkedEmployeeId(session);
   const [ticketForm, setTicketForm] = useState<CreateHelpdeskTicketRequest>(EMPTY_TICKET);
   const [showForm, setShowForm] = useState(false);
+  const [openTicketId, setOpenTicketId] = useState<string | null>(null);
+  const [commentBody, setCommentBody] = useState("");
 
   const filters = useMemo(
     () => (employeeId ? { reporterEmployeeId: employeeId, pageSize: 50 } : { pageSize: 50 }),
@@ -47,6 +48,8 @@ export function EmployeeTicketsPanel() {
 
   const kanbanQuery = useTicketingKanban(filters);
   const createTicket = useCreateTicket();
+  const commentsQuery = useTicketComments(openTicketId ?? undefined);
+  const addComment = useAddTicketComment();
 
   const myTickets = useMemo(() => {
     const columns = kanbanQuery.data?.columns ?? [];
@@ -159,6 +162,62 @@ export function EmployeeTicketsPanel() {
                 {ticket.category ?? "—"} · creat {formatRoDate(ticket.createdAt)}
               </p>
               <p>{ticket.description}</p>
+              <button
+                type="button"
+                className="btn-text"
+                onClick={() => {
+                  setOpenTicketId((current) => (current === ticket.id ? null : ticket.id));
+                  setCommentBody("");
+                }}
+              >
+                {openTicketId === ticket.id ? "Ascunde conversația" : "Deschide conversația"}
+              </button>
+              {openTicketId === ticket.id ? (
+                <div className="employee-ticket-thread">
+                  {commentsQuery.isLoading ? <p className="field-hint">Se încarcă mesajele…</p> : null}
+                  {(commentsQuery.data?.items ?? []).map((comment) => (
+                    <p key={comment.id} className="employee-ticket-comment">
+                      <span className="field-hint">{formatRoDateTime(comment.createdAt)}</span>
+                      <br />
+                      {comment.body}
+                    </p>
+                  ))}
+                  {!commentsQuery.isLoading && !(commentsQuery.data?.items ?? []).length ? (
+                    <p className="field-hint">Niciun mesaj încă. Poți răspunde mai jos.</p>
+                  ) : null}
+                  {ticket.status !== "CLOSED" ? (
+                    <form
+                      className="form-stack"
+                      onSubmit={(event: FormEvent) => {
+                        event.preventDefault();
+                        const body = commentBody.trim();
+                        if (!body) return;
+                        addComment.mutate(
+                          { id: ticket.id, payload: { body, internal: false } },
+                          { onSuccess: () => setCommentBody("") }
+                        );
+                      }}
+                    >
+                      <label htmlFor={`ticket-reply-${ticket.id}`}>Răspuns</label>
+                      <textarea
+                        id={`ticket-reply-${ticket.id}`}
+                        rows={3}
+                        value={commentBody}
+                        onChange={(event) => setCommentBody(event.target.value)}
+                        required
+                      />
+                      <button type="submit" className="btn-primary" disabled={addComment.isPending}>
+                        {addComment.isPending ? "Se trimite…" : "Trimite răspunsul"}
+                      </button>
+                      {addComment.isError ? (
+                        <p className="feedback error">{mutationErrorMessage(addComment.error)}</p>
+                      ) : null}
+                    </form>
+                  ) : (
+                    <p className="field-hint">Solicitarea este închisă.</p>
+                  )}
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -14,6 +14,8 @@ import {
   useUpdatePreventionMeasure
 } from "../hooks/useSsmPpp";
 import { useRiskAssessments } from "../hooks/useSsmRisk";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 
 const TARGET_TYPE_OPTIONS = [
   { value: "JOB_POSITION", label: "Post de lucru" },
@@ -54,6 +56,8 @@ function formatRoDate(value?: string | null): string {
 }
 
 export function SsmPppManager() {
+  const session = useAuthSession();
+  const canApprove = hasPermission(session?.roles, "ssm:risk:approve");
   const plansQuery = usePreventionPlans();
   const riskAssessmentsQuery = useRiskAssessments({ status: "ACTIVE" });
   const worksites = useWorksitesLookup();
@@ -383,6 +387,7 @@ export function SsmPppManager() {
                     </p>
                   </div>
                   <div className="ssm-ppp-detail-actions">
+                  {canApprove ? (
                     <button
                       type="button"
                       className="btn-secondary ssm-ppp-archive-btn"
@@ -395,6 +400,7 @@ export function SsmPppManager() {
                     >
                       Arhivează plan
                     </button>
+                  ) : null}
                     <button type="button" className="btn-secondary" onClick={closePlanModal}>
                       Închide
                     </button>

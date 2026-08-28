@@ -92,19 +92,19 @@ export class TicketingController {
 
   @Get("tickets/:id/comments")
   @RequirePermissions(Permission.TICKETS_VIEW)
-  comments(@TenantId() tenantId: string, @Param("id") id: string) {
-    return this.ticketing.comments(tenantId, id);
+  comments(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
+    return this.ticketing.comments(tenantId, id, user);
   }
 
   @Post("tickets/:id/comments")
   @RequirePermissions(Permission.TICKETS_EDIT)
   addComment(
     @TenantId() tenantId: string,
-    @CurrentUser() user: { sub: string },
+    @CurrentUser() user: JwtPayload,
     @Param("id") id: string,
     @Body() dto: AddTicketCommentDto
   ) {
-    return this.ticketing.addComment(tenantId, user.sub, id, dto);
+    return this.ticketing.addComment(tenantId, user.sub, id, dto, user);
   }
 
   @Get("stats")

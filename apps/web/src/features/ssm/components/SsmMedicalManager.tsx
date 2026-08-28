@@ -19,6 +19,7 @@ import {
   useMedicalControls,
   useMedicalControlTypes,
   useMedicalReminders,
+  useDispatchMedicalReminders,
   useUpdateMedicalControl
 } from "../hooks/useSsmMedical";
 
@@ -94,6 +95,7 @@ export function SsmMedicalManager() {
   const typesQuery = useMedicalControlTypes();
   const controlsQuery = useMedicalControls();
   const remindersQuery = useMedicalReminders();
+  const dispatchReminders = useDispatchMedicalReminders();
   const jobPositionsQuery = useJobPositionsLookup();
   const employeesQuery = useEmployeeOptions();
   const jobPositions = jobPositionsQuery.data?.items ?? [];
@@ -569,6 +571,26 @@ export function SsmMedicalManager() {
 
       {tab === "reminders" ? (
         <div className="card form-stack ssm-doc-card">
+          <div className="form-actions" style={{ marginBottom: "0.85rem" }}>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={dispatchReminders.isPending}
+              onClick={() => dispatchReminders.mutate()}
+            >
+              {dispatchReminders.isPending ? "Se trimit…" : "Trimite reminder-ele acum"}
+            </button>
+          </div>
+          {dispatchReminders.isSuccess ? (
+            <p className="feedback success" role="status">
+              Trimise {dispatchReminders.data.sent} reminder-e.
+            </p>
+          ) : null}
+          {dispatchReminders.isError ? (
+            <p className="feedback error" role="alert">
+              {mutationErrorMessage(dispatchReminders.error)}
+            </p>
+          ) : null}
           <div className="ssm-history-list">
             {(remindersQuery.data?.reminders ?? []).map((item) => (
               <div key={item.controlId} className="ssm-history-item">

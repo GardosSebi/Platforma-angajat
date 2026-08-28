@@ -101,4 +101,10 @@ export class SsmMedicalController {
   reminders(@TenantId() tenantId: string) {
     return this.medicalService.reminders(tenantId);
   }
+
+  @Post("reminders/dispatch")
+  @RequirePermissions(Permission.SSM_MEDICAL_EDIT)
+  dispatchReminders(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
+    return this.medicalService.dispatchMedicalReminders(tenantId, user.sub);
+  }
 }

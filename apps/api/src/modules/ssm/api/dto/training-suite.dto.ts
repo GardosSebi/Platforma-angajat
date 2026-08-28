@@ -232,4 +232,14 @@ export class GenerateCollectiveSheetDto {
   @IsString()
   @MaxLength(300)
   location?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  trainerFunction?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  visitDates?: string;
 }

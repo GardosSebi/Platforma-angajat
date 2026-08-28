@@ -27,6 +27,16 @@ export function useMedicalReminders() {
   });
 }
 
+export function useDispatchMedicalReminders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ssmApi.dispatchMedicalReminders(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "reminders"] });
+    }
+  });
+}
+
 function invalidateMedical(queryClient: ReturnType<typeof useQueryClient>) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "controls"] }),

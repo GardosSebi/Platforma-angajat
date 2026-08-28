@@ -8,13 +8,12 @@ import {
   SsmTrainingCategory,
   SsmTrainingPlanStatus
 } from "@prisma/client";
-import PDFDocument from "pdfkit";
 import JSZip from "jszip";
-import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
+import { DataEncryptionService } from "../../../../infrastructure/security/data-encryption.service";
 import { JwtPayload } from "../../../../auth/jwt.strategy";
 import { hasAllPermissions, Permission } from "../../../../common/constants/permissions";
 import { SystemRole } from "../../../../common/prisma-enums";
@@ -44,6 +43,11 @@ import {
   SSM_TRAINING_PASS_THRESHOLD_PERCENT,
   type SsmTrainingTestAttemptMeta
 } from "../training-test-bank";
+import {
+  decryptStoredCnp,
+  renderAnexa11IndividualSheet,
+  renderAnexa12CollectiveSheet
+} from "../legal-forms";
 
 const MAX_MATERIAL_BYTES = 120 * 1024 * 1024;
 const ALLOWED_MATERIAL_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".mp4", ".mov", ".avi", ".mkv"]);
@@ -96,37 +100,6 @@ function parseTestQuestionsJson(raw: unknown): Array<{
   return parsed.length ? parsed : null;
 }
 
-function embedSignatureImage(
-  doc: InstanceType<typeof PDFDocument>,
-  label: string,
-  signedAt: Date | null | undefined,
-  signatureData: string | null | undefined,
-  x: number,
-  y: number
-): number {
-  doc.fontSize(10).text(`${label}:`, x, y);
-  let nextY = y + 14;
-  if (signedAt) {
-    doc.fontSize(9).text(signedAt.toLocaleDateString("ro-RO"), x, nextY);
-    nextY += 14;
-  } else {
-    doc.fontSize(9).text("nesemnat", x, nextY);
-    nextY += 14;
-  }
-  if (signatureData?.startsWith("data:image")) {
-    try {
-      const base64 = signatureData.split(",")[1];
-      if (base64) {
-        doc.image(Buffer.from(base64, "base64"), x, nextY, { width: 140, height: 44 });
-        nextY += 52;
-      }
-    } catch {
-      // ignore invalid signature payloads
-    }
-  }
-  return nextY;
-}
-
 function daysDiff(from: Date, to: Date): number {
   const ms = to.getTime() - from.getTime();
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
@@ -138,6 +111,7 @@ type MedicalControlForDossier = {
   performedAt: Date | null;
   nextDueAt: Date | null;
   result: string | null;
+  recommendations: string | null;
   aptitudeSheetName: string | null;
   aptitudeSheetPath: string | null;
   blockedAdmission: boolean;
@@ -247,7 +221,8 @@ export class SsmTrainingSuiteService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly mailService: MailService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly encryption: DataEncryptionService
   ) {}
 
   private async syncOverdue(tenantId: string) {
@@ -1437,7 +1412,7 @@ export class SsmTrainingSuiteService {
       include: {
         department: true,
         jobPosition: true,
-        worksite: true
+        worksite: { include: { legalEntity: { select: { name: true } } } }
       }
     });
     if (!employee) {
@@ -1449,31 +1424,7 @@ export class SsmTrainingSuiteService {
       include: { trainingType: true },
       orderBy: { dueAt: "desc" }
     });
-    const documents = await this.prisma.ssmDocument.findMany({
-      where: {
-        tenantId,
-        status: "ACTIVE",
-        OR: [
-          { targetType: "ALL" },
-          {
-            targetType: "DEPARTMENT",
-            targetLabel: employee.department?.name ?? undefined
-          },
-          {
-            targetType: "JOB_POSITION",
-            targetLabel: employee.jobPosition?.name ?? undefined
-          },
-          {
-            targetType: "WORKSITE",
-            targetLabel: employee.worksite?.name ?? undefined
-          }
-        ]
-      },
-      include: {
-        activeVersion: true
-      },
-      orderBy: { updatedAt: "desc" }
-    });
+    const documents = await this.listApprovedDocumentsForEmployee(tenantId, employee);
     const medicalControls = await (this.prisma as PrismaWithMedicalControl).ssmMedicalControl.findMany({
       where: { tenantId, employeeId },
       include: {
@@ -1555,7 +1506,7 @@ export class SsmTrainingSuiteService {
   async exportDigitalFileZip(tenantId: string, employeeId: string, viewer: JwtPayload) {
     const dossier = await this.digitalFile(tenantId, employeeId, viewer);
     const zip = new JSZip();
-    zip.file("dossier.json", JSON.stringify(dossier, null, 2));
+    const warnings: string[] = [];
     zip.file(
       "README.txt",
       [
@@ -1563,35 +1514,27 @@ export class SsmTrainingSuiteService {
         `Angajat: ${dossier.employee.fullName}`,
         "",
         "Structură:",
-        "- documents/ — documente SSM aplicabile angajatului",
-        "- instruiri/ — fișe individuale de instruire (PDF)",
+        "- documents/ — documente SSM aprobate aplicabile angajatului",
+        "- instruiri/ — fișa individuală de instruire Anexa 11 HG 1425/2006 (PDF)",
         "- medicina-muncii/ — fișe de aptitudini",
+        "- eip/ — evidență EIP din dosar (în dossier.json)",
         "- dossier.json — index structurat"
       ].join("\n")
     );
 
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, tenantId },
-      include: { department: true, jobPosition: true, worksite: true }
+      include: {
+        department: true,
+        jobPosition: true,
+        worksite: { include: { legalEntity: { select: { name: true } } } }
+      }
     });
     if (!employee) {
       throw new NotFoundException("Employee not found.");
     }
 
-    const documents = await this.prisma.ssmDocument.findMany({
-      where: {
-        tenantId,
-        status: "ACTIVE",
-        OR: [
-          { targetType: "ALL" },
-          { targetType: "DEPARTMENT", targetLabel: employee.department?.name ?? undefined },
-          { targetType: "JOB_POSITION", targetLabel: employee.jobPosition?.name ?? undefined },
-          { targetType: "WORKSITE", targetLabel: employee.worksite?.name ?? undefined }
-        ]
-      },
-      include: { activeVersion: true },
-      orderBy: { updatedAt: "desc" }
-    });
+    const documents = await this.listApprovedDocumentsForEmployee(tenantId, employee);
 
     for (const doc of documents) {
       const version = doc.activeVersion;
@@ -1601,43 +1544,20 @@ export class SsmTrainingSuiteService {
         const safeName = this.sanitizeZipPath(`${doc.type}-${doc.title}-v${version.versionNumber}-${version.fileName}`);
         zip.file(`documents/${safeName}`, fileBuffer);
       } catch {
-        // skip unavailable files on disk
+        warnings.push(`Document indisponibil pe disc: ${doc.title}`);
       }
     }
 
-    const trainings = await this.prisma.ssmTrainingPlan.findMany({
-      where: { tenantId, employeeId },
-      include: {
-        employee: {
-          include: {
-            jobPosition: { select: { name: true } },
-            department: { select: { name: true } },
-            worksite: { select: { name: true, legalEntity: { select: { name: true } } } }
-          }
-        },
-        trainingType: true,
-        signature: true
-      },
-      orderBy: { dueAt: "desc" }
-    });
-
-    for (const plan of trainings) {
-      if (!plan.signature?.employeeSignedAt && plan.score == null && !plan.completedAt) {
-        continue;
-      }
-      try {
-        const pdfBuffer = await this.buildIndividualSheetPdfBuffer(plan);
-        const safeName = this.sanitizeZipPath(
-          `${plan.trainingType.code}-${plan.dueAt.toISOString().slice(0, 10)}-${plan.id.slice(0, 8)}.pdf`
-        );
-        zip.file(`instruiri/${safeName}`, pdfBuffer);
-      } catch {
-        // skip PDF generation failures
-      }
+    try {
+      const pdfBuffer = await this.renderEmployeeAnexa11Pdf(tenantId, employeeId);
+      zip.file("instruiri/Fisa-instruire-individuala-Anexa-11-HG-1425-2006.pdf", pdfBuffer);
+    } catch {
+      warnings.push("Fișa de instruire individuală (Anexa 11) n-a putut fi generată.");
     }
 
-    const medicalControls = await (this.prisma as PrismaWithMedicalControl).ssmMedicalControl.findMany({
+    const medicalControls = await this.prisma.ssmMedicalControl.findMany({
       where: { tenantId, employeeId },
+      select: { id: true, aptitudeSheetPath: true, aptitudeSheetName: true },
       orderBy: { scheduledAt: "desc" }
     });
     for (const control of medicalControls) {
@@ -1649,8 +1569,23 @@ export class SsmTrainingSuiteService {
         );
         zip.file(`medicina-muncii/${safeName}`, fileBuffer);
       } catch {
-        // skip unavailable aptitude sheets
+        warnings.push(`Fișă aptitudini indisponibilă: ${control.aptitudeSheetName ?? control.id}`);
       }
+    }
+
+    zip.file(
+      "dossier.json",
+      JSON.stringify(
+        {
+          ...dossier,
+          warnings
+        },
+        null,
+        2
+      )
+    );
+    if (warnings.length) {
+      zip.file("warnings.txt", warnings.map((line) => `- ${line}`).join("\n"));
     }
 
     return zip.generateAsync({ type: "nodebuffer" });
@@ -1660,101 +1595,86 @@ export class SsmTrainingSuiteService {
     return value.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/\s+/g, "-").slice(0, 180);
   }
 
-  private buildIndividualSheetPdfBuffer(plan: {
-    employee: {
-      fullName: string;
-      jobPositionId: string | null;
-      jobPosition?: { name: string } | null;
-      department?: { name: string } | null;
-      worksite?: { name: string; legalEntity?: { name: string } | null } | null;
+  private async renderEmployeeAnexa11Pdf(tenantId: string, employeeId: string) {
+    const [employee, tenant, trainings, accidents, medical] = await Promise.all([
+      this.prisma.employee.findFirst({
+        where: { id: employeeId, tenantId },
+        include: {
+          jobPosition: { select: { name: true, corCode: true } },
+          department: { select: { name: true } },
+          worksite: {
+            select: {
+              name: true,
+              legalEntity: { select: { name: true, cui: true, headquarters: true } }
+            }
+          }
+        }
+      }),
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      this.prisma.ssmTrainingPlan.findMany({
+        where: { tenantId, employeeId },
+        include: { trainingType: true, signature: true },
+        orderBy: { scheduledAt: "asc" }
+      }),
+      this.prisma.ssmAccidentCase.findMany({
+        where: { tenantId, employeeId },
+        select: { occurredAt: true, title: true, itmDaysOff: true, type: true },
+        orderBy: { occurredAt: "desc" }
+      }),
+      this.prisma.ssmMedicalControl.findMany({
+        where: { tenantId, employeeId },
+        include: { controlType: { select: { name: true } } },
+        orderBy: { scheduledAt: "desc" }
+      })
+    ]);
+    if (!employee) {
+      throw new NotFoundException("Employee not found.");
+    }
+
+    const cnp = decryptStoredCnp((payload) => this.encryption.decrypt(payload), employee.cnp);
+    const typeLabel: Record<string, string> = {
+      ACCIDENT: "Accident de muncă",
+      INCIDENT: "Incident periculos",
+      OCCUPATIONAL_DISEASE: "Boală profesională"
     };
-    trainingType: { name: string; code: string; category: SsmTrainingCategory; legalMinDurationHours?: number | null };
-    materialTitle?: string | null;
-    scheduledAt: Date;
-    dueAt: Date;
-    completedAt?: Date | null;
-    durationMinutes?: number | null;
-    score?: number | null;
-    signature?: {
-      employeeSignedAt: Date | null;
-      managerSignedAt: Date | null;
-      responsibleSignedAt: Date | null;
-      employeeSignature: string | null;
-      managerSignature: string | null;
-      responsibleSignature: string | null;
-    } | null;
-  }): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
 
-      applyUnicodeFonts(doc);
-      doc.fontSize(16).font(PdfFont.bold).text("FIȘA INDIVIDUALĂ DE INSTRUIRE", { align: "center" });
-      doc.fontSize(12).font(PdfFont.regular).text("în domeniul securității și sănătății în muncă / PSI", {
-        align: "center"
-      });
-      doc.moveDown();
-      doc.fontSize(11);
-      doc.text(`Unitatea: ${plan.employee.worksite?.legalEntity?.name ?? "conform evidenței angajatului"}`);
-      doc.text(`Departament: ${plan.employee.department?.name ?? "-"}`);
-      doc.text(`Punct de lucru: ${plan.employee.worksite?.name ?? "-"}`);
-      doc.text(`Nume și prenume: ${plan.employee.fullName}`);
-      doc.text(`Funcție / meserie: ${plan.employee.jobPosition?.name ?? "-"}`);
-      doc.moveDown(0.5);
-      doc.text(`Tip instruire: ${plan.trainingType.name}`);
-      doc.text(`Cod tematică: ${plan.trainingType.code}`);
-      doc.text(`Categorie: ${plan.trainingType.category}`);
-      if (plan.materialTitle) {
-        doc.text(`Tematică / material: ${plan.materialTitle}`);
-      }
-      if (plan.trainingType.legalMinDurationHours) {
-        doc.text(`Durată minimă legală (ore): ${plan.trainingType.legalMinDurationHours}`);
-      }
-      doc.text(`Data programării: ${plan.scheduledAt.toLocaleDateString("ro-RO")}`);
-      doc.text(`Data limită: ${plan.dueAt.toLocaleDateString("ro-RO")}`);
-      doc.text(
-        `Data finalizării: ${plan.completedAt ? plan.completedAt.toLocaleDateString("ro-RO") : "-"}`
-      );
-      doc.text(`Durată parcurgere (min): ${plan.durationMinutes ?? "-"}`);
-      doc.text(`Rezultat test verificare: ${plan.score != null ? `${plan.score}%` : "—"}`);
-      doc.moveDown();
-      doc.fontSize(12).text("Semnături olografe", { underline: true });
-      doc.moveDown(0.4);
-
-      const startY = doc.y;
-      const colWidth = 160;
-      embedSignatureImage(
-        doc,
-        "Angajat",
-        plan.signature?.employeeSignedAt,
-        plan.signature?.employeeSignature,
-        40,
-        startY
-      );
-      embedSignatureImage(
-        doc,
-        "Manager",
-        plan.signature?.managerSignedAt,
-        plan.signature?.managerSignature,
-        40 + colWidth,
-        startY
-      );
-      const endY = embedSignatureImage(
-        doc,
-        "Responsabil SSM",
-        plan.signature?.responsibleSignedAt,
-        plan.signature?.responsibleSignature,
-        40 + colWidth * 2,
-        startY
-      );
-      doc.y = Math.max(endY, doc.y) + 12;
-      doc.fontSize(9).text(
-        "Document generat electronic conform evidențelor de instruire — păstrare în dosarul digital al angajatului."
-      );
-      doc.end();
+    return renderAnexa11IndividualSheet({
+      employee: {
+        fullName: employee.fullName,
+        cnp,
+        hireDate: employee.hireDate,
+        jobName: employee.jobPosition?.name,
+        corCode: employee.jobPosition?.corCode,
+        departmentName: employee.department?.name,
+        worksiteName: employee.worksite?.name,
+        companyName: employee.worksite?.legalEntity?.name ?? tenant?.name,
+        cui: employee.worksite?.legalEntity?.cui,
+        headquarters: employee.worksite?.legalEntity?.headquarters
+      },
+      trainings: trainings.map((plan) => ({
+        category: plan.trainingType.category,
+        typeName: plan.trainingType.name,
+        materialTitle: plan.materialTitle,
+        scheduledAt: plan.scheduledAt,
+        completedAt: plan.completedAt,
+        durationMinutes: plan.durationMinutes,
+        legalMinDurationHours: plan.trainingType.legalMinDurationHours,
+        score: plan.score,
+        occupation: employee.jobPosition?.name,
+        signature: plan.signature
+      })),
+      accidents: accidents.map((row) => ({
+        occurredAt: row.occurredAt,
+        title: row.title,
+        itmDaysOff: row.itmDaysOff,
+        type: typeLabel[row.type] ?? row.type
+      })),
+      medical: medical.map((row) => ({
+        performedAt: row.performedAt,
+        scheduledAt: row.scheduledAt,
+        result: row.result,
+        recommendations: row.recommendations
+      }))
     });
   }
 
@@ -1762,23 +1682,12 @@ export class SsmTrainingSuiteService {
     await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
     const plan = await this.prisma.ssmTrainingPlan.findFirst({
       where: { id: trainingPlanId, tenantId },
-      include: {
-        employee: {
-          include: {
-            jobPosition: { select: { name: true } },
-            department: { select: { name: true } },
-            worksite: { select: { name: true, legalEntity: { select: { name: true } } } }
-          }
-        },
-        trainingType: true,
-        signature: true
-      }
+      select: { employeeId: true }
     });
     if (!plan) {
       throw new NotFoundException("Training plan not found.");
     }
-
-    return this.buildIndividualSheetPdfBuffer(plan);
+    return this.renderEmployeeAnexa11Pdf(tenantId, plan.employeeId);
   }
 
   private async assertTrainingPlanVisibleToViewer(
@@ -1803,6 +1712,55 @@ export class SsmTrainingSuiteService {
     await assertSsmEmployeeAccess(this.prisma, tenantId, plan.employeeId, scope);
   }
 
+  private employeeApprovedDocumentsWhere(
+    tenantId: string,
+    employee: {
+      department?: { name: string } | null;
+      jobPosition?: { name: string } | null;
+      worksite?: { name: string; legalEntity?: { name: string } | null } | null;
+    }
+  ) {
+    const entityName = employee.worksite?.legalEntity?.name ?? null;
+    return {
+      tenantId,
+      status: "APPROVED" as const,
+      activeVersionId: { not: null },
+      OR: [
+        { targetType: "ALL" as const },
+        ...(employee.department?.name
+          ? [{ targetType: "DEPARTMENT" as const, targetLabel: employee.department.name }]
+          : []),
+        ...(employee.jobPosition?.name
+          ? [{ targetType: "JOB_POSITION" as const, targetLabel: employee.jobPosition.name }]
+          : []),
+        ...(employee.worksite?.name
+          ? [{ targetType: "WORKSITE" as const, targetLabel: employee.worksite.name }]
+          : []),
+        ...(entityName
+          ? [
+              { targetType: "ENTITY" as const, targetLabel: entityName },
+              { targetType: "ENTITY" as const, entityName }
+            ]
+          : [])
+      ]
+    };
+  }
+
+  private listApprovedDocumentsForEmployee(
+    tenantId: string,
+    employee: {
+      department?: { name: string } | null;
+      jobPosition?: { name: string } | null;
+      worksite?: { name: string; legalEntity?: { name: string } | null } | null;
+    }
+  ) {
+    return this.prisma.ssmDocument.findMany({
+      where: this.employeeApprovedDocumentsWhere(tenantId, employee),
+      include: { activeVersion: true },
+      orderBy: { updatedAt: "desc" }
+    });
+  }
+
   private async assertDigitalFileEmployeeAccess(
     tenantId: string,
     employeeId: string,
@@ -1818,38 +1776,22 @@ export class SsmTrainingSuiteService {
     await assertSsmEmployeeAccess(this.prisma, tenantId, employeeId, scope);
   }
 
-  async generateCollectiveSheetPdf(dto: GenerateCollectiveSheetDto) {
-    const createdAt = new Date();
-    const buffer = await new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
-
-      applyUnicodeFonts(doc);
-      doc.fontSize(16).font(PdfFont.bold).text("FIȘĂ COLECTIVĂ DE INSTRUCTAJ", { align: "center" });
-      doc.fontSize(11).font(PdfFont.regular).text("Vizitatori / colaboratori externi", { align: "center" });
-      doc.moveDown();
-      doc.fontSize(12).text(`Tematică: ${dto.title}`);
-      doc.text(`Instructor: ${dto.trainerName ?? "-"}`);
-      doc.text(`Locație: ${dto.location ?? "-"}`);
-      doc.text(`Data: ${createdAt.toLocaleDateString("ro-RO")} ${createdAt.toLocaleTimeString("ro-RO")}`);
-      doc.moveDown();
-      doc.text("Participanți:");
-      doc.moveDown(0.3);
-      dto.attendees.forEach((name, index) => {
-        const y = doc.y;
-        doc.text(`${index + 1}. ${name}`, 40, y, { width: 280 });
-        doc.text("Semnătură: ____________________", 330, y);
-        doc.moveDown(0.8);
-      });
-      doc.moveDown();
-      doc.fontSize(10).text(
-        "Document generat pentru evidența instructajului vizitatorilor și colaboratorilor externi."
-      );
-      doc.end();
+  async generateCollectiveSheetPdf(tenantId: string, dto: GenerateCollectiveSheetDto) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+    const legalEntity = await this.prisma.legalEntity.findFirst({
+      where: { tenantId, active: true },
+      orderBy: { createdAt: "asc" },
+      select: { name: true, cui: true }
     });
-    return buffer;
+    return renderAnexa12CollectiveSheet({
+      companyName: legalEntity?.name ?? tenant?.name ?? tenantId,
+      cui: legalEntity?.cui,
+      title: dto.title,
+      trainerName: dto.trainerName,
+      trainerFunction: dto.trainerFunction,
+      location: dto.location,
+      visitDates: dto.visitDates,
+      attendees: dto.attendees
+    });
   }
 }

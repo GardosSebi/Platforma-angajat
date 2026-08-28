@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  SsmDocumentStatus,
   SsmDocumentTargetType,
   SsmDocumentType,
   SsmPsiEquipmentCategory,
@@ -116,6 +117,7 @@ export class SsmPsiService {
         where: {
           tenantId,
           type: { in: [SsmDocumentType.PSI, SsmDocumentType.EMERGENCY_PROCEDURE] },
+          status: SsmDocumentStatus.APPROVED,
           targetType: { in: [SsmDocumentTargetType.WORKSITE, SsmDocumentTargetType.ALL] }
         },
         include: { activeVersion: true },
@@ -126,7 +128,12 @@ export class SsmPsiService {
     return {
       worksites: worksites.map((worksite) => {
         const worksiteDocs = documents
-          .filter((document) => document.targetType === SsmDocumentTargetType.ALL || document.targetRefId === worksite.id)
+          .filter((document) => {
+            if (document.targetType === SsmDocumentTargetType.ALL) return true;
+            if (document.targetRefId === worksite.id) return true;
+            const label = (document.targetLabel ?? "").trim().toLowerCase();
+            return Boolean(label) && (label === worksite.name.trim().toLowerCase() || label === worksite.code.trim().toLowerCase());
+          })
           .map((document) => {
             const kind = classifyPsiDocument(document.type, document.title);
             return {

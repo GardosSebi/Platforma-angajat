@@ -12,7 +12,7 @@ export interface EmployeeSurveyAvailableItem {
 export const employeePortalApi = {
   listDocuments(params?: { page?: number; pageSize?: number; q?: string }) {
     const search = new URLSearchParams();
-    search.set("status", "ACTIVE");
+    search.set("status", "APPROVED");
     if (params?.q?.trim()) search.set("q", params.q.trim());
     if (params?.page) search.set("page", String(params.page));
     if (params?.pageSize) search.set("pageSize", String(params.pageSize));

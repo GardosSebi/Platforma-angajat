@@ -330,11 +330,11 @@ export function EmployeeTrainingsPanel() {
                     setDownloadError(null);
                     void downloadWithAuth(
                       ssmApi.getIndividualSheetUrl(activePlan.id),
-                      `fisa-instruire-${activePlan.id}.pdf`
+                      `fisa-instruire-individuala-anexa-11.pdf`
                     ).catch((err: unknown) => setDownloadError(mutationErrorMessage(err)));
                   }}
                 >
-                  Descarcă fișa individuală (PDF)
+                  Descarcă fișa individuală Anexa 11 (PDF)
                 </button>
               </div>
               {downloadError ? <p className="feedback error">{downloadError}</p> : null}

@@ -162,6 +162,7 @@ export interface CommunicationAnnouncementItem {
     answerCount?: number;
   };
   myAnswer?: CommunicationAnnouncementAnswerItem | null;
+  myRead?: boolean | null;
 }
 
 export interface CommunicationAnnouncementAnswerItem {

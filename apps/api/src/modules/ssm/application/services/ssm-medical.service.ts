@@ -634,7 +634,7 @@ export class SsmMedicalService {
         category: "SSM_MEDICAL",
         title: "Reminder medicina muncii",
         body: text,
-        linkPath: "/portal?tab=medical",
+        linkPath: "/portal?tab=dossier",
         entityType: "SsmMedicalControl",
         entityId: row.id
       });

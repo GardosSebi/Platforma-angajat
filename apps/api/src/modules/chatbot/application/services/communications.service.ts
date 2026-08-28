@@ -34,6 +34,7 @@ import {
 import { CommunicationRightsService } from "./communication-rights.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { LocalFileStorageService } from "../../../../infrastructure/files/local-file-storage.service";
+import { auditRetentionFileAccess } from "../../../../infrastructure/retention/file-retention-audit";
 
 function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
@@ -202,14 +203,37 @@ export class CommunicationsService {
     };
   }
 
-  async listAnnouncements(tenantId: string, query?: PaginationQueryDto, viewer?: JwtPayload) {
+  async listAnnouncements(
+    tenantId: string,
+    query?: PaginationQueryDto,
+    viewer?: JwtPayload,
+    forMe = false
+  ) {
     const p = resolvePagination(query);
     const scope = await this.scopeFor(viewer, tenantId);
     const allRows = await this.prisma.communicationAnnouncement.findMany({
       where: { tenantId },
       orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }]
     });
-    const scopedRows = await this.filterAnnouncementsForScope(tenantId, allRows, scope);
+    let scopedRows = await this.filterAnnouncementsForScope(tenantId, allRows, scope);
+    if (forMe) {
+      const linkedEmployee = viewer?.email
+        ? await this.prisma.employee.findFirst({
+            where: { tenantId, email: { equals: viewer.email, mode: "insensitive" }, active: true },
+            select: { id: true }
+          })
+        : null;
+      if (!linkedEmployee) {
+        return paginatedResult([], 0, p.page, p.pageSize);
+      }
+      const mine: CommunicationAnnouncement[] = [];
+      for (const row of scopedRows) {
+        if (row.status !== CommunicationAnnouncementStatus.PUBLISHED) continue;
+        const targets = await this.resolveAudienceEmployeeIds(tenantId, row);
+        if (targets.includes(linkedEmployee.id)) mine.push(row);
+      }
+      scopedRows = mine;
+    }
     const pageRows = scopedRows.slice(p.skip, p.skip + p.take);
     const items = await this.withStats(tenantId, pageRows, scope, viewer);
     return paginatedResult(items, scopedRows.length, p.page, p.pageSize);
@@ -565,8 +589,32 @@ export class CommunicationsService {
     };
   }
 
-  async streamMedia(tenantId: string, relativePath: string) {
+  async streamMedia(tenantId: string, relativePath: string, actorId?: string) {
     const opened = await this.files.openTenantFile(tenantId, relativePath);
+    if (actorId) {
+      const announcement = await this.prisma.communicationAnnouncement.findFirst({
+        where: { tenantId, contentUrl: relativePath, retentionArchivedAt: { not: null } },
+        select: { id: true, retentionArchivedAt: true }
+      });
+      const template = announcement
+        ? null
+        : await this.prisma.communicationTemplate.findFirst({
+            where: { tenantId, contentUrl: relativePath, retentionArchivedAt: { not: null } },
+            select: { id: true, retentionArchivedAt: true }
+          });
+      if (announcement || template) {
+        await auditRetentionFileAccess(this.auditLog, {
+          tenantId,
+          actorId,
+          entityType: announcement ? "CommunicationAnnouncement" : "CommunicationTemplate",
+          entityId: announcement?.id ?? template!.id,
+          category: announcement ? "COMMS_MEDIA" : "COMMS_TEMPLATE",
+          fileName: opened.fileName,
+          storagePath: relativePath,
+          retentionArchivedAt: announcement?.retentionArchivedAt ?? template?.retentionArchivedAt ?? null
+        });
+      }
+    }
     const lower = opened.fileName.toLowerCase();
     let mimeType = "application/octet-stream";
     if (/\.(png|jpe?g|gif|webp|svg)$/.test(lower)) {
@@ -1122,6 +1170,18 @@ export class CommunicationsService {
           })
         : [];
     const myAnswerByAnnouncement = new Map(myAnswers.map((a) => [a.announcementId, a]));
+    const myReads =
+      linkedEmployee && announcementIds.length
+        ? await this.prisma.communicationAnnouncementRead.findMany({
+            where: {
+              tenantId,
+              employeeId: linkedEmployee.id,
+              announcementId: { in: announcementIds }
+            },
+            select: { announcementId: true }
+          })
+        : [];
+    const myReadSet = new Set(myReads.map((row) => row.announcementId));
 
     return Promise.all(
       rows.map(async (row) => {
@@ -1183,7 +1243,8 @@ export class CommunicationsService {
                 createdAt: myAnswer.createdAt,
                 updatedAt: myAnswer.updatedAt
               }
-            : null
+            : null,
+          myRead: linkedEmployee ? myReadSet.has(row.id) : null
         };
       })
     );

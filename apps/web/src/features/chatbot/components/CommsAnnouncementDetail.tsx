@@ -39,7 +39,10 @@ export function CommsAnnouncementDetail({
   onDuplicate,
   onDelete
 }: Props) {
-  const canPublish = announcement?.status === "DRAFT" || announcement?.status === "SCHEDULED";
+  const canPublish =
+    announcement?.status === "DRAFT" ||
+    announcement?.status === "SCHEDULED" ||
+    announcement?.status === "READY_TO_SEND";
   const canRetract = announcement?.status === "PUBLISHED";
   const translationEntries = Object.entries(announcement?.translations ?? {}).filter(
     ([, value]) => value.title?.trim() || value.body?.trim()

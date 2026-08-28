@@ -18,6 +18,8 @@ import { useDepartmentsLookup, useWorksitesLookup } from "../../master-data/hook
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { ssmApi } from "../api/ssm.api";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import {
   useAccidentAttachments,
   useAccidentCases,
@@ -211,6 +213,8 @@ function CaseContextBanner({
 }
 
 export function SsmAccidentsManager() {
+  const session = useAuthSession();
+  const canApprove = hasPermission(session?.roles, "ssm:accident:approve");
   const [tab, setTab] = useState<AccidentsTab>("register");
   const activeTabMeta = ACCIDENT_TABS.find((item) => item.id === tab) ?? ACCIDENT_TABS[0];
 
@@ -1023,9 +1027,9 @@ export function SsmAccidentsManager() {
             ) : null}
           </div>
 
-          {selectedCase && selectedCase.status !== "CLOSED" ? (
+          {canApprove && selectedCase && selectedCase.status !== "CLOSED" ? (
             <form className="card form-stack ssm-doc-card" onSubmit={onCloseCase}>
-              <h4 className="card-title">Închidere și raport ITM</h4>
+              <h4 className="card-title">Închidere și proces-verbal de cercetare (art. 128)</h4>
               <div className="field">
                 <label htmlFor="close-conc">Concluzii cercetare</label>
                 <textarea
@@ -1056,11 +1060,11 @@ export function SsmAccidentsManager() {
                     setDownloadError(null);
                     void downloadWithAuth(
                       ssmApi.getAccidentReportUrl(selectedCase.id),
-                      `accident-report-${selectedCase.id}.pdf`
+                      `proces-verbal-cercetare-art128.pdf`
                     ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)));
                   }}
                 >
-                  Export PDF ITM
+                  Proces-verbal cercetare (art. 128)
                 </button>
               </div>
               {closeCase.isError ? (
@@ -1088,11 +1092,11 @@ export function SsmAccidentsManager() {
                   setDownloadError(null);
                   void downloadWithAuth(
                     ssmApi.getAccidentReportUrl(selectedCase.id),
-                    `accident-report-${selectedCase.id}.pdf`
+                    `proces-verbal-cercetare-art128.pdf`
                   ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)));
                 }}
               >
-                Export PDF ITM
+                Proces-verbal cercetare (art. 128)
               </button>
               {downloadError ? <p className="feedback error">{downloadError}</p> : null}
             </div>

@@ -156,7 +156,9 @@ export function SsmTrainingSuiteManager() {
   const [collectiveForm, setCollectiveForm] = useState({
     title: "Instructaj vizitatori / colaboratori",
     trainerName: "",
+    trainerFunction: "",
     location: "",
+    visitDates: "",
     attendeesText: ""
   });
   const [activePlanId, setActivePlanId] = useState("");
@@ -174,6 +176,8 @@ export function SsmTrainingSuiteManager() {
   const [dossierData, setDossierData] = useState<{
     trainings: Array<{ id: string; type: string; status: string; score?: number | null }>;
     documents: Array<{ id: string; title: string; type: string; fileName?: string }>;
+    eipRecords?: Array<{ id: string }>;
+    medicalControls?: Array<{ id: string }>;
   } | null>(null);
   const [showTestEditor, setShowTestEditor] = useState(false);
   const [showTypeForm, setShowTypeForm] = useState(false);
@@ -331,7 +335,9 @@ export function SsmTrainingSuiteManager() {
     generateCollective.mutate({
       title: collectiveForm.title.trim(),
       trainerName: collectiveForm.trainerName.trim() || undefined,
+      trainerFunction: collectiveForm.trainerFunction.trim() || undefined,
       location: collectiveForm.location.trim() || undefined,
+      visitDates: collectiveForm.visitDates.trim() || undefined,
       attendees
     });
   };
@@ -579,7 +585,7 @@ export function SsmTrainingSuiteManager() {
 
           <div className="card form-stack ssm-doc-card">
             <div className="ssm-card-header">
-              <h4 className="card-title">Fișă colectivă vizitatori</h4>
+              <h4 className="card-title">Fișă colectivă Anexa 12 HG 1425/2006</h4>
               <button
                 type="button"
                 className="btn-secondary"
@@ -608,7 +614,16 @@ export function SsmTrainingSuiteManager() {
                   />
                 </div>
                 <div className="field">
-                  <label htmlFor="collective-location">Locație</label>
+                  <label htmlFor="collective-function">Funcția instructorului</label>
+                  <input
+                    id="collective-function"
+                    value={collectiveForm.trainerFunction}
+                    onChange={(e) => setCollectiveForm((p) => ({ ...p, trainerFunction: e.target.value }))}
+                    placeholder="lucrător desemnat / responsabil SSM"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="collective-location">Locație / proveniență grup</label>
                   <input
                     id="collective-location"
                     value={collectiveForm.location}
@@ -616,7 +631,16 @@ export function SsmTrainingSuiteManager() {
                   />
                 </div>
                 <div className="field">
-                  <label htmlFor="collective-attendees">Participanți (câte unul pe linie)</label>
+                  <label htmlFor="collective-dates">Zilele vizitei / prezenței</label>
+                  <input
+                    id="collective-dates"
+                    value={collectiveForm.visitDates}
+                    onChange={(e) => setCollectiveForm((p) => ({ ...p, visitDates: e.target.value }))}
+                    placeholder="ex. 25–26.08.2026"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="collective-attendees">Participanți (câte unul pe linie; opțional „Nume | CI/grupă sanguină”)</label>
                   <textarea
                     id="collective-attendees"
                     rows={5}
@@ -633,7 +657,9 @@ export function SsmTrainingSuiteManager() {
                 ) : null}
               </form>
             ) : (
-              <p className="field-hint">Generează fișa colectivă pentru vizitatori / colaboratori externi.</p>
+              <p className="field-hint">
+                Generează Anexa nr. 12 la HG 1425/2006 — fișa de instruire colectivă pentru vizitatori / lucrători din întreprinderi externe.
+              </p>
             )}
           </div>
         </div>
@@ -1056,11 +1082,11 @@ export function SsmTrainingSuiteManager() {
                       setDownloadError(null);
                       void downloadWithAuth(
                         ssmApi.getIndividualSheetUrl(activePlan.id),
-                        `fisa-instruire-${activePlan.id}.pdf`
+                        `fisa-instruire-individuala-anexa-11.pdf`
                       ).catch((err: unknown) => setDownloadError(mutationErrorMessage(err)));
                     }}
                   >
-                    Descarcă fișa PDF
+                    Descarcă Anexa 11 (fișa legală)
                   </button>
                 </div>
                 {downloadError ? <p className="feedback error">{downloadError}</p> : null}
@@ -1126,7 +1152,11 @@ export function SsmTrainingSuiteManager() {
             {downloadError ? <p className="feedback error">{downloadError}</p> : null}
             {dossierData ? (
               <div className="ssm-history-list">
-                <p className="field-hint">{dossierData.trainings.length} instruiri în dosar</p>
+                <p className="field-hint">
+                  {dossierData.trainings.length} instruiri · {dossierData.documents.length} documente
+                  {dossierData.eipRecords?.length ? ` · ${dossierData.eipRecords.length} EIP` : ""}
+                  {dossierData.medicalControls?.length ? ` · ${dossierData.medicalControls.length} controale medicale` : ""}
+                </p>
                 {dossierData.trainings.slice(0, 12).map((t) => (
                   <div key={t.id} className="ssm-history-item">
                     <div>

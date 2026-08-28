@@ -76,11 +76,15 @@ export class CommunicationsController {
 
   @Get("media")
   @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
-  async streamMedia(@TenantId() tenantId: string, @Query("path") path?: string) {
+  async streamMedia(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query("path") path?: string
+  ) {
     if (!path?.trim()) {
       throw new BadRequestException("Query param 'path' is required");
     }
-    const { stream, mimeType, fileName } = await this.communications.streamMedia(tenantId, path);
+    const { stream, mimeType, fileName } = await this.communications.streamMedia(tenantId, path, user.sub);
     return new StreamableFile(stream, {
       type: mimeType,
       disposition: `inline; filename="${fileName.replace(/"/g, "")}"`
@@ -92,9 +96,10 @@ export class CommunicationsController {
   listAnnouncements(
     @TenantId() tenantId: string,
     @CurrentUser() user: JwtPayload,
-    @Query() query: PaginationQueryDto
+    @Query() query: PaginationQueryDto,
+    @Query("forMe") forMe?: string
   ) {
-    return this.communications.listAnnouncements(tenantId, query, user);
+    return this.communications.listAnnouncements(tenantId, query, user, forMe === "1" || forMe === "true");
   }
 
   @Get("announcements/:id")

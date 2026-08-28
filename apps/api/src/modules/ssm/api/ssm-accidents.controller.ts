@@ -168,7 +168,7 @@ export class SsmAccidentsController {
   async reportPdf(@TenantId() tenantId: string, @Param("caseId") caseId: string) {
     const buffer = await this.accidents.researchReportPdf(tenantId, caseId);
     return new StreamableFile(buffer, {
-      disposition: `attachment; filename=\"accident-report-${caseId}.pdf\"`
+      disposition: `attachment; filename=\"proces-verbal-cercetare-art128-HG-1425-2006.pdf\"`
     });
   }
 }

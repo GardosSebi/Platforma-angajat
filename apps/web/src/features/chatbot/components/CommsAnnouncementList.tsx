@@ -171,7 +171,7 @@ export function CommsAnnouncementList({
                       <button type="button" className="comms-action-link" onClick={() => onEdit(item.id)}>
                         Editează
                       </button>
-                      {item.status === "DRAFT" || item.status === "SCHEDULED" ? (
+                      {item.status === "DRAFT" || item.status === "SCHEDULED" || item.status === "READY_TO_SEND" ? (
                         <button type="button" className="comms-action-link" onClick={() => onPublish(item.id)}>
                           Publică
                         </button>

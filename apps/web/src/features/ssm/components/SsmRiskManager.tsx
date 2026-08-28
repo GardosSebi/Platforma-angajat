@@ -16,6 +16,8 @@ import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { ssmApi } from "../api/ssm.api";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import {
   useAddRiskAssessmentVersion,
   useArchiveRiskAssessment,
@@ -232,6 +234,8 @@ function MeasureEditor({
 }
 
 export function SsmRiskManager() {
+  const session = useAuthSession();
+  const canApprove = hasPermission(session?.roles, "ssm:risk:approve");
   const [tab, setTab] = useState<RiskTabId>("list");
   const [filters, setFilters] = useState({ targetType: "", status: "ACTIVE" });
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string>();
@@ -623,6 +627,7 @@ export function SsmRiskManager() {
                 >
                   {createLinkedPlan.isPending ? "Se creează…" : "Generează Plan PPP"}
                 </button>
+                {canApprove ? (
                 <button
                   type="button"
                   className="btn-secondary"
@@ -638,6 +643,7 @@ export function SsmRiskManager() {
                 >
                   Arhivează
                 </button>
+                ) : null}
               </div>
               {addVersion.isError ? <p className="feedback error">{mutationErrorMessage(addVersion.error)}</p> : null}
               {createLinkedPlan.isError ? (

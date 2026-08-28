@@ -21,7 +21,7 @@ export function EmployeeAnnouncementsPanel() {
 
   const query = useQuery({
     queryKey: ["employee-portal", "announcements"],
-    queryFn: () => chatbotApi.listAnnouncements({ page: 1, pageSize: 30 })
+    queryFn: () => chatbotApi.listAnnouncements({ page: 1, pageSize: 30, forMe: true })
   });
 
   const markRead = useMutation({
@@ -91,7 +91,7 @@ export function EmployeeAnnouncementsPanel() {
       <ul className="employee-announcement-list">
         {published.map((item) => {
           const needsRead = item.requireReadConfirmation || item.messageType === "READ_CONFIRMATION";
-          const isUnread = item.stats.unreadCount > 0;
+          const isUnread = item.myRead !== true;
           const text = resolveAnnouncementText(item);
           const isQuestion = item.messageType === "QUESTION";
           return (
@@ -174,7 +174,7 @@ export function EmployeeAnnouncementsPanel() {
                 >
                   Confirm citire
                 </button>
-              ) : !isQuestion && item.stats.readCount > 0 ? (
+              ) : !isQuestion && employeeId && !isUnread ? (
                 <span className="ssm-chip good">Citit</span>
               ) : null}
               {item.reactionsEnabled && employeeId ? (

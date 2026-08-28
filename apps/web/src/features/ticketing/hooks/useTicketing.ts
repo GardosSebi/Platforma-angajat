@@ -56,10 +56,10 @@ export function useTicketOperatorOptions() {
   }, [usersQuery.data, statsQuery.data]);
 }
 
-export function useTicketComments(ticketId: string) {
+export function useTicketComments(ticketId?: string) {
   return useQuery({
     queryKey: ["ticketing", "comments", ticketId],
-    queryFn: () => ticketingApi.comments(ticketId),
+    queryFn: () => ticketingApi.comments(ticketId!),
     enabled: Boolean(ticketId)
   });
 }

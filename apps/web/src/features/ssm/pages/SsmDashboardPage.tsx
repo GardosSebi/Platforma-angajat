@@ -38,7 +38,7 @@ const SSM_SECTIONS: Array<{
     title: "Instruire și conformitate",
     caption: "Calendar, teste, fișe",
     description:
-      "Planificare, e-learning, semnături, calendar scadențe și raport conformitate."
+      "Planificare, e-learning, semnături, calendar scadențe, fișa Anexa 11 și raport conformitate."
   },
   {
     id: "eip",
@@ -50,7 +50,7 @@ const SSM_SECTIONS: Array<{
     id: "accidents",
     title: "Accidente și incidente",
     caption: "Registru, cercetare, măsuri",
-    description: "Lucrează pe secțiuni: registru cazuri, cercetare, măsuri corective și statistici."
+    description: "Registru cazuri, cercetare, măsuri corective, statistici și proces-verbal art. 128 HG 1425/2006."
   },
   {
     id: "medical",

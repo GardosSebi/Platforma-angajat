@@ -124,21 +124,34 @@ export class SsmScheduledReportsService {
     recipients: string[];
     format: SsmReportDeliveryFormat;
   }) {
+    const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
     const report = await this.overview.report(schedule.tenantId, schedule.reportType);
     const rowCount = Array.isArray(report?.rows) ? report.rows.length : 0;
-    const subject = `Raport SSM programat: ${schedule.reportType}`;
-    const text = `Raportul SSM „${schedule.reportType}” a fost generat automat.\nRânduri: ${rowCount}.\nDeschide platforma pentru export PDF/Excel.`;
 
-    for (const to of schedule.recipients) {
-      await this.mail.sendMail({ to, subject, text });
-    }
-
-    // Binary attachments are optional; email body notifies recipients. Full PDF attach can be added later.
     if (schedule.format === SsmReportDeliveryFormat.PDF || schedule.format === SsmReportDeliveryFormat.BOTH) {
-      await this.overview.reportPdf(schedule.tenantId, schedule.reportType);
+      const pdf = await this.overview.reportPdf(schedule.tenantId, schedule.reportType);
+      attachments.push({
+        filename: `ssm-${schedule.reportType}.pdf`,
+        content: pdf,
+        contentType: "application/pdf"
+      });
     }
     if (schedule.format === SsmReportDeliveryFormat.XLSX || schedule.format === SsmReportDeliveryFormat.BOTH) {
-      await this.overview.reportExcel(schedule.tenantId, schedule.reportType);
+      const xlsx = await this.overview.reportExcel(schedule.tenantId, schedule.reportType);
+      attachments.push({
+        filename: `ssm-${schedule.reportType}.xlsx`,
+        content: xlsx,
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+    }
+
+    const subject = `Raport SSM programat: ${schedule.reportType}`;
+    const text = attachments.length
+      ? `Raportul SSM „${schedule.reportType}” a fost generat automat (${rowCount} rânduri). Fișierul este atașat.`
+      : `Raportul SSM „${schedule.reportType}” a fost generat automat (${rowCount} rânduri).`;
+
+    for (const to of schedule.recipients) {
+      await this.mail.sendMail({ to, subject, text, attachments });
     }
   }
 

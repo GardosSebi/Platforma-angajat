@@ -218,7 +218,7 @@ export const ssmApi = {
     return downloadJsonPostWithAuth(
       "/ssm/training-suite/collective-sheet.pdf",
       payload,
-      "fisa-colectiva-instructaj.pdf"
+      "fisa-instruire-colectiva-anexa-12-HG-1425-2006.pdf"
     );
   },
   listTrainingPlans(params?: PaginationParams) {
@@ -314,6 +314,15 @@ export const ssmApi = {
         aptitudeSheetName?: string | null;
         hasAptitudeSheet?: boolean;
         blockedAdmission?: boolean;
+      }>;
+      eipRecords?: Array<{
+        id: string;
+        eipName: string;
+        eipCode: string;
+        movementType: string;
+        movementDate: string;
+        replacementDueAt?: string | null;
+        signedAt?: string | null;
       }>;
       employee?: {
         id: string;
@@ -499,6 +508,9 @@ export const ssmApi = {
   },
   medicalReminders() {
     return httpClient<{ reminders: SsmMedicalReminderItem[] }>("/ssm/medical/reminders");
+  },
+  dispatchMedicalReminders() {
+    return httpClient<{ sent: number }>("/ssm/medical/reminders/dispatch", { method: "POST" });
   },
   listRiskAssessments(query?: URLSearchParams) {
     const q = query?.toString();

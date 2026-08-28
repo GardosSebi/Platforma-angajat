@@ -112,6 +112,18 @@ export function ItmInspectorPage() {
               <li key={item.id}>
                 <strong>{item.title}</strong> — {item.type} / {item.status}
                 {item.itmDaysOff != null ? ` · Zile ITM: ${item.itmDaysOff}` : ""}
+                <button
+                  type="button"
+                  className="btn-text"
+                  onClick={() => {
+                    setDownloadError(null);
+                    void downloadWithAuth(ssmApi.getAccidentReportUrl(item.id), `proces-verbal-cercetare-art128.pdf`).catch(
+                      (e) => setDownloadError(e instanceof Error ? e.message : "Descărcare eșuată.")
+                    );
+                  }}
+                >
+                  PV cercetare art. 128
+                </button>
               </li>
             ))}
           </ul>
@@ -127,14 +139,22 @@ export function ItmInspectorPage() {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => downloadWithAuth("/ssm/reports/compliance.pdf", "raport-conformitate.pdf")}
+                onClick={() =>
+                  downloadWithAuth(ssmApi.getSsmReportPdfUrl("compliance"), "raport-conformitate.pdf").catch((e) =>
+                    setDownloadError(e instanceof Error ? e.message : "Descărcare eșuată.")
+                  )
+                }
               >
                 Raport conformitate (PDF)
               </button>
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => downloadWithAuth("/ssm/reports/compliance.xlsx", "raport-conformitate.xlsx")}
+                onClick={() =>
+                  downloadWithAuth(ssmApi.getSsmReportExcelUrl("compliance"), "raport-conformitate.xlsx").catch((e) =>
+                    setDownloadError(e instanceof Error ? e.message : "Descărcare eșuată.")
+                  )
+                }
               >
                 Raport conformitate (Excel)
               </button>

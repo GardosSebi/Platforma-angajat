@@ -191,7 +191,9 @@ export interface GenerateSsmCollectiveSheetRequest {
   title: string;
   attendees: string[];
   trainerName?: string;
+  trainerFunction?: string;
   location?: string;
+  visitDates?: string;
 }
 
 export type SsmTrainingCategory =

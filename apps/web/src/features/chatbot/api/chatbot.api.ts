@@ -20,16 +20,20 @@ import type {
 } from "@repo/shared-types/communications";
 import type { UsageSummaryResponse } from "@repo/shared-types/platform-admin";
 import type { PaginatedResult, PaginationParams } from "@repo/shared-types/pagination";
-import { buildPaginationQuery } from "../../../shared/api/pagination-query";
 import { httpClient } from "../../../shared/api/http-client";
 
 export const chatbotApi = {
   dashboard() {
     return httpClient<CommunicationDashboardResponse>("/chatbot/overview");
   },
-  listAnnouncements(params?: PaginationParams) {
+  listAnnouncements(params?: PaginationParams & { forMe?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    if (params?.forMe) qs.set("forMe", "1");
+    const q = qs.toString();
     return httpClient<PaginatedResult<CommunicationAnnouncementItem>>(
-      `/chatbot/announcements${buildPaginationQuery(params)}`
+      `/chatbot/announcements${q ? `?${q}` : ""}`
     );
   },
   getAnnouncement(id: string) {

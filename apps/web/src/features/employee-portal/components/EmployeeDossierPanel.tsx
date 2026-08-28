@@ -130,6 +130,42 @@ export function EmployeeDossierPanel() {
           </ul>
         </section>
       ) : null}
+
+      {data?.eipRecords?.length ? (
+        <section className="card employee-dossier-section">
+          <h3 className="card-title">EIP alocat</h3>
+          <ul className="employee-dossier-list">
+            {data.eipRecords.map((item) => (
+              <li key={item.id}>
+                <strong>
+                  {item.eipName}
+                  {item.eipCode ? ` (${item.eipCode})` : ""}
+                </strong>
+                <span>
+                  {item.movementType}
+                  {item.movementDate ? ` · ${formatRoDate(item.movementDate)}` : ""}
+                  {item.signedAt ? " · semnat" : " · nesemnat"}
+                  {item.replacementDueAt ? ` · înlocuire ${formatRoDate(item.replacementDueAt)}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {data?.riskExposureSheets?.length ? (
+        <section className="card employee-dossier-section">
+          <h3 className="card-title">Fișe de expunere</h3>
+          <ul className="employee-dossier-list">
+            {data.riskExposureSheets.map((item) => (
+              <li key={item.id}>
+                <strong>{item.title}</strong>
+                <span>{item.fileName ?? "Fișă evaluare risc"}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

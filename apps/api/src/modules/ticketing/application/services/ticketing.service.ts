@@ -16,6 +16,7 @@ import {
 import { paginatedResult } from "../../../../common/pagination";
 import { resolvePagination } from "../../../../common/dto/pagination-query.dto";
 import { JwtPayload } from "../../../../auth/jwt.strategy";
+import { hasAnyPermission, Permission } from "../../../../common/constants/permissions";
 import {
   assertEmployeeInWorksiteScope,
   resolveWorksiteViewerScope,
@@ -199,14 +200,15 @@ export class TicketingService {
     });
   }
 
-  async addComment(tenantId: string, actorId: string, ticketId: string, dto: AddTicketCommentDto) {
+  async addComment(tenantId: string, actorId: string, ticketId: string, dto: AddTicketCommentDto, viewer?: JwtPayload) {
     await this.assertTicket(tenantId, ticketId);
+    const canMarkInternal = hasAnyPermission(viewer?.roles ?? [], [Permission.TICKETS_ASSIGN]);
     const comment = await this.prisma.helpdeskTicketComment.create({
       data: {
         tenantId,
         ticketId,
         body: dto.body.trim(),
-        internal: dto.internal ?? false,
+        internal: Boolean(dto.internal) && canMarkInternal,
         createdBy: actorId
       }
     });
@@ -226,11 +228,12 @@ export class TicketingService {
     return comment;
   }
 
-  async comments(tenantId: string, ticketId: string) {
+  async comments(tenantId: string, ticketId: string, viewer?: JwtPayload) {
     await this.assertTicket(tenantId, ticketId);
+    const hideInternal = !hasAnyPermission(viewer?.roles ?? [], [Permission.TICKETS_ASSIGN, Permission.TICKETS_STATS]);
     return {
       items: await this.prisma.helpdeskTicketComment.findMany({
-        where: { tenantId, ticketId },
+        where: { tenantId, ticketId, ...(hideInternal ? { internal: false } : {}) },
         orderBy: { createdAt: "asc" }
       })
     };

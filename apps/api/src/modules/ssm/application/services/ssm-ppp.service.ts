@@ -192,6 +192,7 @@ export class SsmPppService {
   }
 
   async listPlans(tenantId: string, query?: ListSsmPreventionPlansDto) {
+    await this.syncMeasureOverdue(tenantId);
     const rows = await this.prisma.ssmPreventionPlan.findMany({
       where: {
         tenantId,

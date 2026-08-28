@@ -9,8 +9,6 @@ import {
   SsmAccidentSeverity,
   SsmAccidentType
 } from "@prisma/client";
-import PDFDocument from "pdfkit";
-import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import {
@@ -19,7 +17,13 @@ import {
   CreateAccidentCorrectiveMeasureDto,
   CreateAccidentTaskDto
 } from "../../api/dto/ssm-accidents.dto";
+import { DataEncryptionService } from "../../../../infrastructure/security/data-encryption.service";
 import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
+import {
+  birthDateFromCnp,
+  decryptStoredCnp,
+  renderProcesVerbalCercetare
+} from "../legal-forms";
 
 const ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
   ".pdf",
@@ -49,30 +53,13 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]+/g, "_");
 }
 
-function formatRoDate(value: Date | null | undefined): string {
-  if (!value) return "-";
-  return value.toLocaleString("ro-RO", { dateStyle: "short", timeStyle: "short" });
-}
-
-function typeLabelRo(type: SsmAccidentType): string {
-  switch (type) {
-    case SsmAccidentType.ACCIDENT:
-      return "Accident de muncă";
-    case SsmAccidentType.INCIDENT:
-      return "Incident periculos (near-miss)";
-    case SsmAccidentType.OCCUPATIONAL_DISEASE:
-      return "Boală profesională";
-    default:
-      return type;
-  }
-}
-
 @Injectable()
 export class SsmAccidentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly trainingAutomation: SsmTrainingAutomationService
+    private readonly trainingAutomation: SsmTrainingAutomationService,
+    private readonly encryption: DataEncryptionService
   ) {}
 
   async listCases(tenantId: string, query?: import("../../../../common/dto/pagination-query.dto").PaginationQueryDto) {
@@ -326,15 +313,30 @@ export class SsmAccidentsService {
       include: {
         employee: {
           select: {
+            id: true,
             fullName: true,
             email: true,
             cnp: true,
+            hireDate: true,
             jobPosition: { select: { name: true } },
             department: { select: { name: true } },
-            worksite: { select: { name: true } }
+            worksite: {
+              select: {
+                name: true,
+                address: true,
+                legalEntity: { select: { name: true, cui: true, headquarters: true } }
+              }
+            }
           }
         },
-        worksite: { select: { name: true, code: true, address: true } },
+        worksite: {
+          select: {
+            name: true,
+            code: true,
+            address: true,
+            legalEntity: { select: { name: true, cui: true, headquarters: true } }
+          }
+        },
         department: { select: { name: true, code: true } },
         tasks: { orderBy: { dueAt: "asc" } },
         correctiveMeasureItems: { orderBy: { dueAt: "asc" } },
@@ -344,145 +346,69 @@ export class SsmAccidentsService {
     });
     if (!accidentCase) throw new NotFoundException("Case not found.");
 
-    const attachmentKindRo = (kind: SsmAccidentAttachmentKind) => {
-      switch (kind) {
-        case SsmAccidentAttachmentKind.PHOTO:
-          return "Poză";
-        case SsmAccidentAttachmentKind.PV:
-          return "Proces-verbal";
-        case SsmAccidentAttachmentKind.EXPERTISE:
-          return "Expertiză";
-        default:
-          return "Alt document";
-      }
-    };
+    const legalEntity =
+      accidentCase.worksite?.legalEntity ?? accidentCase.employee?.worksite?.legalEntity ?? null;
+    const cnp = decryptStoredCnp((payload) => this.encryption.decrypt(payload), accidentCase.employee?.cnp);
 
-    return new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      const doc = new PDFDocument({ margin: 40, size: "A4" });
-      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
-
-      applyUnicodeFonts(doc);
-
-      const line = (label: string, value: string) => {
-        doc.font(PdfFont.bold).text(`${label}: `, { continued: true });
-        doc.font(PdfFont.regular).text(value);
-      };
-      const section = (title: string) => {
-        doc.moveDown(0.6);
-        doc.fontSize(13).font(PdfFont.bold).text(title);
-        doc.moveDown(0.2);
-        doc.fontSize(11).font(PdfFont.regular);
-      };
-
-      doc.fontSize(16).font(PdfFont.bold).text("RAPORT DE CERCETARE", { align: "center" });
-      doc.fontSize(12).font(PdfFont.regular).text("Accident de muncă / Incident periculos / Boală profesională", {
-        align: "center"
+    let lastTrainingAt: Date | null = null;
+    let lastTrainingName: string | null = null;
+    if (accidentCase.employee?.id) {
+      const lastTraining = await this.prisma.ssmTrainingPlan.findFirst({
+        where: { tenantId, employeeId: accidentCase.employee.id, completedAt: { not: null } },
+        orderBy: { completedAt: "desc" },
+        include: { trainingType: { select: { name: true } } }
       });
-      doc.fontSize(10).text("(conform cerințelor ITM – formular intern de cercetare)", { align: "center" });
-      doc.moveDown();
+      lastTrainingAt = lastTraining?.completedAt ?? null;
+      lastTrainingName = lastTraining?.trainingType.name ?? null;
+    }
 
-      section("1. Date angajator");
-      line("Denumire", accidentCase.tenant.name);
-      line("Punct de lucru", accidentCase.worksite?.name ?? accidentCase.employee?.worksite?.name ?? accidentCase.location ?? "-");
-      line("Adresă punct lucru", accidentCase.worksite?.address ?? "-");
-      line("Departament", accidentCase.department?.name ?? accidentCase.employee?.department?.name ?? "-");
-
-      section("2. Date victimă / persoană afectată");
-      line("Nume și prenume", accidentCase.employee?.fullName ?? "-");
-      line("CNP", accidentCase.employee?.cnp ?? "-");
-      line("Email", accidentCase.employee?.email ?? "-");
-      line("Funcție / post", accidentCase.employee?.jobPosition?.name ?? "-");
-
-      section("3. Date eveniment");
-      line("Tip eveniment", typeLabelRo(accidentCase.type));
-      line("Severitate", accidentCase.severity);
-      line("Status cercetare", accidentCase.status);
-      line("Titlu caz", accidentCase.title);
-      line("Data și ora", formatRoDate(accidentCase.occurredAt));
-      line("Locul producerii", accidentCase.location ?? accidentCase.worksite?.name ?? "-");
-      line("Responsabil cercetare", accidentCase.researchResponsible ?? "-");
-      line("Termen legal cercetare", formatRoDate(accidentCase.dueAt));
-
-      section("4. Descrierea evenimentului");
-      doc.text(accidentCase.description || "-");
-
-      section("5. Martori");
-      doc.text(accidentCase.witnesses.length ? accidentCase.witnesses.join(", ") : "-");
-
-      section("5b. Probe / atașamente pe dosar");
-      if (!accidentCase.attachments.length) {
-        doc.text("-");
-      } else {
-        accidentCase.attachments.forEach((att, idx) => {
-          doc.text(
-            `${idx + 1}. [${attachmentKindRo(att.kind)}] ${att.fileName}${att.notes ? ` — ${att.notes}` : ""}`
-          );
-        });
-      }
-
-      if (accidentCase.type === SsmAccidentType.INCIDENT) {
-        section("6. Factori contribuitori (near-miss)");
-        doc.text(accidentCase.contributingFactors ?? "-");
-        section("7. Măsuri imediate");
-        doc.text(accidentCase.immediateMeasures ?? "-");
-      }
-
-      if (accidentCase.type === SsmAccidentType.ACCIDENT) {
-        section("6. Consecințe");
-        line("Zile ITM / incapacitate temporară", accidentCase.itmDaysOff != null ? String(accidentCase.itmDaysOff) : "-");
-        line("Invaliditate permanentă", accidentCase.hasPermanentDisability ? "Da" : "Nu");
-        line("Deces", accidentCase.isFatality ? "Da" : "Nu");
-      }
-
-      if (accidentCase.type === SsmAccidentType.OCCUPATIONAL_DISEASE) {
-        section("6. Confirmare boală profesională");
-        line("Confirmată", accidentCase.diseaseConfirmed ? "Da" : "Nu");
-        line("Data confirmării", formatRoDate(accidentCase.diseaseConfirmedAt));
-        line("Autoritate / medic", accidentCase.diseaseConfirmedBy ?? "-");
-        line("Document / referință", accidentCase.diseaseDocumentRef ?? "-");
-      }
-
-      section("8. Activități de cercetare");
-      if (!accidentCase.tasks.length) {
-        doc.text("-");
-      } else {
-        accidentCase.tasks.forEach((task, idx) => {
-          doc.text(
-            `${idx + 1}. ${task.title} | Responsabil: ${task.assignedTo ?? "-"} | Termen: ${formatRoDate(task.dueAt)} | ${
-              task.completedAt ? `Finalizat ${formatRoDate(task.completedAt)}` : "În curs"
-            }`
-          );
-          if (task.notes) doc.text(`   Note: ${task.notes}`);
-        });
-      }
-
-      section("9. Concluzii");
-      doc.text(accidentCase.conclusions ?? "-");
-
-      section("10. Măsuri corective");
-      if (accidentCase.correctiveMeasureItems.length) {
-        accidentCase.correctiveMeasureItems.forEach((measure, idx) => {
-          doc.text(
-            `${idx + 1}. ${measure.description} | Responsabil: ${measure.assignedTo ?? "-"} | Termen: ${formatRoDate(measure.dueAt)} | ${
-              measure.completedAt ? `Finalizat ${formatRoDate(measure.completedAt)}` : "Deschis"
-            }`
-          );
-        });
-      } else {
-        doc.text(accidentCase.correctiveMeasures ?? "-");
-      }
-
-      doc.moveDown(1.2);
-      doc.text(`Data generării: ${formatRoDate(new Date())}`);
-      doc.moveDown(1.5);
-      doc.text("Semnătura responsabilului cercetare: ________________________");
-      doc.moveDown(0.8);
-      doc.text("Semnătura angajatorului / reprezentant SSM: ________________________");
-
-      doc.end();
+    return renderProcesVerbalCercetare({
+      caseId: accidentCase.id,
+      type: accidentCase.type,
+      title: accidentCase.title,
+      status: accidentCase.status,
+      occurredAt: accidentCase.occurredAt,
+      location: accidentCase.location,
+      description: accidentCase.description,
+      witnesses: accidentCase.witnesses,
+      contributingFactors: accidentCase.contributingFactors,
+      immediateMeasures: accidentCase.immediateMeasures,
+      itmDaysOff: accidentCase.itmDaysOff,
+      hasPermanentDisability: accidentCase.hasPermanentDisability,
+      isFatality: accidentCase.isFatality,
+      diseaseConfirmed: accidentCase.diseaseConfirmed,
+      diseaseConfirmedAt: accidentCase.diseaseConfirmedAt,
+      diseaseConfirmedBy: accidentCase.diseaseConfirmedBy,
+      diseaseDocumentRef: accidentCase.diseaseDocumentRef,
+      researchResponsible: accidentCase.researchResponsible,
+      conclusions: accidentCase.conclusions,
+      correctiveMeasures: accidentCase.correctiveMeasures,
+      legalDaysDeadline: accidentCase.legalDaysDeadline,
+      dueAt: accidentCase.dueAt,
+      closedAt: accidentCase.closedAt,
+      createdAt: accidentCase.createdAt,
+      employer: {
+        name: legalEntity?.name ?? accidentCase.tenant.name,
+        cui: legalEntity?.cui,
+        headquarters: legalEntity?.headquarters,
+        worksiteName: accidentCase.worksite?.name ?? accidentCase.employee?.worksite?.name,
+        worksiteAddress: accidentCase.worksite?.address ?? accidentCase.employee?.worksite?.address,
+        departmentName: accidentCase.department?.name ?? accidentCase.employee?.department?.name
+      },
+      victim: {
+        fullName: accidentCase.employee?.fullName,
+        cnp,
+        birthDate: cnp ? birthDateFromCnp(cnp) : null,
+        email: accidentCase.employee?.email,
+        jobName: accidentCase.employee?.jobPosition?.name,
+        hireDate: accidentCase.employee?.hireDate,
+        worksiteName: accidentCase.employee?.worksite?.name,
+        lastTrainingAt,
+        lastTrainingName
+      },
+      tasks: accidentCase.tasks,
+      measures: accidentCase.correctiveMeasureItems,
+      attachments: accidentCase.attachments
     });
   }
 

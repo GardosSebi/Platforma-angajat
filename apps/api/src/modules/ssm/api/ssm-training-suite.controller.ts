@@ -239,18 +239,22 @@ export class SsmTrainingSuiteController {
   async individualSheet(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
     const buffer = await this.trainingSuite.generateIndividualSheetPdf(tenantId, id, user);
     return new StreamableFile(buffer, {
-      disposition: `attachment; filename=\"training-sheet-${id}.pdf\"`
+      disposition: `attachment; filename=\"fisa-instruire-individuala-anexa-11-HG-1425-2006.pdf\"`
     });
   }
 
   @Post("collective-sheet.pdf")
   @RequirePermissions(Permission.SSM_TRAINING_EDIT)
   @Header("Content-Type", "application/pdf")
-  async collectiveSheet(@CurrentUser() user: JwtPayload, @Body() dto: GenerateCollectiveSheetDto) {
+  async collectiveSheet(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: GenerateCollectiveSheetDto
+  ) {
     assertSsmTrainingCatalogManagement(user);
-    const buffer = await this.trainingSuite.generateCollectiveSheetPdf(dto);
+    const buffer = await this.trainingSuite.generateCollectiveSheetPdf(tenantId, dto);
     return new StreamableFile(buffer, {
-      disposition: `attachment; filename=\"collective-sheet.pdf\"`
+      disposition: `attachment; filename=\"fisa-instruire-colectiva-anexa-12-HG-1425-2006.pdf\"`
     });
   }
 }

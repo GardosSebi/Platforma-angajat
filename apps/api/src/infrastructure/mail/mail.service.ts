@@ -24,9 +24,23 @@ export class MailService {
     });
   }
 
-  async sendMail(options: { to: string; subject: string; text: string; html?: string }) {
+  async sendMail(options: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
+  }) {
     if (!this.transporter) {
-      this.logger.log(JSON.stringify({ skipped: true, to: options.to, subject: options.subject }), "Mail");
+      this.logger.log(
+        JSON.stringify({
+          skipped: true,
+          to: options.to,
+          subject: options.subject,
+          attachments: options.attachments?.length ?? 0
+        }),
+        "Mail"
+      );
       return { sent: false, reason: "smtp_disabled" };
     }
     const from = process.env.SMTP_FROM ?? "no-reply@localhost";
@@ -35,7 +49,12 @@ export class MailService {
       to: options.to,
       subject: options.subject,
       text: options.text,
-      html: options.html
+      html: options.html,
+      attachments: options.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        contentType: attachment.contentType
+      }))
     });
     return { sent: true };
   }

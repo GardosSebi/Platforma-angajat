@@ -301,14 +301,6 @@ export class SsmDocumentsService {
       };
     });
 
-    await this.triggerProcedureTrainingIfNeeded(tenantId, actorId, {
-      type: result.type,
-      title: result.title,
-      targetType: result.targetType,
-      targetRefId: result.targetRefId,
-      targetLabel: result.targetLabel
-    });
-
     return {
       documentId: result.documentId,
       versionId: result.versionId,
@@ -377,14 +369,6 @@ export class SsmDocumentsService {
       entityType: "SsmDocument",
       entityId: documentId,
       payload: { version: nextVersion }
-    });
-
-    await this.triggerProcedureTrainingIfNeeded(tenantId, actorId, {
-      type: document.type,
-      title: document.title,
-      targetType: document.targetType,
-      targetRefId: document.targetRefId,
-      targetLabel: document.targetLabel
     });
 
     return { documentId, versionId: version.id, versionNumber: nextVersion };
@@ -461,6 +445,14 @@ export class SsmDocumentsService {
       entityType: "SsmDocument",
       entityId: documentId,
       payload: { type: document.type, title: document.title }
+    });
+
+    await this.triggerProcedureTrainingIfNeeded(tenantId, actorId, {
+      type: document.type,
+      title: document.title,
+      targetType: document.targetType,
+      targetRefId: document.targetRefId,
+      targetLabel: document.targetLabel
     });
 
     return {
@@ -590,7 +582,11 @@ export class SsmDocumentsService {
       tenantId,
       activeVersionId: { not: null },
       ...(query.type ? { type: query.type } : allowedTypes ? { type: { in: allowedTypes } } : {}),
-      ...(query.status ? { status: query.status } : {}),
+      ...(ctx.scope === "self"
+        ? { status: SsmDocumentStatus.APPROVED }
+        : query.status
+          ? { status: query.status }
+          : {}),
       ...(query.targetType ? { targetType: query.targetType } : {}),
       ...(query.entityName ? { entityName: { contains: query.entityName, mode: "insensitive" as const } } : {}),
       ...(query.departmentName
