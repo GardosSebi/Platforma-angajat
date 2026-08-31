@@ -5,12 +5,14 @@ import { employeeStaticApi } from "../../employee-static/api/employee-static.api
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
 import { employeePortalApi } from "../api/employee-portal.api";
+import { ssmApi } from "../../ssm/api/ssm.api";
 import type { EmployeePortalTab } from "../utils";
 import { PORTAL_TAB_LABELS } from "../utils";
 
 const QUICK_LINKS: Array<{ tab: EmployeePortalTab; hint: string }> = [
   { tab: "trainings", hint: "Parcurge instruiri și semnează fișele" },
   { tab: "documents", hint: "Documente SSM aplicabile postului tău" },
+  { tab: "medical", hint: "Reminder control medical și programare" },
   { tab: "surveys", hint: "Sondaje active pentru tine" },
   { tab: "tickets", hint: "Cereri HR, concediu, IT" }
 ];
@@ -22,6 +24,11 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
   const surveysQuery = useQuery({
     queryKey: ["employee-portal", "surveys-available"],
     queryFn: employeePortalApi.listAvailableSurveys
+  });
+  const medicalQuery = useQuery({
+    queryKey: ["employee-portal", "medical"],
+    queryFn: ssmApi.myMedicalSummary,
+    enabled: Boolean(employeeId)
   });
   const contextQuery = useQuery({
     queryKey: ["employee-static", "my-context"],
@@ -46,6 +53,18 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
             : medicalBlocked
               ? "aptitudinea medicală (inapt) blochează admiterea la muncă până la reevaluare."
               : "ai instruiri nevalidate sau expirate. Reluarea activității poate fi restricționată până la finalizarea instruirilor SSM."}
+        </div>
+      ) : null}
+
+      {medicalQuery.data?.reminderVisible && !medicalQuery.data.blockedAdmission ? (
+        <div className="feedback warn employee-portal-alert" role="status">
+          <strong>Control medical:</strong>{" "}
+          {medicalQuery.data.daysUntilDue != null && medicalQuery.data.daysUntilDue < 0
+            ? `ești restant cu ${Math.abs(medicalQuery.data.daysUntilDue)} zile.`
+            : `scadență în ${medicalQuery.data.daysUntilDue ?? "—"} zile.`}{" "}
+          <button type="button" className="btn-text-link" onClick={() => onNavigate("medical")}>
+            Programează control →
+          </button>
         </div>
       ) : null}
 

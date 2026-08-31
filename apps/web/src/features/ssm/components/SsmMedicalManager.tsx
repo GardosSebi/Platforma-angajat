@@ -20,16 +20,19 @@ import {
   useMedicalControlTypes,
   useMedicalReminders,
   useDispatchMedicalReminders,
-  useUpdateMedicalControl
+  useUpdateMedicalControl,
+  useMedicalAppointments,
+  useUpdateMedicalAppointment
 } from "../hooks/useSsmMedical";
 
-type MedicalTab = "types" | "register" | "update" | "reminders";
+type MedicalTab = "types" | "register" | "update" | "reminders" | "appointments";
 
 const MEDICAL_TABS: Array<{ id: MedicalTab; title: string; caption: string }> = [
   { id: "types", title: "Tipuri control", caption: "Config pe post și categorie" },
   { id: "register", title: "Registru", caption: "Listă și înregistrare" },
   { id: "update", title: "Actualizare", caption: "Rezultat și fișă aptitudini" },
-  { id: "reminders", title: "Reminder", caption: "Scadențe și întârzieri" }
+  { id: "reminders", title: "Reminder", caption: "Scadențe și întârzieri" },
+  { id: "appointments", title: "Programări", caption: "Cereri din portalul angajatului" }
 ];
 
 const CONTROL_RESULTS: SsmMedicalControlResult[] = ["FIT", "FIT_CONDITIONAL", "TEMPORARY_UNFIT", "UNFIT"];
@@ -95,6 +98,8 @@ export function SsmMedicalManager() {
   const typesQuery = useMedicalControlTypes();
   const controlsQuery = useMedicalControls();
   const remindersQuery = useMedicalReminders();
+  const appointmentsQuery = useMedicalAppointments();
+  const updateAppointment = useUpdateMedicalAppointment();
   const dispatchReminders = useDispatchMedicalReminders();
   const jobPositionsQuery = useJobPositionsLookup();
   const employeesQuery = useEmployeeOptions();
@@ -211,7 +216,7 @@ export function SsmMedicalManager() {
 
   return (
     <section className="ssm-eip-panel" aria-label="Modul medicina muncii">
-      <div className="ssm-panel-tabs" role="tablist" aria-label="Secțiuni medicina muncii">
+      <div className="ssm-panel-tabs ssm-panel-tabs--5" role="tablist" aria-label="Secțiuni medicina muncii">
         {MEDICAL_TABS.map((item) => (
           <button
             key={item.id}
@@ -616,6 +621,52 @@ export function SsmMedicalManager() {
           {!remindersQuery.data?.reminders.length ? (
             <p className="field-hint">Nu sunt reminder-uri active momentan.</p>
           ) : null}
+        </div>
+      ) : null}
+
+      {tab === "appointments" ? (
+        <div className="card ssm-doc-card">
+          <h4 className="card-title">Cereri de programare din portalul angajatului</h4>
+          {(appointmentsQuery.data?.items ?? []).length === 0 ? (
+            <p className="field-hint">Nicio cerere de programare.</p>
+          ) : (
+            <div className="ssm-history-list">
+              {(appointmentsQuery.data?.items ?? []).map((item) => (
+                <div key={item.id} className="ssm-history-item">
+                  <div>
+                    <strong>{item.employeeName ?? item.employeeId}</strong>
+                    <div className="field-hint">
+                      {item.preferredDate
+                        ? `preferat ${new Date(item.preferredDate).toLocaleDateString("ro-RO")}`
+                        : "fără dată preferată"}
+                      {item.notes ? ` · ${item.notes}` : ""}
+                    </div>
+                  </div>
+                  <div className="ssm-inline-actions">
+                    <span className={item.status === "REQUESTED" ? "badge-bad" : "badge-good"}>{item.status}</span>
+                    {item.status === "REQUESTED" ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn-text"
+                          onClick={() => updateAppointment.mutate({ appointmentId: item.id, status: "SCHEDULED" })}
+                        >
+                          Confirmă
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-text"
+                          onClick={() => updateAppointment.mutate({ appointmentId: item.id, status: "CANCELLED" })}
+                        >
+                          Anulează
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
     </section>

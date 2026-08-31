@@ -726,5 +726,129 @@ export const ssmApi = {
     return httpClient<{ deleted: boolean }>(`/ssm/scheduled-reports/${id}`, {
       method: "DELETE"
     });
+  },
+  listGateVisits(worksiteId?: string) {
+    const q = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmGateVisitItem[] }>(`/ssm/gate/visits${q}`);
+  },
+  getGateVisit(visitId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmGateVisitItem>(`/ssm/gate/visits/${visitId}`);
+  },
+  createGateVisit(payload: import("@repo/shared-types/ssm").CreateSsmGateVisitRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmGateVisitItem>("/ssm/gate/visits", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  briefGateVisit(visitId: string, payload: import("@repo/shared-types/ssm").BriefSsmGateVisitRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmGateVisitItem>(`/ssm/gate/visits/${visitId}/briefing`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  signGateVisit(visitId: string, payload: import("@repo/shared-types/ssm").SignSsmGateVisitRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmGateVisitItem>(`/ssm/gate/visits/${visitId}/sign`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  getGateAnexa12Url(visitId: string) {
+    return `/ssm/gate/visits/${visitId}/anexa-12.pdf`;
+  },
+  listAdmissionBlocks(worksiteId?: string) {
+    const q = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmAdmissionBlockItem[] }>(
+      `/ssm/gate/admission-blocks${q}`
+    );
+  },
+  listItmWorksites() {
+    return httpClient<{ items: import("@repo/shared-types/ssm").ItmWorksiteOption[] }>("/ssm/itm/worksites");
+  },
+  getItmControl(worksiteId?: string) {
+    const q = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
+    return httpClient<SsmDocumentControlFoldersResponse>(`/ssm/itm/control${q}`);
+  },
+  getItmControlPackageUrl(worksiteId?: string) {
+    const q = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
+    return `/ssm/itm/control-package.zip${q}`;
+  },
+  listItmVisits(worksiteId?: string) {
+    const q = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
+    return httpClient<{ items: import("@repo/shared-types/ssm").ItmInspectionVisitItem[] }>(`/ssm/itm/visits${q}`);
+  },
+  startItmVisit(payload: import("@repo/shared-types/ssm").CreateItmInspectionVisitRequest) {
+    return httpClient<import("@repo/shared-types/ssm").ItmInspectionVisitItem>("/ssm/itm/visits", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  closeItmVisit(visitId: string, notes?: string) {
+    return httpClient<import("@repo/shared-types/ssm").ItmInspectionVisitItem>(`/ssm/itm/visits/${visitId}/close`, {
+      method: "PATCH",
+      body: JSON.stringify({ notes })
+    });
+  },
+  listItmAccessLogs() {
+    return httpClient<import("@repo/shared-types/ssm").ItmAccessLogItem[]>("/ssm/itm/access-logs");
+  },
+  listEipOrders() {
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmEipOrderItem[] }>("/ssm/eip/orders");
+  },
+  createEipOrder(payload: import("@repo/shared-types/ssm").CreateSsmEipOrderRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmEipOrderItem>("/ssm/eip/orders", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateEipOrder(orderId: string, payload: import("@repo/shared-types/ssm").UpdateSsmEipOrderRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmEipOrderItem>(`/ssm/eip/orders/${orderId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  uploadEipMovementPhoto(movementId: string, file: File) {
+    const body = new FormData();
+    body.append("photo", file);
+    return httpClient<{ movementId: string; hasPhoto: boolean; photoName: string }>(
+      `/ssm/eip/movements/${movementId}/photo`,
+      { method: "POST", body }
+    );
+  },
+  getEipMovementPhotoUrl(movementId: string) {
+    return `/ssm/eip/movements/${movementId}/photo`;
+  },
+  eipRegisterSignoff() {
+    return httpClient<{ item: import("@repo/shared-types/ssm").SsmEipRegisterSignoffItem | null }>(
+      "/ssm/eip/register/signoff"
+    );
+  },
+  signEipRegister(payload: import("@repo/shared-types/ssm").SignSsmEipRegisterRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmEipRegisterSignoffItem>("/ssm/eip/register/sign", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  myMedicalSummary() {
+    return httpClient<import("@repo/shared-types/ssm").SsmEmployeeMedicalSummary>("/ssm/medical/me");
+  },
+  requestMedicalAppointment(payload: import("@repo/shared-types/ssm").CreateSsmMedicalAppointmentRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmMedicalAppointmentItem>("/ssm/medical/me/appointments", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  listMedicalAppointments() {
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmMedicalAppointmentItem[] }>(
+      "/ssm/medical/appointments"
+    );
+  },
+  updateMedicalAppointment(
+    appointmentId: string,
+    payload: { status?: import("@repo/shared-types/ssm").SsmMedicalAppointmentStatus; scheduledControlId?: string }
+  ) {
+    return httpClient(`/ssm/medical/appointments/${appointmentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
   }
 };

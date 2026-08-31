@@ -26,3 +26,36 @@ export enum EmployeeStaticAudienceType {
   WORKSITE = "WORKSITE",
   EMPLOYEE_GROUP = "EMPLOYEE_GROUP"
 }
+
+export enum SsmGateVisitStatus {
+  REGISTERED = "REGISTERED",
+  BRIEFING = "BRIEFING",
+  SIGNED = "SIGNED",
+  CANCELLED = "CANCELLED"
+}
+
+export enum SsmGateVisitorKind {
+  VISITOR = "VISITOR",
+  DETACHED = "DETACHED",
+  TEMPORARY = "TEMPORARY",
+  EXTERNAL = "EXTERNAL"
+}
+
+export enum SsmEipOrderStatus {
+  NEEDED = "NEEDED",
+  ORDERED = "ORDERED",
+  PARTIAL = "PARTIAL",
+  RECEIVED = "RECEIVED",
+  CANCELLED = "CANCELLED"
+}
+
+export enum SsmMedicalAppointmentStatus {
+  REQUESTED = "REQUESTED",
+  SCHEDULED = "SCHEDULED",
+  CANCELLED = "CANCELLED"
+}
+
+export enum ItmInspectionVisitStatus {
+  OPEN = "OPEN",
+  CLOSED = "CLOSED"
+}

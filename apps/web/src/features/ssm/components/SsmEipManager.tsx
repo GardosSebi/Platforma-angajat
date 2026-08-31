@@ -14,7 +14,11 @@ import {
   useCreateEipType,
   useDispatchEipNotifications,
   useRegisterEipMovement,
-  useUpsertEipNorm
+  useUpsertEipNorm,
+  useCreateEipOrder,
+  useEipOrders,
+  useEipRegisterSignoff,
+  useSignEipRegister
 } from "../hooks/useSsmEip";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
@@ -28,13 +32,16 @@ import {
 } from "../../master-data/hooks/useMasterData";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { ssmApi } from "../api/ssm.api";
+import { hasPermission } from "../../../shared/auth/effective-permissions";
+import { useAuthSession } from "../../../shared/auth/use-auth-session";
 
-type EipPanelTab = "types" | "norms" | "movements" | "reports";
+type EipPanelTab = "types" | "norms" | "movements" | "orders" | "reports";
 
 const EIP_TABS: Array<{ id: EipPanelTab; title: string; caption: string }> = [
   { id: "types", title: "Catalog tipuri", caption: "Cod, denumire, durată" },
   { id: "norms", title: "Normativ pe post", caption: "Cantitate și înlocuire" },
   { id: "movements", title: "Mișcări & registru", caption: "Stoc, distribuție, semnătură" },
+  { id: "orders", title: "Necesar vs. comandă", caption: "Gap aprovizionare" },
   { id: "reports", title: "Scadențe & stoc", caption: "Reminder și gap report" }
 ];
 
@@ -60,7 +67,9 @@ const EMPTY_MOVEMENT: CreateSsmEipMovementRequest = {
   movementType: "DISTRIBUTION",
   quantity: 1,
   notes: "",
-  signatureData: ""
+  signatureData: "",
+  size: "",
+  serialNumber: ""
 };
 
 const MOVEMENT_TYPES: SsmEipMovementType[] = ["INTAKE", "DISTRIBUTION", "RETURN", "SCRAP"];
@@ -82,7 +91,12 @@ function locationLabel(worksiteName?: string | null, departmentName?: string | n
 }
 
 export function SsmEipManager() {
+  const session = useAuthSession();
+  const canSignRegister = hasPermission(session?.roles, "ssm:eip:approve");
   const [tab, setTab] = useState<EipPanelTab>("types");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [registerSignature, setRegisterSignature] = useState("");
+  const [orderForm, setOrderForm] = useState({ eipTypeId: "", worksiteId: "", neededQuantity: 1, orderedQuantity: 0, notes: "" });
 
   const typesQuery = useEipTypes();
   const jobPositionsQuery = useJobPositionsLookup();
@@ -98,6 +112,10 @@ export function SsmEipManager() {
   const notificationsQuery = useEipNotifications();
   const stockGapQuery = useEipStockGap();
   const dispatchNotifications = useDispatchEipNotifications();
+  const ordersQuery = useEipOrders();
+  const createOrder = useCreateEipOrder();
+  const signoffQuery = useEipRegisterSignoff();
+  const signRegister = useSignEipRegister();
 
   const createType = useCreateEipType();
   const upsertNorm = useUpsertEipNorm();
@@ -140,6 +158,8 @@ export function SsmEipManager() {
       notes: movementForm.notes || undefined,
       worksiteId: movementForm.worksiteId || undefined,
       departmentId: movementForm.departmentId || undefined,
+      size: movementForm.size || undefined,
+      serialNumber: movementForm.serialNumber || undefined,
       ...(isIntake
         ? {}
         : {
@@ -147,7 +167,15 @@ export function SsmEipManager() {
             signatureData: movementForm.signatureData || undefined
           })
     };
-    registerMovement.mutate(payload);
+    registerMovement.mutate(payload, {
+      onSuccess: (created) => {
+        const movementId = (created as { id?: string })?.id;
+        if (photoFile && movementId) {
+          void ssmApi.uploadEipMovementPhoto(movementId, photoFile);
+          setPhotoFile(null);
+        }
+      }
+    });
   };
 
   const loadError =
@@ -162,7 +190,7 @@ export function SsmEipManager() {
 
   return (
     <section className="ssm-eip-panel" aria-label="Modul EIP">
-      <div className="ssm-panel-tabs" role="tablist" aria-label="Secțiuni EIP">
+      <div className="ssm-panel-tabs ssm-panel-tabs--5" role="tablist" aria-label="Secțiuni EIP">
         {EIP_TABS.map((item) => (
           <button
             key={item.id}
@@ -444,6 +472,34 @@ export function SsmEipManager() {
                 }
               />
             </div>
+            <div className="ssm-panel-fields-row">
+              <div className="field">
+                <label htmlFor="mov-size">Mărime</label>
+                <input
+                  id="mov-size"
+                  value={movementForm.size ?? ""}
+                  onChange={(e) => setMovementForm((p) => ({ ...p, size: e.target.value }))}
+                  placeholder="ex. L, 42, universal"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="mov-serial">Serie</label>
+                <input
+                  id="mov-serial"
+                  value={movementForm.serialNumber ?? ""}
+                  onChange={(e) => setMovementForm((p) => ({ ...p, serialNumber: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="mov-photo">Foto echipament</label>
+              <input
+                id="mov-photo"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
             {!isIntake ? (
               <SignatureCanvas
                 label="Semnătură primire EIP"
@@ -467,6 +523,32 @@ export function SsmEipManager() {
                 Descarcă registru PDF
               </button>
             </div>
+            {canSignRegister ? (
+              <div className="form-stack">
+                <p className="field-hint">
+                  Semnătură pe registrul legal
+                  {signoffQuery.data?.item
+                    ? ` · ultima: ${signoffQuery.data.item.signedByName ?? "—"} (${new Date(signoffQuery.data.item.signedAt).toLocaleString("ro-RO")})`
+                    : " · nesemnat"}
+                </p>
+                <SignatureCanvas
+                  label="Semnătură responsabil SSM (registru legal)"
+                  value={registerSignature}
+                  onChange={setRegisterSignature}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={signRegister.isPending || !registerSignature.startsWith("data:image")}
+                  onClick={() => signRegister.mutate({ signatureData: registerSignature })}
+                >
+                  {signRegister.isPending ? "Se semnează…" : "Semnează registrul"}
+                </button>
+                {signRegister.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(signRegister.error)}</p>
+                ) : null}
+              </div>
+            ) : null}
             {registerMovement.isSuccess ? (
               <p className="feedback success" role="status">
                 Mișcarea EIP a fost înregistrată.
@@ -495,10 +577,110 @@ export function SsmEipManager() {
                       <div className="field-hint">
                         {item.employeeName ?? "Fără angajat"} ·{" "}
                         {locationLabel(item.worksiteName, item.departmentName)} · cant. {item.quantity}
+                        {item.size ? ` · mărime ${item.size}` : ""}
+                        {item.serialNumber ? ` · serie ${item.serialNumber}` : ""}
                       </div>
                     </div>
                     <span className={item.signedAt ? "badge-good" : "badge-bad"}>
                       {item.signedAt ? "Semnat" : "Fără semnătură"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "orders" ? (
+        <div className="ssm-panel-layout">
+          <form
+            className="card form-stack ssm-doc-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createOrder.mutate({
+                eipTypeId: orderForm.eipTypeId,
+                worksiteId: orderForm.worksiteId || undefined,
+                neededQuantity: orderForm.neededQuantity,
+                orderedQuantity: orderForm.orderedQuantity || undefined,
+                notes: orderForm.notes || undefined
+              });
+            }}
+          >
+            <FieldSelect
+              id="order-type"
+              label="Tip EIP"
+              value={orderForm.eipTypeId}
+              onChange={(eipTypeId) => setOrderForm((p) => ({ ...p, eipTypeId }))}
+              allowEmpty
+              emptyLabel="Selectează tip"
+              options={mapToOptions(
+                typesQuery.data ?? [],
+                (type) => type.id,
+                (type) => `${type.code} - ${type.name}`
+              )}
+            />
+            <FieldSelect
+              id="order-worksite"
+              label="Punct de lucru"
+              value={orderForm.worksiteId}
+              onChange={(worksiteId) => setOrderForm((p) => ({ ...p, worksiteId }))}
+              allowEmpty
+              emptyLabel="Global"
+              options={mapToOptions(
+                worksites,
+                (item) => item.id,
+                (item) => `${item.code} - ${item.name}`
+              )}
+            />
+            <div className="ssm-panel-fields-row">
+              <div className="field">
+                <label htmlFor="order-needed">Necesar</label>
+                <input
+                  id="order-needed"
+                  type="number"
+                  min={1}
+                  value={orderForm.neededQuantity}
+                  onChange={(e) => setOrderForm((p) => ({ ...p, neededQuantity: Number(e.target.value || 1) }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="order-qty">Comandat</label>
+                <input
+                  id="order-qty"
+                  type="number"
+                  min={0}
+                  value={orderForm.orderedQuantity}
+                  onChange={(e) => setOrderForm((p) => ({ ...p, orderedQuantity: Number(e.target.value || 0) }))}
+                />
+              </div>
+            </div>
+            <button className="btn-primary" type="submit" disabled={createOrder.isPending || !orderForm.eipTypeId}>
+              {createOrder.isPending ? "Se salvează…" : "Înregistrează necesar / comandă"}
+            </button>
+            {createOrder.isError ? (
+              <p className="feedback error">{mutationErrorMessage(createOrder.error)}</p>
+            ) : null}
+          </form>
+          <div className="card ssm-doc-card">
+            <h4 className="card-title">Necesar vs. comandă vs. recepție</h4>
+            {(ordersQuery.data?.items ?? []).length === 0 ? (
+              <p className="field-hint">Nicio comandă EIP.</p>
+            ) : (
+              <div className="ssm-history-list">
+                {(ordersQuery.data?.items ?? []).map((item) => (
+                  <div key={item.id} className="ssm-history-item">
+                    <div>
+                      <strong>
+                        {item.eipTypeCode} · {item.eipTypeName}
+                      </strong>
+                      <div className="field-hint">
+                        {item.worksiteName ?? "Global"} · necesar {item.neededQuantity} | comandat {item.orderedQuantity} |
+                        recepționat {item.receivedQuantity}
+                      </div>
+                    </div>
+                    <span className={item.gap > 0 ? "badge-bad" : "badge-good"}>
+                      {item.gap > 0 ? `Lipsă ${item.gap}` : item.status}
                     </span>
                   </div>
                 ))}

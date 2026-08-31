@@ -52,9 +52,9 @@ export class ItmAccessService {
     });
   }
 
-  async listAccessLogs(tenantId: string, limit = 100) {
+  async listAccessLogs(tenantId: string, limit = 100, userId?: string) {
     const rows = await this.prisma.itmAccessLog.findMany({
-      where: { tenantId },
+      where: { tenantId, ...(userId ? { userId } : {}) },
       orderBy: { createdAt: "desc" },
       take: limit,
       include: {

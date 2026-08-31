@@ -84,3 +84,26 @@ export function useUpdateMedicalControl() {
     }
   });
 }
+
+export function useMedicalAppointments() {
+  return useQuery({
+    queryKey: ["ssm", "medical", "appointments"],
+    queryFn: ssmApi.listMedicalAppointments
+  });
+}
+
+export function useUpdateMedicalAppointment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      appointmentId,
+      status
+    }: {
+      appointmentId: string;
+      status: "SCHEDULED" | "CANCELLED";
+    }) => ssmApi.updateMedicalAppointment(appointmentId, { status }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "medical", "appointments"] });
+    }
+  });
+}

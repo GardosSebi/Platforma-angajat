@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Header, Post, StreamableFile, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Param, Patch, Post, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -7,7 +9,14 @@ import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { Permission } from "../../../common/constants/permissions";
 import { PermissionsGuard } from "../../../common/guards/permissions.guard";
 import { SsmEipService } from "../application/services/ssm-eip.service";
-import { CreateEipMovementDto, CreateEipNormDto, CreateEipTypeDto } from "./dto/ssm-eip.dto";
+import {
+  CreateEipMovementDto,
+  CreateEipNormDto,
+  CreateEipOrderDto,
+  CreateEipTypeDto,
+  SignEipRegisterDto,
+  UpdateEipOrderDto
+} from "./dto/ssm-eip.dto";
 
 @Controller("ssm/eip")
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
@@ -76,5 +85,61 @@ export class SsmEipController {
   @RequirePermissions(Permission.SSM_EIP_VIEW)
   stockGap(@TenantId() tenantId: string) {
     return this.eipService.stockGapReport(tenantId);
+  }
+
+  @Get("orders")
+  @RequirePermissions(Permission.SSM_EIP_VIEW)
+  listOrders(@TenantId() tenantId: string) {
+    return this.eipService.listOrders(tenantId);
+  }
+
+  @Post("orders")
+  @RequirePermissions(Permission.SSM_EIP_EDIT)
+  createOrder(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: CreateEipOrderDto) {
+    return this.eipService.createOrder(tenantId, user.sub, dto);
+  }
+
+  @Patch("orders/:orderId")
+  @RequirePermissions(Permission.SSM_EIP_EDIT)
+  updateOrder(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("orderId") orderId: string,
+    @Body() dto: UpdateEipOrderDto
+  ) {
+    return this.eipService.updateOrder(tenantId, user.sub, orderId, dto);
+  }
+
+  @Post("movements/:movementId/photo")
+  @UseInterceptors(FileInterceptor("photo", { storage: memoryStorage() }))
+  @RequirePermissions(Permission.SSM_EIP_EDIT, Permission.FILES_UPLOAD)
+  attachPhoto(
+    @TenantId() tenantId: string,
+    @Param("movementId") movementId: string,
+    @UploadedFile() photo?: Express.Multer.File
+  ) {
+    return this.eipService.attachMovementPhoto(tenantId, movementId, photo);
+  }
+
+  @Get("movements/:movementId/photo")
+  @RequirePermissions(Permission.SSM_EIP_VIEW)
+  downloadPhoto(@TenantId() tenantId: string, @Param("movementId") movementId: string) {
+    return this.eipService.downloadMovementPhoto(tenantId, movementId);
+  }
+
+  @Get("register/signoff")
+  @RequirePermissions(Permission.SSM_EIP_VIEW)
+  latestSignoff(@TenantId() tenantId: string) {
+    return this.eipService.latestRegisterSignoff(tenantId);
+  }
+
+  @Post("register/sign")
+  @RequirePermissions(Permission.SSM_EIP_APPROVE)
+  signRegister(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string; email?: string },
+    @Body() dto: SignEipRegisterDto
+  ) {
+    return this.eipService.signRegister(tenantId, user.sub, user.email, dto);
   }
 }

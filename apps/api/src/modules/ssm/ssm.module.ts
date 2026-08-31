@@ -13,7 +13,9 @@ import { SsmPsiService } from "./application/services/ssm-psi.service";
 import { SsmOverviewService } from "./application/services/ssm-overview.service";
 import { SsmTrainingAutomationService } from "./application/services/ssm-training-automation.service";
 import { ItmAccessService } from "./application/services/itm-access.service";
+import { SsmItmPortalService } from "./application/services/ssm-itm-portal.service";
 import { SsmPppService } from "./application/services/ssm-ppp.service";
+import { SsmGateService } from "./application/services/ssm-gate.service";
 import { SsmController } from "./api/ssm.controller";
 import { SsmDocumentsController } from "./api/ssm-documents.controller";
 import { SsmTrainingSuiteController } from "./api/ssm-training-suite.controller";
@@ -26,6 +28,7 @@ import { SsmPppController } from "./api/ssm-ppp.controller";
 import { SsmOverviewController } from "./api/ssm-overview.controller";
 import { SsmItmController } from "./api/ssm-itm.controller";
 import { SsmScheduledReportsController } from "./api/ssm-scheduled-reports.controller";
+import { SsmGateController } from "./api/ssm-gate.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
 import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-training.repository";
 import { SsmScheduledReportsService } from "./application/services/ssm-scheduled-reports.service";
@@ -44,7 +47,8 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmPppController,
     SsmOverviewController,
     SsmItmController,
-    SsmScheduledReportsController
+    SsmScheduledReportsController,
+    SsmGateController
   ],
   providers: [
     PermissionsGuard,
@@ -61,6 +65,8 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmScheduledReportsService,
     SsmTrainingAutomationService,
     ItmAccessService,
+    SsmItmPortalService,
+    SsmGateService,
     {
       provide: SSM_TRAINING_REPOSITORY,
       useClass: PrismaSsmTrainingRepository

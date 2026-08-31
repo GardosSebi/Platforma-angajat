@@ -4,6 +4,7 @@ import { NavIcons } from "../../../app/nav-icons";
 import { EmployeeAnnouncementsPanel } from "../components/EmployeeAnnouncementsPanel";
 import { EmployeeDocumentsPanel } from "../components/EmployeeDocumentsPanel";
 import { EmployeeDossierPanel } from "../components/EmployeeDossierPanel";
+import { EmployeeMedicalPanel } from "../components/EmployeeMedicalPanel";
 import { EmployeePortalHome } from "../components/EmployeePortalHome";
 import { EmployeeSurveysPanel } from "../components/EmployeeSurveysPanel";
 import { EmployeeTicketsPanel } from "../components/EmployeeTicketsPanel";
@@ -16,6 +17,7 @@ const TABS: EmployeePortalTab[] = [
   "trainings",
   "documents",
   "dossier",
+  "medical",
   "announcements",
   "surveys",
   "tickets"
@@ -26,6 +28,7 @@ const TAB_ICONS: Record<EmployeePortalTab, () => ReturnType<typeof NavIcons.home
   trainings: NavIcons.trainings,
   documents: NavIcons.documents,
   dossier: NavIcons.dossier,
+  medical: NavIcons.medical,
   announcements: NavIcons.announcements,
   surveys: NavIcons.surveys,
   tickets: NavIcons.tickets
@@ -66,6 +69,8 @@ export function EmployeePortalPage() {
         return <EmployeeDocumentsPanel />;
       case "dossier":
         return <EmployeeDossierPanel />;
+      case "medical":
+        return <EmployeeMedicalPanel />;
       case "announcements":
         return <EmployeeAnnouncementsPanel />;
       case "surveys":

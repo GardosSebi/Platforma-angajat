@@ -284,6 +284,39 @@ enum EmployeeEmploymentType {
   EXTERNAL
 }
 
+enum SsmGateVisitStatus {
+  REGISTERED
+  BRIEFING
+  SIGNED
+  CANCELLED
+}
+
+enum SsmGateVisitorKind {
+  VISITOR
+  DETACHED
+  TEMPORARY
+  EXTERNAL
+}
+
+enum SsmEipOrderStatus {
+  NEEDED
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+enum SsmMedicalAppointmentStatus {
+  REQUESTED
+  SCHEDULED
+  CANCELLED
+}
+
+enum ItmInspectionVisitStatus {
+  OPEN
+  CLOSED
+}
+
 enum EmployeeMaritalStatus {
   UNMARRIED
   MARRIED
@@ -359,6 +392,12 @@ model Tenant {
   tenantSsoConfig            TenantSsoConfig?
   ssmAccidentAttachments     SsmAccidentAttachment[]
   passwordResetTokens        PasswordResetToken[]
+  ssmGateVisits              SsmGateVisit[]
+  ssmGateVisitAttendees      SsmGateVisitAttendee[]
+  itmInspectionVisits        ItmInspectionVisit[]
+  ssmEipOrders               SsmEipOrder[]
+  ssmEipRegisterSignoffs     SsmEipRegisterSignoff[]
+  ssmMedicalAppointmentRequests SsmMedicalAppointmentRequest[]
 }
 
 model User {
@@ -383,6 +422,8 @@ model User {
   communicationPublishRights CommunicationPublishRight[]
   pushSubscriptions PushSubscription[]
   passwordResetTokens PasswordResetToken[]
+  itmInspectionVisits ItmInspectionVisit[]
+  ssmEipRegisterSignoffs SsmEipRegisterSignoff[]
 
   @@unique([tenantId, email])
   @@index([tenantId, active])
@@ -459,6 +500,9 @@ model Worksite {
   communicationPublishRights CommunicationPublishRight[]
   ssmEipStocks               SsmEipStock[]
   ssmEipMovements            SsmEipMovement[]
+  ssmGateVisits              SsmGateVisit[]
+  itmInspectionVisits        ItmInspectionVisit[]
+  ssmEipOrders               SsmEipOrder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -558,6 +602,8 @@ model Employee {
   ssmMedicalControls     SsmMedicalControl[]
   ssmPsiTrainingRecords  SsmPsiTrainingRecord[]
   ssmPsiResponsibles     SsmPsiResponsible[]
+  ssmGateVisitAttendees  SsmGateVisitAttendee[]
+  ssmMedicalAppointmentRequests SsmMedicalAppointmentRequest[]
   communicationAnnouncementReads CommunicationAnnouncementRead[]
   communicationAnnouncementReactions CommunicationAnnouncementReaction[]
   communicationAnnouncementAnswers CommunicationAnnouncementAnswer[]
@@ -869,6 +915,7 @@ model SsmEipType {
   norms  SsmEipNorm[]
   stocks SsmEipStock[]
   moves  SsmEipMovement[]
+  orders SsmEipOrder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -946,6 +993,12 @@ model SsmEipMovement {
   signatureData     String?
   signedAt          DateTime?
   notes             String?
+  size              String?
+  serialNumber      String?
+  photoPath         String?
+  photoName         String?
+  photoMime         String?
+  orderId           String?
   retentionArchivedAt DateTime?
   createdBy         String
   createdAt         DateTime           @default(now())
@@ -955,6 +1008,7 @@ model SsmEipMovement {
   eipType            SsmEipType               @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
   worksite           Worksite?                @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
   department         Department?              @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  order              SsmEipOrder?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
   reminderDispatches SsmEipReminderDispatch[]
 
   @@index([tenantId, employeeId, movementDate])
@@ -1123,6 +1177,7 @@ model SsmMedicalControl {
   tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   employee    Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   controlType SsmMedicalControlType @relation(fields: [controlTypeId], references: [id], onDelete: Cascade)
+  appointmentRequests SsmMedicalAppointmentRequest[]
 
   @@index([tenantId, employeeId, scheduledAt])
   @@index([tenantId, nextDueAt])
@@ -1696,6 +1751,138 @@ model ItmAccessLog {
 
   @@index([tenantId, userId, createdAt])
   @@index([tenantId, resourceType, createdAt])
+}
+
+model ItmInspectionVisit {
+  id               String                   @id @default(cuid())
+  tenantId         String
+  worksiteId       String?
+  inspectorUserId  String
+  inspectorName    String?
+  status           ItmInspectionVisitStatus @default(OPEN)
+  startedAt        DateTime                 @default(now())
+  endedAt          DateTime?
+  notes            String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite  Worksite? @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  inspector User      @relation(fields: [inspectorUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, startedAt])
+  @@index([tenantId, worksiteId, startedAt])
+  @@index([tenantId, inspectorUserId])
+}
+
+model SsmGateVisit {
+  id               String             @id @default(cuid())
+  tenantId         String
+  worksiteId       String?
+  companyName      String?
+  purpose          String?
+  trainerName      String?
+  trainerFunction  String?
+  trainerSignature String?
+  location         String?
+  briefingTitle    String
+  briefingNotes    String?
+  status           SsmGateVisitStatus @default(REGISTERED)
+  visitDate        DateTime           @default(now())
+  completedAt      DateTime?
+  createdBy        String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite  Worksite?              @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  attendees SsmGateVisitAttendee[]
+
+  @@index([tenantId, visitDate])
+  @@index([tenantId, status, visitDate])
+  @@index([tenantId, worksiteId])
+}
+
+model SsmGateVisitAttendee {
+  id                      String              @id @default(cuid())
+  tenantId                String
+  visitId                 String
+  employeeId              String?
+  fullName                String
+  company                 String?
+  idDocument              String?
+  visitorKind             SsmGateVisitorKind  @default(VISITOR)
+  trainingAcknowledgedAt  DateTime?
+  signatureData           String?
+  signedAt                DateTime?
+  createdAt               DateTime            @default(now())
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  visit    SsmGateVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  employee Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, visitId])
+  @@index([tenantId, employeeId])
+}
+
+model SsmEipOrder {
+  id               String            @id @default(cuid())
+  tenantId         String
+  eipTypeId        String
+  worksiteId       String?
+  neededQuantity   Int
+  orderedQuantity  Int               @default(0)
+  receivedQuantity Int               @default(0)
+  status           SsmEipOrderStatus @default(NEEDED)
+  notes            String?
+  createdBy        String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eipType   SsmEipType      @relation(fields: [eipTypeId], references: [id], onDelete: Cascade)
+  worksite  Worksite?       @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  movements SsmEipMovement[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, eipTypeId])
+  @@index([tenantId, worksiteId])
+}
+
+model SsmEipRegisterSignoff {
+  id              String   @id @default(cuid())
+  tenantId        String
+  signedByUserId  String
+  signedByName    String?
+  signatureData   String
+  signedAt        DateTime @default(now())
+  notes           String?
+  periodFrom      DateTime?
+  periodTo        DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  signedBy User @relation(fields: [signedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, signedAt])
+}
+
+model SsmMedicalAppointmentRequest {
+  id                 String                       @id @default(cuid())
+  tenantId           String
+  employeeId         String
+  preferredDate      DateTime?
+  notes              String?
+  status             SsmMedicalAppointmentStatus  @default(REQUESTED)
+  scheduledControlId String?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee         Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  scheduledControl SsmMedicalControl?  @relation(fields: [scheduledControlId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, employeeId, createdAt])
+  @@index([tenantId, status])
 }
 
 model UserScopedRole {

@@ -204,7 +204,8 @@ export const SsmSectionPermission = {
   ppp: Permission.SSM_RISK_VIEW,
   psi: Permission.SSM_PSI_VIEW,
   compliance: Permission.SSM_DASHBOARD_VIEW,
-  reports: Permission.SSM_REPORT_VIEW
+  reports: Permission.SSM_REPORT_VIEW,
+  gate: Permission.SSM_TRAINING_VIEW
 } as const;
 
 export type SsmSectionId = keyof typeof SsmSectionPermission;

@@ -24,6 +24,8 @@ import { SsmMedicalService } from "../application/services/ssm-medical.service";
 import {
   CreateMedicalControlDto,
   CreateMedicalControlTypeDto,
+  CreateMedicalAppointmentDto,
+  UpdateMedicalAppointmentDto,
   UpdateMedicalControlDto
 } from "./dto/ssm-medical.dto";
 
@@ -106,5 +108,38 @@ export class SsmMedicalController {
   @RequirePermissions(Permission.SSM_MEDICAL_EDIT)
   dispatchReminders(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
     return this.medicalService.dispatchMedicalReminders(tenantId, user.sub);
+  }
+
+  @Get("me")
+  @RequireAnyPermissions(Permission.SSM_TRAINING_VIEW, Permission.SSM_MEDICAL_VIEW)
+  mySummary(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.medicalService.employeeSummary(tenantId, user.email);
+  }
+
+  @Post("me/appointments")
+  @RequireAnyPermissions(Permission.SSM_TRAINING_VIEW, Permission.SSM_MEDICAL_VIEW)
+  requestAppointment(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateMedicalAppointmentDto
+  ) {
+    return this.medicalService.requestAppointment(tenantId, user.email, dto);
+  }
+
+  @Get("appointments")
+  @RequirePermissions(Permission.SSM_MEDICAL_VIEW)
+  listAppointments(@TenantId() tenantId: string) {
+    return this.medicalService.listAppointments(tenantId);
+  }
+
+  @Patch("appointments/:appointmentId")
+  @RequirePermissions(Permission.SSM_MEDICAL_EDIT)
+  updateAppointment(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("appointmentId") appointmentId: string,
+    @Body() dto: UpdateMedicalAppointmentDto
+  ) {
+    return this.medicalService.updateAppointment(tenantId, user.sub, appointmentId, dto);
   }
 }

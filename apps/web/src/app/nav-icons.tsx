@@ -107,6 +107,13 @@ export const NavIcons = {
       <path d="M4 6h16M4 12h16M4 18h10" />
     </Icon>
   ),
+  medical: (props?: IconProps) => (
+    <Icon {...props}>
+      <path d="M12 2v20" />
+      <path d="M2 12h20" />
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+    </Icon>
+  ),
   menu: (props?: IconProps) => (
     <Icon {...props}>
       <path d="M4 6h16M4 12h16M4 18h16" />

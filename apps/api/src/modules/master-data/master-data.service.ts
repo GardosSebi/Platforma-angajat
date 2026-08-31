@@ -742,7 +742,7 @@ export class MasterDataService {
     );
     const items = await this.prisma.employee.findMany({
       where,
-      select: { id: true, fullName: true, email: true, active: true },
+      select: { id: true, fullName: true, email: true, active: true, employmentType: true },
       orderBy: { fullName: "asc" },
       take
     });

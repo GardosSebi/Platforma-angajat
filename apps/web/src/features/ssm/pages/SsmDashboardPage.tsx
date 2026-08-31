@@ -13,6 +13,7 @@ import { SsmPppManager } from "../components/SsmPppManager";
 import { SsmPsiManager } from "../components/SsmPsiManager";
 import { SsmComplianceDashboardManager } from "../components/SsmComplianceDashboardManager";
 import { SsmReportsManager } from "../components/SsmReportsManager";
+import { SsmGateManager } from "../components/SsmGateManager";
 
 const SSM_SECTIONS: Array<{
   id: SsmSectionId;
@@ -88,6 +89,13 @@ const SSM_SECTIONS: Array<{
     title: "Rapoarte & export",
     caption: "PDF, Excel, inspector",
     description: "Rapoarte pentru instruiri, EIP, medicina muncii și documente/versionare."
+  },
+  {
+    id: "gate",
+    title: "Poartă / vizitatori",
+    caption: "Wizard + nu intra la lucru",
+    description:
+      "Flux dedicat: înregistrare la poartă, instruire scurtă, fișă colectivă Anexa 12 semnată. Listă operațională de blocare admitere pentru șefi de tură și poartă."
   }
 ];
 
@@ -134,6 +142,8 @@ export function SsmDashboardPage() {
         return <SsmComplianceDashboardManager />;
       case "reports":
         return <SsmReportsManager />;
+      case "gate":
+        return <SsmGateManager />;
       case "quick":
       default:
         return <TrainingAssignForm />;

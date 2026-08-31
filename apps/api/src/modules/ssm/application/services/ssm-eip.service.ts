@@ -1,12 +1,22 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { SsmEipMovementType } from "@prisma/client";
+import { createReadStream } from "fs";
+import { mkdir, writeFile } from "fs/promises";
+import { extname, resolve } from "path";
+import { BadRequestException, Injectable, NotFoundException, StreamableFile } from "@nestjs/common";
+import { SsmEipMovementType, SsmEipOrderStatus } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
-import { CreateEipMovementDto, CreateEipNormDto, CreateEipTypeDto } from "../../api/dto/ssm-eip.dto";
+import {
+  CreateEipMovementDto,
+  CreateEipNormDto,
+  CreateEipOrderDto,
+  CreateEipTypeDto,
+  SignEipRegisterDto,
+  UpdateEipOrderDto
+} from "../../api/dto/ssm-eip.dto";
 
 const EIP_REMINDER_DAYS = [30, 15, 7] as const;
 
@@ -253,6 +263,9 @@ export class SsmEipService {
           signatureData: dto.signatureData,
           signedAt: dto.signatureData ? new Date() : null,
           notes: dto.notes?.trim(),
+          size: dto.size?.trim() || null,
+          serialNumber: dto.serialNumber?.trim() || null,
+          orderId: dto.orderId?.trim() || null,
           createdBy: actorId
         }
       });
@@ -267,6 +280,10 @@ export class SsmEipService {
       entityId: movement.id,
       payload: { movementType: dto.movementType, quantity: dto.quantity, scopeKey: location.scopeKey }
     });
+
+    if (dto.orderId && dto.movementType === SsmEipMovementType.INTAKE) {
+      await this.applyOrderReceipt(tenantId, dto.orderId, dto.quantity);
+    }
 
     return movement;
   }
@@ -300,7 +317,11 @@ export class SsmEipService {
         movementDate: row.movementDate,
         replacementDueAt: row.replacementDueAt,
         signedAt: row.signedAt,
-        notes: row.notes
+        notes: row.notes,
+        size: row.size,
+        serialNumber: row.serialNumber,
+        hasPhoto: Boolean(row.photoPath),
+        orderId: row.orderId
       }))
     };
   }
@@ -319,6 +340,11 @@ export class SsmEipService {
       },
       orderBy: { movementDate: "asc" },
       take: 500
+    });
+
+    const signoff = await this.prisma.ssmEipRegisterSignoff.findFirst({
+      where: { tenantId },
+      orderBy: { signedAt: "desc" }
     });
 
     return new Promise<Buffer>((resolve, reject) => {
@@ -398,6 +424,29 @@ export class SsmEipService {
           doc.text(row.signedAt ? "Semnat" : "—", colX[7], y, { width: 90 });
         }
         doc.y = Math.max(doc.y, y + 28);
+      }
+
+      const latestSignoff = signoff;
+      doc.moveDown(1.2);
+      doc.fontSize(10).font(PdfFont.bold).text("Semnătură registru legal", 36, doc.y);
+      if (latestSignoff) {
+        doc.fontSize(8).font(PdfFont.regular).text(
+          `Responsabil: ${latestSignoff.signedByName ?? "—"} · ${latestSignoff.signedAt.toLocaleString("ro-RO")}${
+            latestSignoff.notes ? ` · ${latestSignoff.notes}` : ""
+          }`
+        );
+        if (latestSignoff.signatureData?.startsWith("data:image")) {
+          try {
+            const base64 = latestSignoff.signatureData.split(",")[1];
+            if (base64) {
+              doc.image(Buffer.from(base64, "base64"), 36, doc.y + 4, { width: 120, height: 36 });
+            }
+          } catch {
+            // ignore invalid stored signature
+          }
+        }
+      } else {
+        doc.fontSize(8).font(PdfFont.regular).text("Registrul nu are încă semnătură de responsabil SSM.");
       }
 
       doc.end();
@@ -727,6 +776,231 @@ export class SsmEipService {
           shortage
         };
       })
+    };
+  }
+
+  private orderStatusFromQuantities(
+    needed: number,
+    ordered: number,
+    received: number
+  ): SsmEipOrderStatus {
+    if (received >= needed && needed > 0) return SsmEipOrderStatus.RECEIVED;
+    if (received > 0) return SsmEipOrderStatus.PARTIAL;
+    if (ordered > 0) return SsmEipOrderStatus.ORDERED;
+    return SsmEipOrderStatus.NEEDED;
+  }
+
+  private mapOrder(row: {
+    id: string;
+    eipTypeId: string;
+    eipType: { name: string; code: string };
+    worksiteId: string | null;
+    worksite: { name: string } | null;
+    neededQuantity: number;
+    orderedQuantity: number;
+    receivedQuantity: number;
+    status: SsmEipOrderStatus;
+    notes: string | null;
+    createdAt: Date;
+  }) {
+    return {
+      id: row.id,
+      eipTypeId: row.eipTypeId,
+      eipTypeName: row.eipType.name,
+      eipTypeCode: row.eipType.code,
+      worksiteId: row.worksiteId,
+      worksiteName: row.worksite?.name ?? null,
+      neededQuantity: row.neededQuantity,
+      orderedQuantity: row.orderedQuantity,
+      receivedQuantity: row.receivedQuantity,
+      status: row.status,
+      notes: row.notes,
+      gap: Math.max(row.neededQuantity - row.receivedQuantity, 0),
+      createdAt: row.createdAt
+    };
+  }
+
+  async listOrders(tenantId: string) {
+    const rows = await this.prisma.ssmEipOrder.findMany({
+      where: { tenantId },
+      include: {
+        eipType: { select: { name: true, code: true } },
+        worksite: { select: { name: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    return { items: rows.map((row) => this.mapOrder(row)) };
+  }
+
+  async createOrder(tenantId: string, actorId: string, dto: CreateEipOrderDto) {
+    const type = await this.prisma.ssmEipType.findFirst({
+      where: { id: dto.eipTypeId, tenantId, active: true }
+    });
+    if (!type) throw new NotFoundException("EIP type not found.");
+    if (dto.worksiteId) {
+      const worksite = await this.prisma.worksite.findFirst({
+        where: { id: dto.worksiteId, tenantId, active: true }
+      });
+      if (!worksite) throw new NotFoundException("Invalid worksiteId for tenant.");
+    }
+    const orderedQuantity = dto.orderedQuantity ?? 0;
+    const status = this.orderStatusFromQuantities(dto.neededQuantity, orderedQuantity, 0);
+    const created = await this.prisma.ssmEipOrder.create({
+      data: {
+        tenantId,
+        eipTypeId: dto.eipTypeId,
+        worksiteId: dto.worksiteId?.trim() || null,
+        neededQuantity: dto.neededQuantity,
+        orderedQuantity,
+        status,
+        notes: dto.notes?.trim(),
+        createdBy: actorId
+      },
+      include: {
+        eipType: { select: { name: true, code: true } },
+        worksite: { select: { name: true } }
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "EIP_ORDER_CREATED",
+      entityType: "SsmEipOrder",
+      entityId: created.id
+    });
+    return this.mapOrder(created);
+  }
+
+  async updateOrder(tenantId: string, actorId: string, orderId: string, dto: UpdateEipOrderDto) {
+    const existing = await this.prisma.ssmEipOrder.findFirst({ where: { id: orderId, tenantId } });
+    if (!existing) throw new NotFoundException("Comanda EIP nu a fost găsită.");
+    const needed = dto.neededQuantity ?? existing.neededQuantity;
+    const ordered = dto.orderedQuantity ?? existing.orderedQuantity;
+    const received = dto.receivedQuantity ?? existing.receivedQuantity;
+    const status = (dto.status as SsmEipOrderStatus | undefined) ?? this.orderStatusFromQuantities(needed, ordered, received);
+    const updated = await this.prisma.ssmEipOrder.update({
+      where: { id: orderId },
+      data: {
+        neededQuantity: needed,
+        orderedQuantity: ordered,
+        receivedQuantity: received,
+        status,
+        notes: dto.notes?.trim() ?? existing.notes
+      },
+      include: {
+        eipType: { select: { name: true, code: true } },
+        worksite: { select: { name: true } }
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "EIP_ORDER_UPDATED",
+      entityType: "SsmEipOrder",
+      entityId: orderId
+    });
+    return this.mapOrder(updated);
+  }
+
+  private async applyOrderReceipt(tenantId: string, orderId: string, quantity: number) {
+    const order = await this.prisma.ssmEipOrder.findFirst({ where: { id: orderId, tenantId } });
+    if (!order) return;
+    const received = order.receivedQuantity + quantity;
+    await this.prisma.ssmEipOrder.update({
+      where: { id: orderId },
+      data: {
+        receivedQuantity: received,
+        status: this.orderStatusFromQuantities(order.neededQuantity, order.orderedQuantity, received)
+      }
+    });
+  }
+
+  async attachMovementPhoto(tenantId: string, movementId: string, file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException("Fișierul foto lipsește.");
+    const movement = await this.prisma.ssmEipMovement.findFirst({ where: { id: movementId, tenantId } });
+    if (!movement) throw new NotFoundException("Mișcarea EIP nu a fost găsită.");
+    const extension = extname(file.originalname).toLowerCase();
+    if (![".png", ".jpg", ".jpeg", ".webp"].includes(extension)) {
+      throw new BadRequestException("Doar imagini PNG/JPG sunt acceptate.");
+    }
+    const targetDir = resolve(process.cwd(), "uploads", "ssm-eip", tenantId, movementId);
+    await mkdir(targetDir, { recursive: true });
+    const absolutePath = resolve(targetDir, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]+/g, "_")}`);
+    await writeFile(absolutePath, file.buffer);
+    await this.prisma.ssmEipMovement.update({
+      where: { id: movementId },
+      data: {
+        photoPath: absolutePath,
+        photoName: file.originalname,
+        photoMime: file.mimetype
+      }
+    });
+    return { movementId, hasPhoto: true, photoName: file.originalname };
+  }
+
+  async downloadMovementPhoto(tenantId: string, movementId: string) {
+    const movement = await this.prisma.ssmEipMovement.findFirst({ where: { id: movementId, tenantId } });
+    if (!movement?.photoPath) throw new NotFoundException("Foto EIP lipsește.");
+    return new StreamableFile(createReadStream(movement.photoPath), {
+      type: movement.photoMime ?? "image/jpeg",
+      disposition: `inline; filename="${movement.photoName ?? `eip-${movementId}.jpg`}"`
+    });
+  }
+
+  async latestRegisterSignoff(tenantId: string) {
+    const row = await this.prisma.ssmEipRegisterSignoff.findFirst({
+      where: { tenantId },
+      orderBy: { signedAt: "desc" }
+    });
+    if (!row) return { item: null };
+    return {
+      item: {
+        id: row.id,
+        signedByName: row.signedByName,
+        signedAt: row.signedAt,
+        notes: row.notes,
+        periodFrom: row.periodFrom,
+        periodTo: row.periodTo
+      }
+    };
+  }
+
+  async signRegister(tenantId: string, actorId: string, actorName: string | undefined, dto: SignEipRegisterDto) {
+    if (!dto.signatureData.startsWith("data:image")) {
+      throw new BadRequestException("Semnătura registrului trebuie capturată olograf.");
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { id: actorId, tenantId },
+      select: { fullName: true, email: true }
+    });
+    const created = await this.prisma.ssmEipRegisterSignoff.create({
+      data: {
+        tenantId,
+        signedByUserId: actorId,
+        signedByName: user?.fullName || user?.email || actorName || null,
+        signatureData: dto.signatureData,
+        notes: dto.notes?.trim() || null,
+        periodFrom: parseOptionalDate(dto.periodFrom) ?? null,
+        periodTo: parseOptionalDate(dto.periodTo) ?? null
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "EIP_REGISTER_SIGNED",
+      entityType: "SsmEipRegisterSignoff",
+      entityId: created.id
+    });
+    return {
+      id: created.id,
+      signedByName: created.signedByName,
+      signedAt: created.signedAt,
+      notes: created.notes,
+      periodFrom: created.periodFrom,
+      periodTo: created.periodTo
     };
   }
 }

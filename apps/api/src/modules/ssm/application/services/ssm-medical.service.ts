@@ -653,4 +653,160 @@ export class SsmMedicalService {
     }
     return { sent };
   }
+
+  async employeeSummary(tenantId: string, userEmail: string) {
+    const employeeId = await findEmployeeIdForUserEmail(this.prisma, tenantId, userEmail);
+    if (!employeeId) {
+      throw new NotFoundException("Contul nu este asociat unui angajat.");
+    }
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      select: { id: true, fullName: true, medicalBlockedAdmission: true }
+    });
+    if (!employee) throw new NotFoundException("Angajatul nu a fost găsit.");
+
+    const controls = await this.prisma.ssmMedicalControl.findMany({
+      where: { tenantId, employeeId },
+      include: {
+        controlType: { select: { id: true, code: true, name: true, category: true } }
+      },
+      orderBy: [{ nextDueAt: "asc" }, { scheduledAt: "desc" }]
+    });
+    const mapped = controls.map((row) => ({
+      id: row.id,
+      employeeId: row.employeeId,
+      employeeName: employee.fullName,
+      controlTypeId: row.controlTypeId,
+      controlTypeCode: row.controlType.code,
+      controlTypeName: row.controlType.name,
+      controlTypeCategory: row.controlType.category,
+      scheduledAt: row.scheduledAt,
+      performedAt: row.performedAt,
+      result: row.result,
+      recommendations: row.recommendations,
+      validityUntil: row.validityUntil,
+      nextDueAt: row.nextDueAt,
+      aptitudeSheetName: row.aptitudeSheetName,
+      hasAptitudeSheet: Boolean(row.aptitudeSheetPath),
+      blockedAdmission: row.blockedAdmission
+    }));
+
+    const lastPerformed = [...mapped]
+      .filter((c) => c.performedAt)
+      .sort((a, b) => new Date(b.performedAt!).getTime() - new Date(a.performedAt!).getTime())[0];
+    const nextDue = mapped
+      .filter((c) => c.nextDueAt)
+      .sort((a, b) => new Date(a.nextDueAt!).getTime() - new Date(b.nextDueAt!).getTime())[0];
+    const daysUntilDue = nextDue?.nextDueAt ? daysDiff(new Date(), new Date(nextDue.nextDueAt)) : null;
+    const reminderVisible =
+      employee.medicalBlockedAdmission ||
+      (daysUntilDue != null && daysUntilDue <= 30);
+
+    const appointments = await this.prisma.ssmMedicalAppointmentRequest.findMany({
+      where: { tenantId, employeeId },
+      orderBy: { createdAt: "desc" },
+      take: 10
+    });
+
+    return {
+      blockedAdmission: employee.medicalBlockedAdmission,
+      lastResult: lastPerformed?.result ?? null,
+      lastControlType: lastPerformed?.controlTypeName ?? null,
+      lastPerformedAt: lastPerformed?.performedAt ?? null,
+      nextDueAt: nextDue?.nextDueAt ?? null,
+      daysUntilDue,
+      reminderVisible,
+      upcoming: mapped.filter((c) => !c.performedAt || (c.nextDueAt && new Date(c.nextDueAt) > new Date())),
+      appointments: appointments.map((row) => ({
+        id: row.id,
+        employeeId: row.employeeId,
+        preferredDate: row.preferredDate,
+        notes: row.notes,
+        status: row.status,
+        scheduledControlId: row.scheduledControlId,
+        createdAt: row.createdAt
+      }))
+    };
+  }
+
+  async requestAppointment(tenantId: string, userEmail: string, dto: { preferredDate?: string; notes?: string }) {
+    const employeeId = await findEmployeeIdForUserEmail(this.prisma, tenantId, userEmail);
+    if (!employeeId) {
+      throw new NotFoundException("Contul nu este asociat unui angajat.");
+    }
+    const created = await this.prisma.ssmMedicalAppointmentRequest.create({
+      data: {
+        tenantId,
+        employeeId,
+        preferredDate: dto.preferredDate ? parseDate(dto.preferredDate, "preferredDate") : null,
+        notes: dto.notes?.trim() || null
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId: employeeId,
+      module: "SSM",
+      action: "MEDICAL_APPOINTMENT_REQUESTED",
+      entityType: "SsmMedicalAppointmentRequest",
+      entityId: created.id
+    });
+    return {
+      id: created.id,
+      employeeId: created.employeeId,
+      preferredDate: created.preferredDate,
+      notes: created.notes,
+      status: created.status,
+      scheduledControlId: created.scheduledControlId,
+      createdAt: created.createdAt
+    };
+  }
+
+  async listAppointments(tenantId: string) {
+    const rows = await this.prisma.ssmMedicalAppointmentRequest.findMany({
+      where: { tenantId },
+      include: { employee: { select: { fullName: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        employeeId: row.employeeId,
+        employeeName: row.employee.fullName,
+        preferredDate: row.preferredDate,
+        notes: row.notes,
+        status: row.status,
+        scheduledControlId: row.scheduledControlId,
+        createdAt: row.createdAt
+      }))
+    };
+  }
+
+  async updateAppointment(
+    tenantId: string,
+    actorId: string,
+    appointmentId: string,
+    dto: { status?: "REQUESTED" | "SCHEDULED" | "CANCELLED"; scheduledControlId?: string }
+  ) {
+    const existing = await this.prisma.ssmMedicalAppointmentRequest.findFirst({
+      where: { id: appointmentId, tenantId }
+    });
+    if (!existing) throw new NotFoundException("Programarea nu a fost găsită.");
+    const updated = await this.prisma.ssmMedicalAppointmentRequest.update({
+      where: { id: appointmentId },
+      data: {
+        status: dto.status ?? existing.status,
+        scheduledControlId: dto.scheduledControlId ?? existing.scheduledControlId
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "MEDICAL_APPOINTMENT_UPDATED",
+      entityType: "SsmMedicalAppointmentRequest",
+      entityId: appointmentId
+    });
+    return updated;
+  }
 }

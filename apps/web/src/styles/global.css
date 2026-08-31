@@ -852,7 +852,7 @@ button {
 
 .ssm-overview-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
@@ -3686,6 +3686,11 @@ button.ssm-doc-item:hover {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 
+  .ssm-gate-attendee-row,
+  .ssm-wizard-steps {
+    grid-template-columns: 1fr;
+  }
+
   .ssm-panel-layout,
   .ssm-panel-layout--movement,
   .ssm-panel-layout--single,
@@ -3907,6 +3912,108 @@ button.ssm-doc-item:hover {
   gap: 0.5rem;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--color-border);
+}
+
+.ssm-wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.ssm-wizard-step {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.82rem;
+  background: #fff;
+  color: var(--color-muted);
+}
+
+.ssm-wizard-step.active {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  background: var(--color-primary-muted);
+  font-weight: 600;
+}
+
+.ssm-wizard-step.done {
+  border-color: #86efac;
+}
+
+.ssm-gate-attendee-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.7fr) minmax(0, 0.9fr);
+  gap: 0.6rem;
+}
+
+.ssm-gate-visit-pick {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.ssm-gate-visit-pick.active {
+  outline: 2px solid var(--color-primary);
+  border-radius: 8px;
+}
+
+.admission-block-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.admission-block-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #fff7f7;
+}
+
+.admission-block-reasons {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.itm-gdpr-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.itm-gdpr-log li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.itm-gdpr-log span {
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.feedback.warn {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
   border-radius: 8px;
   background: #fff;
   font-size: 0.88rem;

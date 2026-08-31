@@ -189,6 +189,7 @@ export interface EmployeeOptionItem {
   fullName: string;
   email: string;
   active: boolean;
+  employmentType?: string;
 }
 
 export interface SsmResponsibleItem {

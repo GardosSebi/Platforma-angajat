@@ -6,6 +6,7 @@ export type EmployeePortalTab =
   | "trainings"
   | "documents"
   | "dossier"
+  | "medical"
   | "announcements"
   | "surveys"
   | "tickets";
@@ -15,6 +16,7 @@ export const PORTAL_TAB_LABELS: Record<EmployeePortalTab, string> = {
   trainings: "Instruiri",
   documents: "Documente",
   dossier: "Dosarul meu",
+  medical: "Medicină",
   announcements: "Anunțuri",
   surveys: "Sondaje",
   tickets: "Solicitări"

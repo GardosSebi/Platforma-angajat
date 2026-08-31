@@ -91,3 +91,24 @@ export class UpdateMedicalControlDto {
   @IsDateString()
   validityUntil?: string;
 }
+
+export class CreateMedicalAppointmentDto {
+  @IsOptional()
+  @IsDateString()
+  preferredDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+}
+
+export class UpdateMedicalAppointmentDto {
+  @IsOptional()
+  @IsString()
+  status?: "REQUESTED" | "SCHEDULED" | "CANCELLED";
+
+  @IsOptional()
+  @IsString()
+  scheduledControlId?: string;
+}

@@ -78,8 +78,43 @@ export function useRegisterEipMovement() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "register"] }),
         queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "notifications"] }),
-        queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "stock-gap"] })
+        queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "stock-gap"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "orders"] })
       ]);
+    }
+  });
+}
+
+export function useEipOrders() {
+  return useQuery({
+    queryKey: ["ssm", "eip", "orders"],
+    queryFn: ssmApi.listEipOrders
+  });
+}
+
+export function useCreateEipOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: import("@repo/shared-types/ssm").CreateSsmEipOrderRequest) => ssmApi.createEipOrder(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "orders"] });
+    }
+  });
+}
+
+export function useEipRegisterSignoff() {
+  return useQuery({
+    queryKey: ["ssm", "eip", "register-signoff"],
+    queryFn: ssmApi.eipRegisterSignoff
+  });
+}
+
+export function useSignEipRegister() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: import("@repo/shared-types/ssm").SignSsmEipRegisterRequest) => ssmApi.signEipRegister(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "register-signoff"] });
     }
   });
 }

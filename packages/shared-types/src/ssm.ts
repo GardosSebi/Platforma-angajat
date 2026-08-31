@@ -362,6 +362,9 @@ export interface CreateSsmEipMovementRequest {
   replacementDueAt?: string;
   notes?: string;
   signatureData?: string;
+  size?: string;
+  serialNumber?: string;
+  orderId?: string;
 }
 
 export interface SsmEipTypeItem {
@@ -399,6 +402,10 @@ export interface SsmEipMovementItem {
   replacementDueAt?: string | null;
   signedAt?: string | null;
   notes?: string | null;
+  size?: string | null;
+  serialNumber?: string | null;
+  hasPhoto?: boolean;
+  orderId?: string | null;
 }
 
 export interface SsmEipDueNotification {
@@ -1173,4 +1180,197 @@ export interface CreateSsmEvacuationDrillRequest {
   result: string;
   coordinatorName?: string;
   notes?: string;
+}
+
+export type SsmGateVisitStatus = "REGISTERED" | "BRIEFING" | "SIGNED" | "CANCELLED";
+export type SsmGateVisitorKind = "VISITOR" | "DETACHED" | "TEMPORARY" | "EXTERNAL";
+export type SsmEipOrderStatus = "NEEDED" | "ORDERED" | "PARTIAL" | "RECEIVED" | "CANCELLED";
+export type SsmMedicalAppointmentStatus = "REQUESTED" | "SCHEDULED" | "CANCELLED";
+export type ItmInspectionVisitStatus = "OPEN" | "CLOSED";
+
+export interface SsmGateVisitAttendeeInput {
+  employeeId?: string;
+  fullName: string;
+  company?: string;
+  idDocument?: string;
+  visitorKind?: SsmGateVisitorKind;
+}
+
+export interface CreateSsmGateVisitRequest {
+  worksiteId?: string;
+  companyName?: string;
+  purpose?: string;
+  trainerName?: string;
+  trainerFunction?: string;
+  location?: string;
+  briefingTitle: string;
+  visitDate?: string;
+  attendees: SsmGateVisitAttendeeInput[];
+}
+
+export interface BriefSsmGateVisitRequest {
+  briefingNotes?: string;
+  attendeeIds?: string[];
+}
+
+export interface SignSsmGateVisitRequest {
+  trainerSignature?: string;
+  signatures: Array<{ attendeeId: string; signatureData: string }>;
+}
+
+export interface SsmGateVisitAttendeeItem {
+  id: string;
+  employeeId?: string | null;
+  fullName: string;
+  company?: string | null;
+  idDocument?: string | null;
+  visitorKind: SsmGateVisitorKind;
+  trainingAcknowledgedAt?: string | null;
+  signedAt?: string | null;
+  hasSignature: boolean;
+}
+
+export interface SsmGateVisitItem {
+  id: string;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  companyName?: string | null;
+  purpose?: string | null;
+  trainerName?: string | null;
+  trainerFunction?: string | null;
+  location?: string | null;
+  briefingTitle: string;
+  briefingNotes?: string | null;
+  status: SsmGateVisitStatus;
+  visitDate: string;
+  completedAt?: string | null;
+  attendees: SsmGateVisitAttendeeItem[];
+  createdAt: string;
+}
+
+export type SsmAdmissionBlockReason = "TRAINING" | "MEDICAL";
+
+export interface SsmAdmissionBlockItem {
+  employeeId: string;
+  fullName: string;
+  employmentType: string;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  departmentName?: string | null;
+  jobPositionName?: string | null;
+  reasons: SsmAdmissionBlockReason[];
+  trainingOverdueCount: number;
+  medicalBlocked: boolean;
+  lastMedicalResult?: string | null;
+}
+
+export interface ItmInspectionVisitItem {
+  id: string;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  inspectorUserId: string;
+  inspectorName?: string | null;
+  status: ItmInspectionVisitStatus;
+  startedAt: string;
+  endedAt?: string | null;
+  notes?: string | null;
+}
+
+export interface CreateItmInspectionVisitRequest {
+  worksiteId?: string;
+  notes?: string;
+}
+
+export interface ItmWorksiteOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface ItmAccessLogItem {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface CreateSsmEipOrderRequest {
+  eipTypeId: string;
+  worksiteId?: string;
+  neededQuantity: number;
+  orderedQuantity?: number;
+  notes?: string;
+}
+
+export interface UpdateSsmEipOrderRequest {
+  neededQuantity?: number;
+  orderedQuantity?: number;
+  receivedQuantity?: number;
+  status?: SsmEipOrderStatus;
+  notes?: string;
+}
+
+export interface SsmEipOrderItem {
+  id: string;
+  eipTypeId: string;
+  eipTypeName: string;
+  eipTypeCode: string;
+  worksiteId?: string | null;
+  worksiteName?: string | null;
+  neededQuantity: number;
+  orderedQuantity: number;
+  receivedQuantity: number;
+  status: SsmEipOrderStatus;
+  notes?: string | null;
+  gap: number;
+  createdAt: string;
+}
+
+export interface SignSsmEipRegisterRequest {
+  signatureData: string;
+  notes?: string;
+  periodFrom?: string;
+  periodTo?: string;
+}
+
+export interface SsmEipRegisterSignoffItem {
+  id: string;
+  signedByName?: string | null;
+  signedAt: string;
+  notes?: string | null;
+  periodFrom?: string | null;
+  periodTo?: string | null;
+}
+
+export interface CreateSsmMedicalAppointmentRequest {
+  preferredDate?: string;
+  notes?: string;
+}
+
+export interface SsmMedicalAppointmentItem {
+  id: string;
+  employeeId: string;
+  employeeName?: string;
+  preferredDate?: string | null;
+  notes?: string | null;
+  status: SsmMedicalAppointmentStatus;
+  scheduledControlId?: string | null;
+  createdAt: string;
+}
+
+export interface SsmEmployeeMedicalSummary {
+  blockedAdmission: boolean;
+  lastResult?: string | null;
+  lastControlType?: string | null;
+  lastPerformedAt?: string | null;
+  nextDueAt?: string | null;
+  daysUntilDue?: number | null;
+  reminderVisible: boolean;
+  upcoming: SsmMedicalControlItem[];
+  appointments: SsmMedicalAppointmentItem[];
 }
