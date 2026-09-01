@@ -75,6 +75,8 @@ export interface ItmAccessLogRow {
   userName: string | null;
   action: string;
   resourceType: string;
+  resourceLabel?: string;
+  resourceTitle?: string | null;
   resourceId: string | null;
   metadata: unknown;
   createdAt: string;

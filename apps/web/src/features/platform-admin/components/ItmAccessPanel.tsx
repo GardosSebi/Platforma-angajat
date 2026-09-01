@@ -116,8 +116,8 @@ export function ItmAccessPanel() {
                 <strong>{log.userEmail}</strong>
                 <span className="muted">
                   {" "}
-                  — {log.action} / {log.resourceType}
-                  {log.resourceId ? ` (${log.resourceId})` : ""}
+                  — {log.action} / {log.resourceLabel ?? log.resourceType}
+                  {log.resourceTitle ? ` · ${log.resourceTitle}` : log.resourceId ? ` (${log.resourceId})` : ""}
                 </span>
                 <div className="muted">{new Date(log.createdAt).toLocaleString("ro-RO")}</div>
               </div>

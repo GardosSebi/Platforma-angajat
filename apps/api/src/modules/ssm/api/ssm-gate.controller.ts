@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFile, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
+import { JwtPayload } from "../../../auth/jwt.strategy";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
 import { RequirePermissions } from "../../../common/decorators/require-permissions.decorator";
+import { RequireAnyPermissions } from "../../../common/decorators/require-any-permissions.decorator";
 import { TenantId } from "../../../common/decorators/tenant-id.decorator";
 import { Permission } from "../../../common/constants/permissions";
 import { PermissionsGuard } from "../../../common/guards/permissions.guard";
@@ -16,8 +18,12 @@ export class SsmGateController {
 
   @Get("admission-blocks")
   @RequirePermissions(Permission.SSM_TRAINING_VIEW)
-  admissionBlocks(@TenantId() tenantId: string, @Query("worksiteId") worksiteId?: string) {
-    return this.gate.listAdmissionBlocks(tenantId, worksiteId);
+  admissionBlocks(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query("worksiteId") worksiteId?: string
+  ) {
+    return this.gate.listAdmissionBlocks(tenantId, user, worksiteId);
   }
 
   @Get("visits")
@@ -33,7 +39,7 @@ export class SsmGateController {
   }
 
   @Post("visits")
-  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  @RequireAnyPermissions(Permission.SSM_TRAINING_EDIT, Permission.SSM_TRAINING_APPROVE)
   createVisit(
     @TenantId() tenantId: string,
     @CurrentUser() user: { sub: string },
@@ -43,7 +49,7 @@ export class SsmGateController {
   }
 
   @Patch("visits/:visitId/briefing")
-  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  @RequireAnyPermissions(Permission.SSM_TRAINING_EDIT, Permission.SSM_TRAINING_APPROVE)
   briefVisit(
     @TenantId() tenantId: string,
     @CurrentUser() user: { sub: string },
@@ -54,7 +60,7 @@ export class SsmGateController {
   }
 
   @Patch("visits/:visitId/sign")
-  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  @RequireAnyPermissions(Permission.SSM_TRAINING_EDIT, Permission.SSM_TRAINING_APPROVE)
   signVisit(
     @TenantId() tenantId: string,
     @CurrentUser() user: { sub: string },

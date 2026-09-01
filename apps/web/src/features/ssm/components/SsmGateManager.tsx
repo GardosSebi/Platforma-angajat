@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { SsmGateVisitorKind, SsmGateVisitItem } from "@repo/shared-types/ssm";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
@@ -64,8 +65,10 @@ const EMPTY_ATTENDEE: DraftAttendee = {
 
 export function SsmGateManager() {
   const session = useAuthSession();
-  const canEdit = hasPermission(session?.roles, "ssm:training:edit");
-  const [tab, setTab] = useState<GateTab>("wizard");
+  const canEdit =
+    hasPermission(session?.roles, "ssm:training:edit") || hasPermission(session?.roles, "ssm:training:approve");
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<GateTab>(searchParams.get("tab") === "blocks" ? "blocks" : "wizard");
   const [worksiteFilter, setWorksiteFilter] = useState("");
   const [activeVisitId, setActiveVisitId] = useState<string | null>(null);
   const [step, setStep] = useState<WizardStep>(1);
@@ -493,11 +496,16 @@ export function SsmGateManager() {
       ) : null}
 
       {tab === "blocks" ? (
-        <div className="card ssm-doc-card">
+        <div className="card ssm-doc-card admission-block-print">
           <h4 className="card-title">Nu intra la lucru</h4>
           <p className="field-hint">
             Listă operațională pentru șefi de tură și poartă: instruiri blocate sau aptitudine medicală inapt.
           </p>
+          <div className="form-actions" style={{ marginBottom: "0.85rem" }}>
+            <button type="button" className="btn-secondary" onClick={() => window.print()}>
+              Tipărește lista
+            </button>
+          </div>
           {blocksQuery.isLoading ? <p>Se încarcă…</p> : null}
           {(blocksQuery.data?.items ?? []).length === 0 && !blocksQuery.isLoading ? (
             <p className="feedback success">Nicio persoană blocată la admitere pe filtrul curent.</p>

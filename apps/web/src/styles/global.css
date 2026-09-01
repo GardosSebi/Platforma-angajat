@@ -3988,6 +3988,25 @@ button.ssm-doc-item:hover {
   align-items: center;
 }
 
+@media print {
+  .app-sidebar,
+  .app-topbar,
+  .ssm-panel-tabs,
+  .form-actions,
+  .page-lead {
+    display: none !important;
+  }
+
+  .admission-block-print {
+    box-shadow: none;
+    border: none;
+  }
+
+  .admission-block-list li {
+    break-inside: avoid;
+  }
+}
+
 .itm-gdpr-log {
   list-style: none;
   margin: 0;
@@ -4002,6 +4021,8 @@ button.ssm-doc-item:hover {
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--color-border);
   border-radius: 8px;
+  background: #fff;
+  font-size: 0.88rem;
 }
 
 .itm-gdpr-log span {
@@ -4009,14 +4030,14 @@ button.ssm-doc-item:hover {
   font-size: 0.82rem;
 }
 
+.itm-gdpr-log strong {
+  font-size: 0.9rem;
+}
+
 .feedback.warn {
   background: #fff7ed;
   border-color: #fdba74;
   color: #9a3412;
-}
-  border-radius: 8px;
-  background: #fff;
-  font-size: 0.88rem;
 }
 
 .admin-grid {

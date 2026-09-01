@@ -7,12 +7,14 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { JwtPayload } from "../../../../auth/jwt.strategy";
 import {
   BriefGateVisitDto,
   CreateGateVisitDto,
   SignGateVisitDto
 } from "../../api/dto/ssm-gate.dto";
 import { renderAnexa12CollectiveSheet } from "../legal-forms/anexa-12-collective-sheet";
+import { resolveSsmViewerScope, ssmEmployeeWhere } from "../../api/ssm-viewer-scope";
 
 const KIND_FROM_EMPLOYMENT: Record<EmployeeEmploymentType, SsmGateVisitorKind> = {
   OWN: SsmGateVisitorKind.VISITOR,
@@ -275,11 +277,11 @@ export class SsmGateService {
     });
   }
 
-  async listAdmissionBlocks(tenantId: string, worksiteId?: string) {
+  async listAdmissionBlocks(tenantId: string, viewer: JwtPayload, worksiteId?: string) {
+    const scope = await resolveSsmViewerScope(this.prisma, tenantId, viewer);
     const employees = await this.prisma.employee.findMany({
       where: {
-        tenantId,
-        active: true,
+        ...ssmEmployeeWhere(tenantId, scope),
         ...(worksiteId ? { worksiteId } : {}),
         OR: [
           { medicalBlockedAdmission: true },

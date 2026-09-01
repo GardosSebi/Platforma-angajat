@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   CreateSsmEipMovementRequest,
   CreateSsmEipNormRequest,
@@ -18,7 +19,8 @@ import {
   useCreateEipOrder,
   useEipOrders,
   useEipRegisterSignoff,
-  useSignEipRegister
+  useSignEipRegister,
+  useUpdateEipOrder
 } from "../hooks/useSsmEip";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
@@ -92,6 +94,7 @@ function locationLabel(worksiteName?: string | null, departmentName?: string | n
 
 export function SsmEipManager() {
   const session = useAuthSession();
+  const queryClient = useQueryClient();
   const canSignRegister = hasPermission(session?.roles, "ssm:eip:approve");
   const [tab, setTab] = useState<EipPanelTab>("types");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -114,6 +117,7 @@ export function SsmEipManager() {
   const dispatchNotifications = useDispatchEipNotifications();
   const ordersQuery = useEipOrders();
   const createOrder = useCreateEipOrder();
+  const updateOrder = useUpdateEipOrder();
   const signoffQuery = useEipRegisterSignoff();
   const signRegister = useSignEipRegister();
 
@@ -168,11 +172,12 @@ export function SsmEipManager() {
           })
     };
     registerMovement.mutate(payload, {
-      onSuccess: (created) => {
+      onSuccess: async (created) => {
         const movementId = (created as { id?: string })?.id;
         if (photoFile && movementId) {
-          void ssmApi.uploadEipMovementPhoto(movementId, photoFile);
+          await ssmApi.uploadEipMovementPhoto(movementId, photoFile);
           setPhotoFile(null);
+          await queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "register"] });
         }
       }
     });
@@ -584,6 +589,17 @@ export function SsmEipManager() {
                     <span className={item.signedAt ? "badge-good" : "badge-bad"}>
                       {item.signedAt ? "Semnat" : "Fără semnătură"}
                     </span>
+                    {item.hasPhoto ? (
+                      <button
+                        type="button"
+                        className="btn-text"
+                        onClick={() =>
+                          void downloadWithAuth(ssmApi.getEipMovementPhotoUrl(item.id), `eip-${item.id}.jpg`)
+                        }
+                      >
+                        Foto
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -682,6 +698,24 @@ export function SsmEipManager() {
                     <span className={item.gap > 0 ? "badge-bad" : "badge-good"}>
                       {item.gap > 0 ? `Lipsă ${item.gap}` : item.status}
                     </span>
+                    {item.status === "NEEDED" || item.status === "ORDERED" || item.status === "PARTIAL" ? (
+                      <button
+                        type="button"
+                        className="btn-text"
+                        disabled={updateOrder.isPending}
+                        onClick={() =>
+                          updateOrder.mutate({
+                            orderId: item.id,
+                            payload:
+                              item.status === "NEEDED"
+                                ? { orderedQuantity: item.neededQuantity, status: "ORDERED" }
+                                : { receivedQuantity: item.orderedQuantity || item.neededQuantity, status: "RECEIVED" }
+                          })
+                        }
+                      >
+                        {item.status === "NEEDED" ? "Marchează comandat" : "Marchează recepționat"}
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>

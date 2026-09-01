@@ -8,6 +8,7 @@ import {
   StreamableFile
 } from "@nestjs/common";
 import { SsmMedicalControlCategory, SsmMedicalControlResult } from "@prisma/client";
+import { SystemRole } from "../../../../common/prisma-enums";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
@@ -734,6 +735,10 @@ export class SsmMedicalService {
     if (!employeeId) {
       throw new NotFoundException("Contul nu este asociat unui angajat.");
     }
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      select: { fullName: true }
+    });
     const created = await this.prisma.ssmMedicalAppointmentRequest.create({
       data: {
         tenantId,
@@ -750,6 +755,28 @@ export class SsmMedicalService {
       entityType: "SsmMedicalAppointmentRequest",
       entityId: created.id
     });
+    const staff = await this.prisma.user.findMany({
+      where: {
+        tenantId,
+        active: true,
+        roles: { hasSome: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE] }
+      },
+      select: { id: true }
+    });
+    await Promise.all(
+      staff.map((user) =>
+        this.notifications.notifyUser({
+          tenantId,
+          userId: user.id,
+          category: "SSM_MEDICAL",
+          title: "Cerere programare control medical",
+          body: `${employee?.fullName ?? "Un angajat"} a solicitat o programare din portal.`,
+          linkPath: "/ssm?section=medical",
+          entityType: "SsmMedicalAppointmentRequest",
+          entityId: created.id
+        })
+      )
+    );
     return {
       id: created.id,
       employeeId: created.employeeId,
@@ -807,6 +834,18 @@ export class SsmMedicalService {
       entityType: "SsmMedicalAppointmentRequest",
       entityId: appointmentId
     });
+    if (updated.status === "SCHEDULED") {
+      await this.notifications.notifyEmployee({
+        tenantId,
+        employeeId: existing.employeeId,
+        category: "SSM_MEDICAL",
+        title: "Control medical programat",
+        body: "Cererea ta de programare a fost confirmată. Verifică detaliile în tab-ul Medicină.",
+        linkPath: "/portal?tab=medical",
+        entityType: "SsmMedicalAppointmentRequest",
+        entityId: appointmentId
+      });
+    }
     return updated;
   }
 }

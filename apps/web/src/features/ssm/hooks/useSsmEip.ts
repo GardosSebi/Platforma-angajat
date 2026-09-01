@@ -102,6 +102,20 @@ export function useCreateEipOrder() {
   });
 }
 
+export function useUpdateEipOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      orderId: string;
+      payload: import("@repo/shared-types/ssm").UpdateSsmEipOrderRequest;
+    }) => ssmApi.updateEipOrder(input.orderId, input.payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "stock-gap"] });
+    }
+  });
+}
+
 export function useEipRegisterSignoff() {
   return useQuery({
     queryKey: ["ssm", "eip", "register-signoff"],

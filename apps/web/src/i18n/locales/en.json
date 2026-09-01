@@ -10,7 +10,8 @@
     "info": "Information",
     "notifications": "Notifications",
     "portal": "My space",
-    "itm": "ITM/ISU inspection"
+    "itm": "ITM/ISU inspection",
+    "gate": "Gate / admission"
   },
   "common": {
     "save": "Save",

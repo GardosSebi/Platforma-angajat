@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { downloadWithAuth } from "../../../shared/api/http-download";
@@ -38,6 +39,15 @@ export function EmployeeDossierPanel() {
 
   return (
     <div className="employee-portal-dossier">
+      <div className="card employee-dossier-section">
+        <h3 className="card-title">Medicină muncii</h3>
+        <p className="field-hint">
+          Reminder-ul de control medical, programarea și fișele de aptitudini sunt în tab-ul dedicat.
+        </p>
+        <Link to="/portal?tab=medical" className="btn-text-link">
+          Deschide tab-ul Medicină →
+        </Link>
+      </div>
       <div className="ssm-inline-actions employee-dossier-actions">
         <button
           type="button"

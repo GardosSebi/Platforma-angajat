@@ -78,6 +78,13 @@ export const NavIcons = {
       <path d="M9 13h6M9 17h4" />
     </Icon>
   ),
+  gate: (props?: IconProps) => (
+    <Icon {...props}>
+      <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+      <path d="M4 21h16" />
+      <path d="M14 11h.01" />
+    </Icon>
+  ),
   trainings: (props?: IconProps) => (
     <Icon {...props}>
       <path d="M22 10v6M2 10l10-5 10 5-10 5z" />

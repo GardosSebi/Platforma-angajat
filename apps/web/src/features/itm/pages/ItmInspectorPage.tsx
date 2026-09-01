@@ -303,7 +303,7 @@ export function ItmInspectorPage() {
         <section className="card">
           <h2 className="card-title">Jurnal acces (GDPR)</h2>
           <p className="field-hint">
-            Cine a vizualizat, descărcat sau exportat documente din dosarul de control. Inspectorii văd propriul jurnal.
+            Cine a vizualizat, descărcat sau exportat ce documente din dosarul de control. Inspectorii văd propriul jurnal.
           </p>
           {logsQuery.isLoading ? <p>Se încarcă jurnalul…</p> : null}
           <ul className="itm-gdpr-log">
@@ -311,9 +311,10 @@ export function ItmInspectorPage() {
               <li key={row.id}>
                 <strong>{row.userName || row.userEmail}</strong>
                 <span>
-                  {actionLabel(row.action)} · {row.resourceType}
-                  {row.resourceId ? ` · ${row.resourceId}` : ""} · {new Date(row.createdAt).toLocaleString("ro-RO")}
+                  {actionLabel(row.action)} · {row.resourceLabel ?? row.resourceType}
+                  {row.resourceTitle ? ` · ${row.resourceTitle}` : ""}
                 </span>
+                <span>{new Date(row.createdAt).toLocaleString("ro-RO")}</span>
               </li>
             ))}
           </ul>

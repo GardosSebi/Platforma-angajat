@@ -15,7 +15,7 @@ import { TicketingPage } from "../features/ticketing/pages/TicketingPage";
 import { EmployeeStaticListPage } from "../features/employee-static/pages/EmployeeStaticListPage";
 import { EmployeeStaticPageView } from "../features/employee-static/pages/EmployeeStaticPageView";
 import { HomeRedirect } from "./HomeRedirect";
-import { SsmBackofficeRoute } from "./SsmBackofficeRoute";
+import { SsmBackofficeRoute, SsmGateRoute } from "./SsmBackofficeRoute";
 import { EmployeePortalRoute } from "./EmployeePortalRoute";
 import { ItmInspectorRoute } from "./ItmInspectorRoute";
 import { NotificationsPage } from "../features/notifications/pages/NotificationsPage";
@@ -65,6 +65,7 @@ export function AppRouter() {
           <Route path="/portal" element={<EmployeePortalRoute />} />
           <Route path="/itm" element={<ItmInspectorRoute />} />
           <Route path="/ssm" element={<SsmBackofficeRoute />} />
+          <Route path="/ssm/poarta" element={<SsmGateRoute />} />
           <Route path="/master-data" element={<MasterDataRoute />} />
           <Route path="/platform-admin" element={<PlatformAdminRoute />} />
           <Route

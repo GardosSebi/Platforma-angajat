@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { canAccessSsmSection, type SsmSectionId } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { TrainingAssignForm } from "../components/TrainingAssignForm";
@@ -101,7 +101,11 @@ const SSM_SECTIONS: Array<{
 
 export function SsmDashboardPage() {
   const session = useAuthSession();
-  const [activeSection, setActiveSection] = useState<SsmSectionId>("quick");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const [activeSection, setActiveSection] = useState<SsmSectionId>(() =>
+    SSM_SECTIONS.some((s) => s.id === sectionParam) ? (sectionParam as SsmSectionId) : "quick"
+  );
 
   const visibleSections = useMemo(
     () => SSM_SECTIONS.filter((s) => canAccessSsmSection(session?.roles, s.id)),
@@ -110,10 +114,14 @@ export function SsmDashboardPage() {
 
   useEffect(() => {
     if (!session?.roles?.length) return;
+    if (sectionParam && visibleSections.some((s) => s.id === sectionParam)) {
+      setActiveSection(sectionParam as SsmSectionId);
+      return;
+    }
     if (!visibleSections.some((s) => s.id === activeSection)) {
       setActiveSection(visibleSections[0]?.id ?? "documents");
     }
-  }, [session?.roles, visibleSections, activeSection]);
+  }, [session?.roles, visibleSections, activeSection, sectionParam]);
 
   const activeSectionMeta = useMemo(
     () => SSM_SECTIONS.find((section) => section.id === activeSection) ?? visibleSections[0] ?? SSM_SECTIONS[0],
@@ -173,7 +181,16 @@ export function SsmDashboardPage() {
               role="tab"
               aria-selected={activeSection === section.id}
               className={`ssm-overview-tab ${activeSection === section.id ? "active" : ""}`}
-              onClick={() => setActiveSection(section.id)}
+              onClick={() => {
+                setActiveSection(section.id);
+                const params = new URLSearchParams(searchParams);
+                if (section.id === "quick") {
+                  params.delete("section");
+                } else {
+                  params.set("section", section.id);
+                }
+                setSearchParams(params, { replace: true });
+              }}
             >
               <strong>{section.title}</strong>
               <span>{section.caption}</span>

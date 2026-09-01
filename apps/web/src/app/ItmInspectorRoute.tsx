@@ -8,11 +8,8 @@ export function ItmInspectorRoute() {
   if (isEmployeePortalUser(session)) {
     return <Navigate to="/portal" replace />;
   }
-  if (hasSsmBackofficeAccess(session)) {
-    return <Navigate to="/ssm" replace />;
+  if (isItmInspectorUser(session) || hasSsmBackofficeAccess(session)) {
+    return <ItmInspectorPage />;
   }
-  if (!isItmInspectorUser(session)) {
-    return <Navigate to={getAppHomePath(session)} replace />;
-  }
-  return <ItmInspectorPage />;
+  return <Navigate to={getAppHomePath(session)} replace />;
 }

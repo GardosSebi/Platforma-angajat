@@ -26,8 +26,7 @@ export class SsmItmPortalService {
     return { items: rows };
   }
 
-  async controlFolders(tenantId: string, viewer: JwtPayload, worksiteId?: string) {
-    await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
+  private async loadControlDocuments(tenantId: string, worksiteId?: string) {
     if (worksiteId) {
       const worksite = await this.prisma.worksite.findFirst({
         where: { id: worksiteId, tenantId },
@@ -59,6 +58,12 @@ export class SsmItmPortalService {
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(row);
     }
+    return { filtered, grouped };
+  }
+
+  async controlFolders(tenantId: string, viewer: JwtPayload, worksiteId?: string) {
+    await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
+    const { filtered, grouped } = await this.loadControlDocuments(tenantId, worksiteId);
 
     await this.itmAccess.logAccess(tenantId, viewer.sub, "VIEW", "ItmControlFolder", worksiteId ?? "all", {
       documentCount: filtered.length
@@ -69,7 +74,35 @@ export class SsmItmPortalService {
         key,
         label: key.replace("_", " "),
         count: docs.length,
-        documents: docs.filter((doc) => doc.activeVersion)
+        documents: docs
+          .filter((doc) => doc.activeVersion)
+          .map((doc) => {
+            const version = doc.activeVersion!;
+            return {
+              id: doc.id,
+              title: doc.title,
+              type: doc.type,
+              status: doc.status,
+              entityName: doc.entityName,
+              targetType: doc.targetType,
+              targetRefId: doc.targetRefId,
+              targetLabel: doc.targetLabel,
+              isControlFolder: doc.isControlFolder,
+              createdAt: doc.createdAt.toISOString(),
+              updatedAt: doc.updatedAt.toISOString(),
+              activeVersion: {
+                id: version.id,
+                versionNumber: version.versionNumber,
+                fileName: version.fileName,
+                mimeType: version.mimeType,
+                fileSize: version.fileSize,
+                createdBy: version.createdBy,
+                createdAt: version.createdAt.toISOString(),
+                changeNote: version.changeNote,
+                isActive: true
+              }
+            };
+          })
       }))
     };
   }
@@ -179,7 +212,7 @@ export class SsmItmPortalService {
 
   async exportControlPackage(tenantId: string, viewer: JwtPayload, worksiteId?: string) {
     await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
-    const folders = await this.controlFolders(tenantId, viewer, worksiteId);
+    const { filtered, grouped } = await this.loadControlDocuments(tenantId, worksiteId);
     const zip = new JSZip();
     const warnings: string[] = [];
     let added = 0;
@@ -190,18 +223,18 @@ export class SsmItmPortalService {
         "Pachet control ITM/ISU",
         `Generat: ${new Date().toISOString()}`,
         `Punct de lucru: ${worksiteId ?? "toate"}`,
-        `Documente: ${folders.folders.reduce((sum, f) => sum + f.count, 0)}`
+        `Documente: ${filtered.length}`
       ].join("\n")
     );
 
-    for (const folder of folders.folders) {
-      for (const doc of folder.documents) {
+    for (const [key, docs] of grouped.entries()) {
+      for (const doc of docs) {
         const version = doc.activeVersion;
         if (!version?.storagePath) continue;
         try {
           await access(version.storagePath, constants.R_OK);
           const buffer = await readFile(version.storagePath);
-          const safeName = `${folder.key}/${doc.title}-${version.fileName}`.replace(/[^\w./-]+/g, "_");
+          const safeName = `${key}/${doc.title}-${version.fileName}`.replace(/[^\w./-]+/g, "_");
           zip.file(`documente/${safeName}`, buffer);
           added += 1;
         } catch {
