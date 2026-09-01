@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
-    "build": "tsc -p tsconfig.json && node scripts/copy-pdf-fonts.mjs",
+    "build": "prisma generate && tsc -p tsconfig.json && node scripts/copy-pdf-fonts.mjs",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
     "lint": "echo \"lint api\"",
     "test": "echo \"test api\"",
     "prisma:generate": "prisma generate",
