@@ -118,10 +118,12 @@ export interface SsmDocumentTemplateItem {
   targetLabel?: string | null;
   isControlFolder: boolean;
   checklistItems: string[];
+  bodyHtml?: string | null;
   hasFile?: boolean;
   fileName?: string | null;
   mimeType?: string | null;
   fileSize?: number | null;
+  editableInApp?: boolean;
   relatedModuleHint?: string | null;
   active: boolean;
   createdAt: string;

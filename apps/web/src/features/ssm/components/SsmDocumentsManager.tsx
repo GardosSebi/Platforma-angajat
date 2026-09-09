@@ -24,6 +24,7 @@ import {
   useSsmDocumentTypePolicies
 } from "../hooks/useSsmDocuments";
 import { ssmApi } from "../api/ssm.api";
+import { WordTemplateEditor } from "./WordTemplateEditor";
 
 type DocsTab = "library" | "upload" | "templates" | "control" | "policies";
 
@@ -132,9 +133,15 @@ function mutationErrorMessage(error: unknown): string {
 
 function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
   const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const templatesQuery = useQuery({
     queryKey: ["ssm", "document-templates"],
     queryFn: () => ssmApi.listDocumentTemplates()
+  });
+  const editorQuery = useQuery({
+    queryKey: ["ssm", "document-template", editingId],
+    queryFn: () => ssmApi.getDocumentTemplate(editingId!),
+    enabled: Boolean(editingId)
   });
   const seedMutation = useMutation({
     mutationFn: () => ssmApi.seedDocumentTemplates(),
@@ -144,6 +151,17 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
     mutationFn: ({ templateId, file }: { templateId: string; file: File }) =>
       ssmApi.uploadDocumentTemplateFile(templateId, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ssm", "document-templates"] })
+  });
+  const saveContentMutation = useMutation({
+    mutationFn: ({ templateId, bodyHtml }: { templateId: string; bodyHtml: string }) =>
+      ssmApi.saveDocumentTemplateContent(templateId, bodyHtml),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "document-templates"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "document-template"] })
+      ]);
+      setEditingId(null);
+    }
   });
   const createFromTemplateMutation = useMutation({
     mutationFn: (templateId: string) => ssmApi.createDocumentFromTemplate(templateId),
@@ -174,8 +192,26 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
           ) : null}
         </div>
         <p className="field-hint" style={{ marginTop: 0 }}>
-          IPSSM, PPP, registru, PSI și altele. Din șablon poți crea rapid un document.
+          Modele editabile (Word în platformă). Poți încărca PDF/Word/video sau deschide editorul in-app pentru
+          șabloane Word. Din șablon poți crea rapid un document versionat.
         </p>
+        {editingId && canEdit ? (
+          editorQuery.isLoading ? (
+            <p className="field-hint">Se încarcă editorul…</p>
+          ) : (
+            <WordTemplateEditor
+              title={editorQuery.data?.title ?? "Șablon"}
+              initialHtml={editorQuery.data?.bodyHtml ?? "<p></p>"}
+              isPending={saveContentMutation.isPending}
+              error={saveContentMutation.isError ? mutationErrorMessage(saveContentMutation.error) : null}
+              onSave={(bodyHtml) => saveContentMutation.mutate({ templateId: editingId, bodyHtml })}
+              onCancel={() => {
+                saveContentMutation.reset();
+                setEditingId(null);
+              }}
+            />
+          )
+        ) : null}
         <div className="ssm-history-list">
           {(templatesQuery.data?.items ?? []).map((t) => (
             <div key={t.id} className="ssm-history-item" style={{ alignItems: "flex-start" }}>
@@ -186,10 +222,16 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
                 </strong>
                 <div className="field-hint">
                   {t.title}
-                  {t.hasFile ? ` · ${t.fileName ?? "fișier"}` : " · fără fișier"}
+                  {t.hasFile ? ` · ${t.fileName ?? "fișier"}` : t.bodyHtml ? " · conținut editabil" : " · fără fișier"}
+                  {t.editableInApp ? " · editabil în platformă" : ""}
                   {t.relatedModuleHint ? ` · ${t.relatedModuleHint}` : ""}
                 </div>
                 <div className="ssm-inline-actions" style={{ marginTop: "0.35rem" }}>
+                  {canEdit && t.editableInApp !== false ? (
+                    <button type="button" className="btn-text" onClick={() => setEditingId(t.id)}>
+                      Editează în platformă
+                    </button>
+                  ) : null}
                   {canEdit ? (
                     <label className="btn-text">
                       Încarcă fișier
@@ -218,7 +260,7 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
                       Descarcă
                     </button>
                   ) : null}
-                  {canEdit && t.hasFile ? (
+                  {canEdit && (t.hasFile || t.bodyHtml) ? (
                     <button
                       type="button"
                       className="btn-secondary"
@@ -244,6 +286,11 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
         {createFromTemplateMutation.isSuccess ? (
           <p className="feedback success" role="status">
             Document creat din șablon.
+          </p>
+        ) : null}
+        {saveContentMutation.isSuccess ? (
+          <p className="feedback success" role="status">
+            Șablon Word salvat în platformă.
           </p>
         ) : null}
         {createFromTemplateMutation.isError ? (
@@ -468,7 +515,7 @@ export function SsmDocumentsManager() {
     if (canUploadDocuments) {
       tabs.push({ id: "upload", title: "Upload", caption: "Document nou" });
     }
-    tabs.push({ id: "templates", title: "Șabloane", caption: "Modele reutilizabile" });
+    tabs.push({ id: "templates", title: "Șabloane", caption: "Word editabil în platformă" });
     tabs.push({ id: "control", title: "Control ITM", caption: "Acces rapid" });
     if (canApproveDocuments) {
       tabs.push({ id: "policies", title: "Acces tipuri", caption: "Roluri pe categorie" });

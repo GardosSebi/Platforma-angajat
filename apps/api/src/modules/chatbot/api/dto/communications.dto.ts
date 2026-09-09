@@ -24,7 +24,7 @@ const CONTENT_TYPES = [
 const MESSAGE_TYPES = ["ANNOUNCEMENT", "QUESTION", "READ_CONFIRMATION"] as const;
 const REACTIONS = ["THUMBS_UP", "HEART", "CLAP", "CHECK"] as const;
 const CATEGORIES = ["GENERAL", "SAFETY_ALERT", "POLICY", "TRAINING_INFO", "SSM_COMPLIANCE", "HR_INFO"] as const;
-const AUDIENCE_TYPES = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE_GROUP", "EMPLOYEE", "CUSTOM"] as const;
+const AUDIENCE_TYPES = ["ALL", "WORKSITE", "DEPARTMENT", "JOB_POSITION", "EMPLOYEE_GROUP", "EMPLOYEE", "CUSTOM", "EXTERNAL"] as const;
 const CREATE_STATUSES = ["DRAFT", "PUBLISHED", "READY_TO_SEND"] as const;
 const UPDATE_STATUSES = ["DRAFT", "PUBLISHED", "SCHEDULED", "READY_TO_SEND", "ARCHIVED"] as const;
 
@@ -107,6 +107,11 @@ export class CreateAnnouncementDto {
   @IsArray()
   @IsString({ each: true })
   targetEmployeeIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  targetExternalContactIds?: string[];
 
   @IsOptional()
   @IsIn(CREATE_STATUSES)
@@ -205,6 +210,11 @@ export class UpdateAnnouncementDto {
   @IsArray()
   @IsString({ each: true })
   targetEmployeeIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  targetExternalContactIds?: string[];
 
   @IsOptional()
   @IsIn(UPDATE_STATUSES)

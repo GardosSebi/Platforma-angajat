@@ -37,6 +37,14 @@ class CreatePublishRightDto {
   @IsOptional()
   @IsBoolean()
   canManageTemplates?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canChat?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canCommunicateExternal?: boolean;
 }
 
 @Controller("chatbot/publish-rights")
@@ -48,6 +56,12 @@ export class CommunicationRightsController {
   @RequirePermissions(Permission.ADMIN_USERS_VIEW)
   list(@TenantId() tenantId: string) {
     return this.rights.list(tenantId);
+  }
+
+  @Get("me")
+  @RequirePermissions(Permission.COMMUNICATIONS_ANNOUNCEMENTS_VIEW)
+  myCapabilities(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.rights.myCapabilities(tenantId, user.sub, user.roles ?? []);
   }
 
   @Post()

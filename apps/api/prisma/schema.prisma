@@ -188,6 +188,7 @@ enum CommunicationAudienceType {
   EMPLOYEE_GROUP
   EMPLOYEE
   CUSTOM
+  EXTERNAL
 }
 
 enum CommunicationAnnouncementStatus {
@@ -387,6 +388,9 @@ model Tenant {
   legalEntities              LegalEntity[]
   itmAccessLogs              ItmAccessLog[]
   communicationPublishRights CommunicationPublishRight[]
+  externalContacts           ExternalContact[]
+  communicationChatChannels  CommunicationChatChannel[]
+  communicationChatMessages  CommunicationChatMessage[]
   ssmScheduledReports        SsmScheduledReport[]
   pushSubscriptions          PushSubscription[]
   tenantSsoConfig            TenantSsoConfig?
@@ -420,6 +424,7 @@ model User {
   inAppNotifications InAppNotification[]
   itmAccessLogs    ItmAccessLog[]
   communicationPublishRights CommunicationPublishRight[]
+  communicationChatMessages  CommunicationChatMessage[]
   pushSubscriptions PushSubscription[]
   passwordResetTokens PasswordResetToken[]
   itmInspectionVisits ItmInspectionVisit[]
@@ -465,6 +470,7 @@ model LegalEntity {
   ssmResponsibles SsmResponsible[]
   ssmDocuments    SsmDocument[]
   communicationPublishRights CommunicationPublishRight[]
+  communicationChatChannels  CommunicationChatChannel[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, cui])
@@ -498,6 +504,7 @@ model Worksite {
   userScopedRoles            UserScopedRole[]
   jobPositions               JobPosition[]
   communicationPublishRights CommunicationPublishRight[]
+  communicationChatChannels  CommunicationChatChannel[]
   ssmEipStocks               SsmEipStock[]
   ssmEipMovements            SsmEipMovement[]
   ssmGateVisits              SsmGateVisit[]
@@ -654,6 +661,7 @@ model EmployeeGroup {
   members         EmployeeGroupMember[]
   userScopedRoles UserScopedRole[]
   communicationPublishRights CommunicationPublishRight[]
+  communicationChatChannels  CommunicationChatChannel[]
 
   @@unique([tenantId, name])
   @@index([tenantId, active])
@@ -1462,6 +1470,7 @@ model CommunicationAnnouncement {
   audienceRefId     String?
   audienceLabel     String?
   targetEmployeeIds String[]                        @default([])
+  targetExternalContactIds String[]                 @default([])
   status            CommunicationAnnouncementStatus @default(DRAFT)
   publishAt         DateTime?
   expiresAt         DateTime?
@@ -1630,6 +1639,7 @@ model SsmDocumentTemplate {
   targetLabel     String?
   isControlFolder Boolean               @default(false)
   checklistItems  String[]              @default([])
+  bodyHtml        String?
   fileName        String?
   mimeType        String?
   fileSize        Int?
@@ -1981,6 +1991,8 @@ model CommunicationPublishRight {
   worksiteId         String?
   canPublish         Boolean                    @default(true)
   canManageTemplates Boolean                    @default(false)
+  canChat            Boolean                    @default(false)
+  canCommunicateExternal Boolean                @default(false)
   createdByUserId    String
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
@@ -1996,6 +2008,86 @@ model CommunicationPublishRight {
   @@index([tenantId, legalEntityId])
   @@index([tenantId, employeeGroupId])
   @@index([tenantId, worksiteId])
+}
+
+enum ExternalContactKind {
+  CONTRACTOR
+  PARTNER
+  EXTERNAL_SERVICE
+  OTHER
+}
+
+enum CommunicationChatChannelKind {
+  ALL
+  COMPANY
+  GROUP
+  WORKSITE
+  EXTERNAL
+}
+
+model ExternalContact {
+  id             String              @id @default(cuid())
+  tenantId       String
+  kind           ExternalContactKind @default(PARTNER)
+  organization   String
+  fullName       String
+  email          String
+  phone          String?
+  notes          String?
+  active         Boolean             @default(true)
+  createdByUserId String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  tenant   Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channels CommunicationChatChannel[]
+
+  @@index([tenantId, active])
+  @@index([tenantId, email])
+  @@unique([tenantId, email])
+}
+
+model CommunicationChatChannel {
+  id                String                       @id @default(cuid())
+  tenantId          String
+  kind              CommunicationChatChannelKind
+  name              String
+  legalEntityId     String?
+  employeeGroupId   String?
+  worksiteId        String?
+  externalContactId String?
+  createdByUserId   String
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity     LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  employeeGroup   EmployeeGroup? @relation(fields: [employeeGroupId], references: [id], onDelete: Cascade)
+  worksite        Worksite?      @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  externalContact ExternalContact? @relation(fields: [externalContactId], references: [id], onDelete: Cascade)
+  messages        CommunicationChatMessage[]
+
+  @@index([tenantId, kind])
+  @@index([tenantId, legalEntityId])
+  @@index([tenantId, employeeGroupId])
+  @@index([tenantId, worksiteId])
+  @@index([tenantId, externalContactId])
+}
+
+model CommunicationChatMessage {
+  id            String   @id @default(cuid())
+  tenantId      String
+  channelId     String
+  authorUserId  String
+  body          String
+  emailedTo     String?
+  createdAt     DateTime @default(now())
+
+  tenant  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel CommunicationChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author  User                     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, channelId, createdAt])
 }
 
 model SsmScheduledReport {

@@ -105,6 +105,17 @@ export const ssmApi = {
   getDocumentTemplateFileUrl(templateId: string) {
     return `/ssm/documents/templates/${templateId}/file`;
   },
+  getDocumentTemplate(templateId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmDocumentTemplateItem>(
+      `/ssm/documents/templates/${templateId}`
+    );
+  },
+  saveDocumentTemplateContent(templateId: string, bodyHtml: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmDocumentTemplateItem>(
+      `/ssm/documents/templates/${templateId}/content`,
+      { method: "PUT", body: JSON.stringify({ bodyHtml }) }
+    );
+  },
   createDocumentFromTemplate(templateId: string, payload?: { title?: string; targetLabel?: string }) {
     return httpClient<UploadSsmDocumentResponse>(`/ssm/documents/templates/${templateId}/create-document`, {
       method: "POST",

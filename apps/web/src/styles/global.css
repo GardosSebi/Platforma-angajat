@@ -6545,3 +6545,86 @@ button.ssm-doc-item:hover {
   margin-bottom: 0.75rem;
 }
 
+.ssm-word-editor {
+  margin-bottom: 1rem;
+}
+
+.ssm-word-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.ssm-word-placeholder-select select {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  font: inherit;
+  font-size: 0.82rem;
+  background: var(--color-surface);
+}
+
+.ssm-word-canvas {
+  min-height: 22rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  background: #fff;
+  line-height: 1.55;
+  overflow: auto;
+}
+
+.ssm-word-canvas:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.ssm-word-canvas h1 {
+  font-size: 1.35rem;
+  margin: 0 0 0.75rem;
+}
+
+.ssm-word-canvas h2 {
+  font-size: 1.1rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.ssm-word-canvas h3 {
+  font-size: 1rem;
+  margin: 0.85rem 0 0.4rem;
+}
+
+.comms-chat-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.comms-chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: 26rem;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.comms-chat-bubble {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  background: #fff;
+}
+
+.comms-chat-bubble.mine {
+  background: var(--color-primary-muted);
+  border-color: transparent;
+}
+
+@media (max-width: 800px) {
+  .comms-chat-layout {
+    grid-template-columns: 1fr;
+  }
+}
+

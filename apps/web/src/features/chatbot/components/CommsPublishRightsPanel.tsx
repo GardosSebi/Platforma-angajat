@@ -21,7 +21,9 @@ const EMPTY_FORM: CreateCommunicationPublishRightRequest = {
   userId: "",
   scopeType: "ALL",
   canPublish: true,
-  canManageTemplates: false
+  canManageTemplates: false,
+  canChat: false,
+  canCommunicateExternal: false
 };
 
 function scopeLabel(row: {
@@ -105,6 +107,8 @@ export function CommsPublishRightsPanel() {
       scopeType: form.scopeType,
       canPublish: form.canPublish ?? true,
       canManageTemplates: form.canManageTemplates ?? false,
+      canChat: form.canChat ?? false,
+      canCommunicateExternal: form.canCommunicateExternal ?? false,
       legalEntityId: form.scopeType === "LEGAL_ENTITY" ? form.legalEntityId || null : null,
       employeeGroupId: form.scopeType === "EMPLOYEE_GROUP" ? form.employeeGroupId || null : null,
       worksiteId: form.scopeType === "WORKSITE" ? form.worksiteId || null : null
@@ -135,10 +139,10 @@ export function CommsPublishRightsPanel() {
   return (
     <div className="form-stack">
       <form className="card form-stack comms-panel" onSubmit={onSubmit}>
-        <h2 className="card-title">Drepturi de publicare comunicări</h2>
+        <h2 className="card-title">Drepturi de comunicare</h2>
         <p className="comms-toolbar-hint">
-          Acordă utilizatorilor dreptul de a publica anunțuri și/sau de a administra șabloane, pe scopuri
-          organizaționale.
+          Cap. 4.5: drepturi de chat pe companie/grup, publicare internă și comunicare externă (contractori,
+          parteneri).
         </p>
 
         <FieldSelect
@@ -227,6 +231,22 @@ export function CommsPublishRightsPanel() {
             />
             Poate administra șabloane
           </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={form.canChat ?? false}
+              onChange={(event) => setForm((prev) => ({ ...prev, canChat: event.target.checked }))}
+            />
+            Poate folosi chat pe acest scop (companie/grup)
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={form.canCommunicateExternal ?? false}
+              onChange={(event) => setForm((prev) => ({ ...prev, canCommunicateExternal: event.target.checked }))}
+            />
+            Poate comunica în afara firmei
+          </label>
         </div>
 
         <button className="btn-primary" type="submit" disabled={createRight.isPending}>
@@ -255,9 +275,14 @@ export function CommsPublishRightsPanel() {
                 <span className="muted"> · {scopeLabel(row)}</span>
                 <span className="muted">
                   {" "}
-                  · {row.canPublish ? "Publicare" : ""}
-                  {row.canPublish && row.canManageTemplates ? ", " : ""}
-                  {row.canManageTemplates ? "Șabloane" : ""}
+                  · {[
+                    row.canPublish ? "Publicare internă" : "",
+                    row.canChat ? "Chat" : "",
+                    row.canCommunicateExternal ? "Extern" : "",
+                    row.canManageTemplates ? "Șabloane" : ""
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || "fără acțiuni"}
                 </span>
                 <span className="muted"> · Adăugat: {formatCommsDate(row.createdAt)}</span>
               </div>

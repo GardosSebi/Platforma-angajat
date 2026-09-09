@@ -94,3 +94,10 @@ export class UpdateSsmDocumentTemplateDto {
   @IsBoolean()
   active?: boolean;
 }
+
+export class SaveSsmDocumentTemplateContentDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200000)
+  bodyHtml!: string;
+}

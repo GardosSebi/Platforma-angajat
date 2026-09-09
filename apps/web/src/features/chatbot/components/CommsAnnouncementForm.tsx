@@ -65,8 +65,9 @@ export function CommsAnnouncementForm({
   const [uploadPending, setUploadPending] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const needsSegment = audienceOptions.length > 0;
+  const needsSegment = audienceOptions.length > 0 && form.audienceType !== "EXTERNAL";
   const needsCustomList = form.audienceType === "CUSTOM";
+  const needsExternalList = form.audienceType === "EXTERNAL";
   const showLinkField =
     form.contentType === "LINK" ||
     form.contentType === "DOCUMENT" ||
@@ -360,6 +361,44 @@ export function CommsAnnouncementForm({
               (option) => option.label
             )}
           />
+        ) : null}
+        {needsExternalList ? (
+          <div className="field">
+            <span>Destinatari externi</span>
+            <p className="field-hint">Contractori și parteneri din afara firmei. Mesajul se trimite pe email.</p>
+            {audienceOptions.length === 0 ? (
+              <p className="field-hint">Nu există contacte externe. Adaugă-le din tab-ul Chat / Externi.</p>
+            ) : (
+              <div className="form-stack">
+                {audienceOptions.map((option) => {
+                  const selected = (form.targetExternalContactIdsCsv ?? "")
+                    .split(",")
+                    .map((id) => id.trim())
+                    .filter(Boolean);
+                  const checked = selected.includes(option.id);
+                  return (
+                    <label key={option.id} className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = checked
+                            ? selected.filter((id) => id !== option.id)
+                            : [...selected, option.id];
+                          onChange({
+                            targetExternalContactIdsCsv: next.join(", "),
+                            audienceRefId: next[0] ?? "",
+                            audienceLabel: next.length ? `${next.length} destinatari externi` : ""
+                          });
+                        }}
+                      />
+                      {option.label}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : null}
         {needsCustomList ? (
           <div className="field">

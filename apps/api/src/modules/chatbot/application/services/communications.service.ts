@@ -62,7 +62,8 @@ function audienceLabel(audienceType: CommunicationAudienceType): string {
     JOB_POSITION: "Post",
     EMPLOYEE_GROUP: "Grup angajați",
     EMPLOYEE: "Angajat",
-    CUSTOM: "Listă personalizată"
+    CUSTOM: "Listă personalizată",
+    EXTERNAL: "Comunicare externă"
   };
   return labels[audienceType];
 }
@@ -241,7 +242,14 @@ export class CommunicationsService {
 
   async createAnnouncement(tenantId: string, actorId: string, dto: CreateAnnouncementDto, viewer?: JwtPayload) {
     const scope = await this.scopeFor(viewer, tenantId);
-    await this.assertAudience(tenantId, dto.audienceType, dto.audienceRefId, dto.targetEmployeeIds, scope);
+    await this.assertAudience(
+      tenantId,
+      dto.audienceType,
+      dto.audienceRefId,
+      dto.targetEmployeeIds,
+      scope,
+      dto.targetExternalContactIds
+    );
     if (viewer) {
       await this.publishRights.assertCanPublish(
         tenantId,
@@ -278,6 +286,7 @@ export class CommunicationsService {
         audienceRefId: clean(dto.audienceRefId),
         audienceLabel: clean(dto.audienceLabel),
         targetEmployeeIds: dedupe(dto.targetEmployeeIds),
+        targetExternalContactIds: dedupe(dto.targetExternalContactIds),
         status: statusForPublish(dto.status, publishAt),
         publishAt,
         expiresAt: parseOptionalDate(dto.expiresAt),
@@ -316,7 +325,15 @@ export class CommunicationsService {
     const audienceType = dto.audienceType ?? current.audienceType;
     const audienceRefId = dto.audienceRefId ?? current.audienceRefId ?? undefined;
     const targetEmployeeIds = dto.targetEmployeeIds ?? current.targetEmployeeIds;
-    await this.assertAudience(tenantId, audienceType, audienceRefId, targetEmployeeIds, scope);
+    const targetExternalContactIds = dto.targetExternalContactIds ?? current.targetExternalContactIds;
+    await this.assertAudience(
+      tenantId,
+      audienceType,
+      audienceRefId,
+      targetEmployeeIds,
+      scope,
+      targetExternalContactIds
+    );
 
     const publishAt = dto.publishAt === undefined ? current.publishAt : parseOptionalDate(dto.publishAt);
     const data = {
@@ -336,6 +353,8 @@ export class CommunicationsService {
       audienceRefId: dto.audienceRefId === undefined ? undefined : clean(dto.audienceRefId) ?? null,
       audienceLabel: dto.audienceLabel === undefined ? undefined : clean(dto.audienceLabel) ?? null,
       targetEmployeeIds: dto.targetEmployeeIds === undefined ? undefined : dedupe(dto.targetEmployeeIds),
+      targetExternalContactIds:
+        dto.targetExternalContactIds === undefined ? undefined : dedupe(dto.targetExternalContactIds),
       status: dto.status ? statusForPublish(dto.status, publishAt) : undefined,
       publishAt,
       expiresAt: dto.expiresAt === undefined ? undefined : parseOptionalDate(dto.expiresAt) ?? null,
@@ -424,6 +443,7 @@ export class CommunicationsService {
         audienceRefId: source.audienceRefId,
         audienceLabel: source.audienceLabel,
         targetEmployeeIds: source.targetEmployeeIds,
+        targetExternalContactIds: source.targetExternalContactIds,
         status: CommunicationAnnouncementStatus.DRAFT,
         templateId: source.templateId,
         duplicatedFromId: source.id,
@@ -876,6 +896,9 @@ export class CommunicationsService {
   }
 
   private async resolveAudienceEmployeeIds(tenantId: string, row: CommunicationAnnouncement): Promise<string[]> {
+    if (row.audienceType === CommunicationAudienceType.EXTERNAL) {
+      return [];
+    }
     if (row.audienceType === CommunicationAudienceType.ALL) {
       const rows = await this.prisma.employee.findMany({
         where: { tenantId, active: true },
@@ -918,6 +941,22 @@ export class CommunicationsService {
   }
 
   private async notifyAnnouncementAudience(tenantId: string, row: CommunicationAnnouncement) {
+    if (row.audienceType === CommunicationAudienceType.EXTERNAL) {
+      const ids = dedupe(row.targetExternalContactIds);
+      if (!ids.length) return;
+      const contacts = await this.prisma.externalContact.findMany({
+        where: { tenantId, id: { in: ids }, active: true }
+      });
+      for (const contact of contacts) {
+        await this.mail.sendMail({
+          to: contact.email,
+          subject: `Comunicare: ${row.title}`,
+          text: `${row.body}\n\nAcest mesaj a fost trimis din platforma internă către ${contact.organization}.`
+        });
+      }
+      return;
+    }
+
     const employeeIds = await this.resolveAudienceEmployeeIds(tenantId, row);
     if (!employeeIds.length) return;
 
@@ -1046,7 +1085,8 @@ export class CommunicationsService {
     audienceType: CommunicationAudienceType,
     audienceRefId?: string | null,
     targetEmployeeIds?: string[],
-    scope: WorksiteViewerScope = { mode: "tenant" }
+    scope: WorksiteViewerScope = { mode: "tenant" },
+    targetExternalContactIds?: string[]
   ) {
     const scopedIds = worksiteIdsFromScope(scope);
     if (scopedIds !== null) {
@@ -1055,6 +1095,23 @@ export class CommunicationsService {
           "Nu poți trimite anunțuri către toți angajații. Audiența este limitată la punctul tău de lucru."
         );
       }
+      if (audienceType === CommunicationAudienceType.EXTERNAL) {
+        throw new ForbiddenException("Comunicarea externă nu este disponibilă pe contul limitat la punctul de lucru.");
+      }
+    }
+
+    if (audienceType === CommunicationAudienceType.EXTERNAL) {
+      const ids = dedupe(targetExternalContactIds);
+      if (!ids.length) {
+        throw new BadRequestException("Comunicarea externă necesită cel puțin un contractor/partener.");
+      }
+      const count = await this.prisma.externalContact.count({
+        where: { tenantId, active: true, id: { in: ids } }
+      });
+      if (count !== ids.length) {
+        throw new NotFoundException("Unul sau mai mulți destinatari externi nu au fost găsiți sau sunt inactivi.");
+      }
+      return;
     }
 
     if (audienceType === CommunicationAudienceType.ALL) return;
@@ -1129,6 +1186,9 @@ export class CommunicationsService {
     scope: WorksiteViewerScope = { mode: "tenant" }
   ): Promise<number> {
     const allTargets = await this.resolveAudienceEmployeeIds(tenantId, row);
+    if (row.audienceType === CommunicationAudienceType.EXTERNAL) {
+      return dedupe(row.targetExternalContactIds).length;
+    }
     const scopedIds = worksiteIdsFromScope(scope);
     if (scopedIds === null) {
       return allTargets.length;
@@ -1213,6 +1273,7 @@ export class CommunicationsService {
           audienceRefId: row.audienceRefId,
           audienceLabel: row.audienceLabel,
           targetEmployeeIds: row.targetEmployeeIds,
+          targetExternalContactIds: row.targetExternalContactIds,
           status: row.status,
           publishAt: row.publishAt,
           expiresAt: row.expiresAt,

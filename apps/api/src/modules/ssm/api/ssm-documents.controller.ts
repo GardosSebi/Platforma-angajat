@@ -29,6 +29,7 @@ import { ListSsmDocumentsDto } from "./dto/list-ssm-documents.dto";
 import { RevertSsmDocumentDto } from "./dto/revert-ssm-document.dto";
 import {
   CreateSsmDocumentTemplateDto,
+  SaveSsmDocumentTemplateContentDto,
   UpdateSsmDocumentTemplateDto
 } from "./dto/ssm-document-template.dto";
 import { UpsertSsmDocumentTypePolicyDto } from "./dto/ssm-document-type-policy.dto";
@@ -87,6 +88,23 @@ export class SsmDocumentsController {
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
   listTemplates(@TenantId() tenantId: string) {
     return this.documentsService.listTemplates(tenantId);
+  }
+
+  @Get("templates/:templateId")
+  @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
+  getTemplate(@TenantId() tenantId: string, @Param("templateId") templateId: string) {
+    return this.documentsService.getTemplate(tenantId, templateId);
+  }
+
+  @Put("templates/:templateId/content")
+  @RequirePermissions(Permission.SSM_DOCUMENT_EDIT)
+  saveTemplateContent(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("templateId") templateId: string,
+    @Body() dto: SaveSsmDocumentTemplateContentDto
+  ) {
+    return this.documentsService.saveTemplateContent(tenantId, user.sub, templateId, dto);
   }
 
   @Post("templates/seed-defaults")

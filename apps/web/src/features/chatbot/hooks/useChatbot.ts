@@ -5,7 +5,10 @@ import type {
   UpdateCommunicationAnnouncementRequest,
   UpdateCommunicationTemplateRequest
 } from "@repo/shared-types/communications";
-import type { CreateCommunicationPublishRightRequest } from "@repo/shared-types/communication-rights";
+import type {
+  CreateCommunicationPublishRightRequest,
+  CreateExternalContactRequest
+} from "@repo/shared-types/communication-rights";
 import type { PaginationParams } from "@repo/shared-types/pagination";
 import { chatbotApi } from "../api/chatbot.api";
 
@@ -182,6 +185,75 @@ export function useDeletePublishRight() {
     mutationFn: (id: string) => chatbotApi.deletePublishRight(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["chatbot", "publish-rights"] });
+    }
+  });
+}
+
+export function useMyCommunicationRights(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "my-rights"],
+    queryFn: chatbotApi.myCommunicationRights,
+    enabled
+  });
+}
+
+export function useExternalContacts(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "external-contacts"],
+    queryFn: chatbotApi.listExternalContacts,
+    enabled
+  });
+}
+
+export function useCreateExternalContact() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateExternalContactRequest) => chatbotApi.createExternalContact(payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["chatbot", "external-contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["chatbot", "chat-channels"] })
+      ]);
+    }
+  });
+}
+
+export function useDeactivateExternalContact() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => chatbotApi.deactivateExternalContact(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["chatbot", "external-contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["chatbot", "chat-channels"] })
+      ]);
+    }
+  });
+}
+
+export function useChatChannels(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "chat-channels"],
+    queryFn: chatbotApi.listChatChannels,
+    enabled
+  });
+}
+
+export function useChatMessages(channelId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "chat-messages", channelId],
+    queryFn: () => chatbotApi.listChatMessages(channelId),
+    enabled: enabled && Boolean(channelId),
+    refetchInterval: 8000
+  });
+}
+
+export function usePostChatMessage(channelId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => chatbotApi.postChatMessage(channelId, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["chatbot", "chat-messages", channelId] });
     }
   });
 }

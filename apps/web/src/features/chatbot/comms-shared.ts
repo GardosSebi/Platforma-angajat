@@ -28,7 +28,8 @@ export const AUDIENCE_TYPES: CommunicationAudienceType[] = [
   "JOB_POSITION",
   "EMPLOYEE_GROUP",
   "EMPLOYEE",
-  "CUSTOM"
+  "CUSTOM",
+  "EXTERNAL"
 ];
 
 export const CONTENT_TYPE_LABELS: Record<CommunicationContentType, string> = {
@@ -65,10 +66,11 @@ export const AUDIENCE_LABELS: Record<CommunicationAudienceType, string> = {
   JOB_POSITION: "Post",
   EMPLOYEE_GROUP: "Grup angajați",
   EMPLOYEE: "Angajat individual",
-  CUSTOM: "Listă personalizată"
+  CUSTOM: "Listă personalizată",
+  EXTERNAL: "Extern (contractori / parteneri)"
 };
 
-export type CommsTab = "list" | "compose" | "templates" | "reminders" | "calendar" | "usage" | "rights";
+export type CommsTab = "list" | "compose" | "templates" | "reminders" | "calendar" | "usage" | "rights" | "chat";
 
 export function formatCommsDate(value?: string | null): string {
   if (!value) return "—";
@@ -94,6 +96,7 @@ export const TRANSLATION_LOCALE_LABELS: Record<string, string> = {
 
 export type AnnouncementFormFields = CreateCommunicationAnnouncementRequest & {
   targetEmployeeIdsCsv: string;
+  targetExternalContactIdsCsv: string;
   translationRoTitle: string;
   translationRoBody: string;
   translationEnTitle: string;
@@ -148,6 +151,7 @@ export function announcementToForm(item: CommunicationAnnouncementItem): Announc
     reminderAt: toDatetimeLocalValue(item.reminderAt),
     templateId: item.templateId ?? undefined,
     targetEmployeeIdsCsv: item.targetEmployeeIds.join(", "),
+    targetExternalContactIdsCsv: (item.targetExternalContactIds ?? []).join(", "),
     translationRoTitle: ro?.title ?? "",
     translationRoBody: ro?.body ?? "",
     translationEnTitle: en?.title ?? "",
@@ -156,8 +160,15 @@ export function announcementToForm(item: CommunicationAnnouncementItem): Announc
 }
 
 export function buildAnnouncementPayload(form: AnnouncementFormFields): CreateCommunicationAnnouncementRequest {
-  const { targetEmployeeIdsCsv, translationRoTitle, translationRoBody, translationEnTitle, translationEnBody, ...rest } =
-    form;
+  const {
+    targetEmployeeIdsCsv,
+    targetExternalContactIdsCsv,
+    translationRoTitle,
+    translationRoBody,
+    translationEnTitle,
+    translationEnBody,
+    ...rest
+  } = form;
   const translations: CommunicationTranslations = {};
   if (translationRoTitle.trim() || translationRoBody.trim()) {
     translations.ro = {
@@ -186,6 +197,13 @@ export function buildAnnouncementPayload(form: AnnouncementFormFields): CreateCo
     targetEmployeeIds:
       form.audienceType === "CUSTOM"
         ? targetEmployeeIdsCsv
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : undefined,
+    targetExternalContactIds:
+      form.audienceType === "EXTERNAL"
+        ? targetExternalContactIdsCsv
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean)

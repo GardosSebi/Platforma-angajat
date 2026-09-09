@@ -1,5 +1,5 @@
 import { createReadStream } from "fs";
-import { access, mkdir, writeFile } from "fs/promises";
+import { access, mkdir, readFile, writeFile } from "fs/promises";
 import { constants } from "fs";
 import { extname, resolve } from "path";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
@@ -11,6 +11,7 @@ import { resolveSsmViewerScope } from "../../api/ssm-viewer-scope";
 import { CreateSsmDocumentDto } from "../../api/dto/create-ssm-document.dto";
 import {
   CreateSsmDocumentTemplateDto,
+  SaveSsmDocumentTemplateContentDto,
   UpdateSsmDocumentTemplateDto
 } from "../../api/dto/ssm-document-template.dto";
 import { resolvePagination } from "../../../../common/dto/pagination-query.dto";
@@ -19,6 +20,13 @@ import { ListSsmDocumentsDto } from "../../api/dto/list-ssm-documents.dto";
 import { ItmAccessService } from "./itm-access.service";
 import { SystemRole } from "../../../../common/prisma-enums";
 import { SsmTrainingAutomationService } from "./ssm-training-automation.service";
+import {
+  defaultTemplateHtml,
+  docxBufferToHtml,
+  htmlToDocxBuffer,
+  isWordMimeOrName,
+  sanitizeTemplateHtml
+} from "../word-template.util";
 import {
   assertDocumentTypeAccess,
   canAccessDocumentType,
@@ -960,10 +968,12 @@ export class SsmDocumentsService {
         targetLabel: row.targetLabel,
         isControlFolder: row.isControlFolder,
         checklistItems: row.checklistItems,
+        bodyHtml: row.bodyHtml,
         hasFile: Boolean(row.storagePath),
         fileName: row.fileName,
         mimeType: row.mimeType,
         fileSize: row.fileSize,
+        editableInApp: this.isTemplateEditableInApp(row),
         relatedModuleHint: DOCUMENT_TYPE_MODULE_HINTS[row.type] ?? null,
         active: row.active,
         createdAt: row.createdAt,
@@ -983,6 +993,7 @@ export class SsmDocumentsService {
         targetLabel: dto.targetLabel?.trim(),
         isControlFolder: dto.isControlFolder ?? false,
         checklistItems: dto.checklistItems ?? [],
+        bodyHtml: defaultTemplateHtml(dto.title.trim(), dto.checklistItems ?? []),
         active: dto.active ?? true,
         createdBy: actorId
       }
@@ -1017,6 +1028,12 @@ export class SsmDocumentsService {
         active: dto.active
       }
     });
+    if (dto.checklistItems && !existing.bodyHtml) {
+      await this.prisma.ssmDocumentTemplate.update({
+        where: { id },
+        data: { bodyHtml: defaultTemplateHtml(dto.title?.trim() || existing.title, dto.checklistItems) }
+      });
+    }
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -1127,13 +1144,23 @@ export class SsmDocumentsService {
     const absolutePath = resolve(targetDir, fileName);
     await writeFile(absolutePath, upload.buffer);
 
+    let bodyHtml: string | undefined;
+    if (isWordMimeOrName(upload.mimetype, upload.originalname) && upload.originalname.toLowerCase().endsWith(".docx")) {
+      try {
+        bodyHtml = await docxBufferToHtml(upload.buffer);
+      } catch {
+        bodyHtml = undefined;
+      }
+    }
+
     await this.prisma.ssmDocumentTemplate.update({
       where: { id: templateId },
       data: {
         fileName: upload.originalname,
         mimeType: upload.mimetype,
         fileSize: upload.size,
-        storagePath: absolutePath
+        storagePath: absolutePath,
+        ...(bodyHtml ? { bodyHtml } : {})
       }
     });
     await this.auditLog.write({
@@ -1149,8 +1176,90 @@ export class SsmDocumentsService {
       templateId,
       fileName: upload.originalname,
       mimeType: upload.mimetype,
-      hasFile: true
+      hasFile: true,
+      editableInApp: Boolean(bodyHtml) || isWordMimeOrName(upload.mimetype, upload.originalname)
     };
+  }
+
+  async getTemplate(tenantId: string, templateId: string) {
+    const template = await this.prisma.ssmDocumentTemplate.findFirst({
+      where: { id: templateId, tenantId }
+    });
+    if (!template) {
+      throw new NotFoundException("Șablonul de document nu a fost găsit.");
+    }
+    return {
+      id: template.id,
+      name: template.name,
+      title: template.title,
+      type: template.type,
+      targetType: template.targetType,
+      targetLabel: template.targetLabel,
+      isControlFolder: template.isControlFolder,
+      checklistItems: template.checklistItems,
+      bodyHtml:
+        template.bodyHtml ??
+        (this.isTemplateEditableInApp(template)
+          ? defaultTemplateHtml(template.title, template.checklistItems)
+          : null),
+      hasFile: Boolean(template.storagePath),
+      fileName: template.fileName,
+      mimeType: template.mimeType,
+      fileSize: template.fileSize,
+      editableInApp: this.isTemplateEditableInApp(template),
+      relatedModuleHint: DOCUMENT_TYPE_MODULE_HINTS[template.type] ?? null,
+      active: template.active,
+      createdAt: template.createdAt,
+      updatedAt: template.updatedAt
+    };
+  }
+
+  async saveTemplateContent(
+    tenantId: string,
+    actorId: string,
+    templateId: string,
+    dto: SaveSsmDocumentTemplateContentDto
+  ) {
+    const template = await this.prisma.ssmDocumentTemplate.findFirst({
+      where: { id: templateId, tenantId }
+    });
+    if (!template) {
+      throw new NotFoundException("Șablonul de document nu a fost găsit.");
+    }
+    if (!this.isTemplateEditableInApp(template)) {
+      throw new BadRequestException(
+        "Acest șablon nu este editabil în platformă (PDF/video). Încarcă un fișier Word sau creează conținutul din editor."
+      );
+    }
+    const bodyHtml = sanitizeTemplateHtml(dto.bodyHtml);
+    const buffer = await htmlToDocxBuffer(bodyHtml, template.title);
+    const originalName = template.fileName?.replace(/\.(pdf|mp4|mov|avi|mkv|doc)$/i, ".docx") || `${template.name}.docx`;
+    const fileName = `template-${Date.now()}-${sanitizeFilename(originalName.endsWith(".docx") ? originalName : `${originalName}.docx`)}`;
+    const targetDir = resolve(process.cwd(), "uploads", "ssm-document-templates", tenantId, templateId);
+    await mkdir(targetDir, { recursive: true });
+    const absolutePath = resolve(targetDir, fileName);
+    await writeFile(absolutePath, buffer);
+
+    await this.prisma.ssmDocumentTemplate.update({
+      where: { id: templateId },
+      data: {
+        bodyHtml,
+        fileName: originalName.endsWith(".docx") ? originalName : `${template.name}.docx`,
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        fileSize: buffer.length,
+        storagePath: absolutePath
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "DOCUMENT_TEMPLATE_EDITED_IN_APP",
+      entityType: "SsmDocumentTemplate",
+      entityId: templateId,
+      payload: { bytes: buffer.length }
+    });
+    return this.getTemplate(tenantId, templateId);
   }
 
   async streamTemplateFile(tenantId: string, templateId: string) {
@@ -1185,19 +1294,29 @@ export class SsmDocumentsService {
     if (!template) {
       throw new NotFoundException("Șablonul de document nu a fost găsit.");
     }
-    if (!template.storagePath || !template.fileName || !template.mimeType) {
-      throw new BadRequestException("Șablonul nu are fișier. Încărcați mai întâi un Word/PDF.");
+    let fileName = template.fileName;
+    let mimeType = template.mimeType;
+    let buffer: Buffer | null = null;
+    if (template.storagePath) {
+      try {
+        await access(template.storagePath, constants.R_OK);
+        buffer = await readFile(template.storagePath);
+      } catch {
+        buffer = null;
+      }
     }
-    try {
-      await access(template.storagePath, constants.R_OK);
-    } catch {
-      throw new NotFoundException("Fișierul șablonului nu a fost găsit pe server.");
+    if (!buffer && template.bodyHtml) {
+      buffer = await htmlToDocxBuffer(template.bodyHtml, template.title);
+      fileName = `${template.name}.docx`;
+      mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     }
-    const { readFile } = await import("fs/promises");
-    const buffer = await readFile(template.storagePath);
+    if (!buffer || !fileName || !mimeType) {
+      throw new BadRequestException("Șablonul nu are conținut. Editează-l în platformă sau încarcă un fișier Word.");
+    }
+
     const fakeFile = {
-      originalname: template.fileName,
-      mimetype: template.mimeType,
+      originalname: fileName,
+      mimetype: mimeType,
       size: template.fileSize ?? buffer.length,
       buffer
     } as Express.Multer.File;
@@ -1306,5 +1425,16 @@ export class SsmDocumentsService {
 
   documentModuleHints() {
     return DOCUMENT_TYPE_MODULE_HINTS;
+  }
+
+  private isTemplateEditableInApp(template: {
+    bodyHtml?: string | null;
+    storagePath?: string | null;
+    mimeType?: string | null;
+    fileName?: string | null;
+  }): boolean {
+    if (template.bodyHtml) return true;
+    if (!template.storagePath) return true;
+    return isWordMimeOrName(template.mimeType, template.fileName);
   }
 }

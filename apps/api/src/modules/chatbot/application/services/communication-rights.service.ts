@@ -15,6 +15,8 @@ export type CreatePublishRightInput = {
   worksiteId?: string | null;
   canPublish?: boolean;
   canManageTemplates?: boolean;
+  canChat?: boolean;
+  canCommunicateExternal?: boolean;
 };
 
 @Injectable()
@@ -34,6 +36,23 @@ export class CommunicationRightsService {
     });
   }
 
+  async myCapabilities(tenantId: string, userId: string, roles: string[]) {
+    const isAdmin = roles.includes(SystemRole.SSM_ADMIN);
+    const rights = await this.prisma.communicationPublishRight.findMany({
+      where: { tenantId, userId }
+    });
+    const tenantRightsCount = await this.prisma.communicationPublishRight.count({ where: { tenantId } });
+    const legacyOpen = tenantRightsCount === 0;
+    const isEntity = roles.includes(SystemRole.SSM_ENTITY_RESPONSIBLE);
+    return {
+      canPublish: isAdmin || legacyOpen || rights.some((r) => r.canPublish),
+      canChat: isAdmin || isEntity || rights.some((r) => r.canChat) || (legacyOpen && isEntity),
+      canCommunicateExternal: isAdmin || isEntity || rights.some((r) => r.canCommunicateExternal),
+      canManageTemplates: isAdmin || legacyOpen || rights.some((r) => r.canManageTemplates),
+      canManageRights: isAdmin || isEntity
+    };
+  }
+
   async create(tenantId: string, actorUserId: string, input: CreatePublishRightInput) {
     await this.assertRefs(tenantId, input);
     const user = await this.prisma.user.findFirst({ where: { id: input.userId, tenantId } });
@@ -49,6 +68,8 @@ export class CommunicationRightsService {
         worksiteId: input.scopeType === "WORKSITE" ? input.worksiteId ?? null : null,
         canPublish: input.canPublish ?? true,
         canManageTemplates: input.canManageTemplates ?? false,
+        canChat: input.canChat ?? false,
+        canCommunicateExternal: input.canCommunicateExternal ?? false,
         createdByUserId: actorUserId
       },
       include: {
@@ -67,9 +88,6 @@ export class CommunicationRightsService {
     return { deleted: true };
   }
 
-  /**
-   * SSM_ADMIN bypasses. Otherwise user must have a matching publish right for the audience.
-   */
   async assertCanPublish(
     tenantId: string,
     userId: string,
@@ -79,8 +97,12 @@ export class CommunicationRightsService {
   ) {
     if (roles.includes(SystemRole.SSM_ADMIN)) return;
 
+    if (audienceType === CommunicationAudienceType.EXTERNAL) {
+      await this.assertCanCommunicateExternal(tenantId, userId, roles);
+      return;
+    }
+
     const tenantRightsCount = await this.prisma.communicationPublishRight.count({ where: { tenantId } });
-    // Soft rollout: if no rights configured yet, keep legacy RBAC-only behavior.
     if (tenantRightsCount === 0) return;
 
     const rights = await this.prisma.communicationPublishRight.findMany({
@@ -161,6 +183,90 @@ export class CommunicationRightsService {
     if (!count) {
       throw new ForbiddenException("Nu ai drept de administrare șabloane comunicare.");
     }
+  }
+
+  async assertCanCommunicateExternal(tenantId: string, userId: string, roles: string[]) {
+    if (roles.includes(SystemRole.SSM_ADMIN) || roles.includes(SystemRole.SSM_ENTITY_RESPONSIBLE)) return;
+    const count = await this.prisma.communicationPublishRight.count({
+      where: { tenantId, userId, canCommunicateExternal: true }
+    });
+    if (!count) {
+      throw new ForbiddenException(
+        "Nu ai drept de comunicare externă. Cere administratorului permisiunea pentru contractori/parteneri."
+      );
+    }
+  }
+
+  async assertCanChatOnChannel(
+    tenantId: string,
+    userId: string,
+    roles: string[],
+    channel: {
+      kind: string;
+      legalEntityId?: string | null;
+      employeeGroupId?: string | null;
+      worksiteId?: string | null;
+    }
+  ) {
+    if (roles.includes(SystemRole.SSM_ADMIN) || roles.includes(SystemRole.SSM_ENTITY_RESPONSIBLE)) return;
+    if (channel.kind === "EXTERNAL") {
+      await this.assertCanCommunicateExternal(tenantId, userId, roles);
+      return;
+    }
+    const rights = await this.prisma.communicationPublishRight.findMany({
+      where: { tenantId, userId, canChat: true }
+    });
+    if (!rights.length) {
+      throw new ForbiddenException("Nu ai drept de chat pe companie/grup. Cere administratorului configurarea.");
+    }
+    if (rights.some((r) => r.scopeType === CommunicationPublishScope.ALL)) return;
+    if (
+      channel.kind === "COMPANY" &&
+      channel.legalEntityId &&
+      rights.some(
+        (r) => r.scopeType === CommunicationPublishScope.LEGAL_ENTITY && r.legalEntityId === channel.legalEntityId
+      )
+    ) {
+      return;
+    }
+    if (
+      channel.kind === "GROUP" &&
+      channel.employeeGroupId &&
+      rights.some(
+        (r) => r.scopeType === CommunicationPublishScope.EMPLOYEE_GROUP && r.employeeGroupId === channel.employeeGroupId
+      )
+    ) {
+      return;
+    }
+    if (
+      channel.kind === "WORKSITE" &&
+      channel.worksiteId &&
+      rights.some((r) => r.scopeType === CommunicationPublishScope.WORKSITE && r.worksiteId === channel.worksiteId)
+    ) {
+      return;
+    }
+    throw new ForbiddenException("Nu ai drept de chat pe acest canal.");
+  }
+
+  async listChatScopes(tenantId: string, userId: string, roles: string[]) {
+    if (roles.includes(SystemRole.SSM_ADMIN)) {
+      return this.prisma.communicationPublishRight.findMany({
+        where: { tenantId },
+        include: {
+          legalEntity: { select: { id: true, code: true, name: true } },
+          employeeGroup: { select: { id: true, name: true } },
+          worksite: { select: { id: true, code: true, name: true } }
+        }
+      });
+    }
+    return this.prisma.communicationPublishRight.findMany({
+      where: { tenantId, userId, canChat: true },
+      include: {
+        legalEntity: { select: { id: true, code: true, name: true } },
+        employeeGroup: { select: { id: true, name: true } },
+        worksite: { select: { id: true, code: true, name: true } }
+      }
+    });
   }
 
   private async assertRefs(tenantId: string, input: CreatePublishRightInput) {

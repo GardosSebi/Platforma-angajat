@@ -63,7 +63,8 @@ export const COMMUNICATION_AUDIENCE_TYPES = [
   "JOB_POSITION",
   "EMPLOYEE_GROUP",
   "EMPLOYEE",
-  "CUSTOM"
+  "CUSTOM",
+  "EXTERNAL"
 ] as const;
 export type CommunicationAudienceType = (typeof COMMUNICATION_AUDIENCE_TYPES)[number];
 
@@ -92,6 +93,7 @@ export interface CreateCommunicationAnnouncementRequest {
   audienceRefId?: string;
   audienceLabel?: string;
   targetEmployeeIds?: string[];
+  targetExternalContactIds?: string[];
   status?: "DRAFT" | "PUBLISHED" | "READY_TO_SEND";
   publishAt?: string;
   expiresAt?: string;
@@ -116,6 +118,7 @@ export interface UpdateCommunicationAnnouncementRequest {
   audienceRefId?: string;
   audienceLabel?: string;
   targetEmployeeIds?: string[];
+  targetExternalContactIds?: string[];
   status?: "DRAFT" | "PUBLISHED" | "SCHEDULED" | "READY_TO_SEND" | "ARCHIVED";
   publishAt?: string;
   expiresAt?: string;
@@ -140,6 +143,7 @@ export interface CommunicationAnnouncementItem {
   audienceRefId?: string | null;
   audienceLabel?: string | null;
   targetEmployeeIds: string[];
+  targetExternalContactIds?: string[];
   status: CommunicationAnnouncementStatus;
   publishAt?: string | null;
   expiresAt?: string | null;

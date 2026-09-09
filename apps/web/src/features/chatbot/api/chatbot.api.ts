@@ -1,6 +1,11 @@
 import type {
+  CommunicationChatChannelRow,
+  CommunicationChatMessageRow,
   CommunicationPublishRightRow,
-  CreateCommunicationPublishRightRequest
+  CreateCommunicationPublishRightRequest,
+  CreateExternalContactRequest,
+  ExternalContactRow,
+  MyCommunicationRights
 } from "@repo/shared-types/communication-rights";
 import type {
   CommunicationAnnouncementAnswerItem,
@@ -155,6 +160,35 @@ export const chatbotApi = {
   deletePublishRight(id: string) {
     return httpClient<{ deleted: true }>(`/chatbot/publish-rights/${id}`, {
       method: "DELETE"
+    });
+  },
+  myCommunicationRights() {
+    return httpClient<MyCommunicationRights>("/chatbot/publish-rights/me");
+  },
+  listExternalContacts() {
+    return httpClient<{ items: ExternalContactRow[] }>("/chatbot/external-contacts");
+  },
+  createExternalContact(payload: CreateExternalContactRequest) {
+    return httpClient<ExternalContactRow>("/chatbot/external-contacts", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  deactivateExternalContact(id: string) {
+    return httpClient<{ deactivated: true }>(`/chatbot/external-contacts/${id}`, {
+      method: "DELETE"
+    });
+  },
+  listChatChannels() {
+    return httpClient<{ items: CommunicationChatChannelRow[] }>("/chatbot/chat/channels");
+  },
+  listChatMessages(channelId: string) {
+    return httpClient<{ items: CommunicationChatMessageRow[] }>(`/chatbot/chat/channels/${channelId}/messages`);
+  },
+  postChatMessage(channelId: string, body: string) {
+    return httpClient<CommunicationChatMessageRow>(`/chatbot/chat/channels/${channelId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ body })
     });
   }
 };

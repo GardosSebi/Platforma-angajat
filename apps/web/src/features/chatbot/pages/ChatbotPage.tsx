@@ -32,6 +32,8 @@ import {
   useDeleteCommunicationTemplate,
   useDispatchCommunicationReminders,
   useDuplicateAnnouncement,
+  useExternalContacts,
+  useMyCommunicationRights,
   usePublishAnnouncement,
   useRetractAnnouncement,
   useUpdateAnnouncement,
@@ -55,6 +57,7 @@ import { CommsUsagePanel } from "../components/CommsUsagePanel";
 import { CommsRemindersPanel } from "../components/CommsRemindersPanel";
 import { CommsTemplatesPanel } from "../components/CommsTemplatesPanel";
 import { CommsPublishRightsPanel } from "../components/CommsPublishRightsPanel";
+import { CommsChatPanel } from "../components/CommsChatPanel";
 
 type FeedbackState = {
   type: "success" | "error";
@@ -75,6 +78,7 @@ const EMPTY_ANNOUNCEMENT: AnnouncementFormState = {
   contentUrl: "",
   reactionsEnabled: false,
   targetEmployeeIdsCsv: "",
+  targetExternalContactIdsCsv: "",
   translationRoTitle: "",
   translationRoBody: "",
   translationEnTitle: "",
@@ -101,12 +105,23 @@ export function ChatbotPage() {
   const canViewUsage = hasPermission(roles, "admin:usage:view");
   const canManagePublishRights =
     Boolean(session?.roles?.includes("SSM_ADMIN")) || hasPermission(roles, "admin:users:edit");
+  const myRightsQuery = useMyCommunicationRights();
+  const canUseChat =
+    hasPermission(roles, "communications:chat:view") ||
+    Boolean(myRightsQuery.data?.canChat) ||
+    Boolean(myRightsQuery.data?.canCommunicateExternal);
+  const canManageExternalContacts =
+    hasPermission(roles, "communications:external:manage") || Boolean(session?.roles?.includes("SSM_ADMIN"));
   const worksiteRestricted = isWorksiteScopedViewer(session?.roles);
 
-  const audienceTypesForForm = useMemo(
-    () => (worksiteRestricted ? AUDIENCE_TYPES.filter((type) => type !== "ALL") : AUDIENCE_TYPES),
-    [worksiteRestricted]
-  );
+  const audienceTypesForForm = useMemo(() => {
+    let types = AUDIENCE_TYPES;
+    if (worksiteRestricted) types = types.filter((type) => type !== "ALL" && type !== "EXTERNAL");
+    if (!myRightsQuery.data?.canCommunicateExternal && !canManageExternalContacts) {
+      types = types.filter((type) => type !== "EXTERNAL");
+    }
+    return types;
+  }, [canManageExternalContacts, myRightsQuery.data?.canCommunicateExternal, worksiteRestricted]);
 
   const announcementsPage = usePagination();
   const dashboardQuery = useChatbotDashboard(canViewDashboard);
@@ -127,6 +142,7 @@ export function ChatbotPage() {
   const departmentsLookup = useDepartmentsLookup();
   const jobPositionsLookup = useJobPositionsLookup();
   const employeesOptions = useEmployeeOptions();
+  const externalContactsQuery = useExternalContacts(canEditAnnouncements || canManageExternalContacts);
 
   const createAnnouncement = useCreateAnnouncement();
   const updateAnnouncement = useUpdateAnnouncement();
@@ -203,6 +219,14 @@ export function ChatbotPage() {
     if (announcementForm.audienceType === "EMPLOYEE_GROUP") {
       return (groupsLookup.data?.items ?? []).map((item) => ({ id: item.id, label: item.name }));
     }
+    if (announcementForm.audienceType === "EXTERNAL") {
+      return (externalContactsQuery.data?.items ?? [])
+        .filter((item) => item.active)
+        .map((item) => ({
+          id: item.id,
+          label: `${item.fullName} — ${item.organization} (${item.email})`
+        }));
+    }
     return [];
   }, [
     announcementForm.audienceType,
@@ -210,7 +234,8 @@ export function ChatbotPage() {
     employeesOptions.data?.items,
     groupsLookup.data?.items,
     jobPositionsLookup.data?.items,
-    worksitesLookup.data?.items
+    worksitesLookup.data?.items,
+    externalContactsQuery.data?.items
   ]);
 
   const employeeNameHint = (employeesOptions.data?.items ?? [])
@@ -232,6 +257,7 @@ export function ChatbotPage() {
     if (canViewDashboard) items.push({ id: "calendar", label: t("comms.tabs.calendar") });
     if (canViewUsage) items.push({ id: "usage", label: t("comms.tabs.usage") });
     if (canManagePublishRights) items.push({ id: "rights", label: t("comms.tabs.rights") });
+    if (canUseChat) items.push({ id: "chat", label: t("comms.tabs.chat") });
     if (canEditAnnouncements || reminders.length > 0) {
       items.push({
         id: "reminders",
@@ -243,6 +269,7 @@ export function ChatbotPage() {
     canEditAnnouncements,
     canEditTemplates,
     canManagePublishRights,
+    canUseChat,
     canViewDashboard,
     canViewUsage,
     editingAnnouncementId,
@@ -585,6 +612,8 @@ export function ChatbotPage() {
       ) : null}
 
       {tab === "rights" && canManagePublishRights ? <CommsPublishRightsPanel /> : null}
+
+      {tab === "chat" && canUseChat ? <CommsChatPanel canManageContacts={canManageExternalContacts} /> : null}
 
       {tab === "reminders" ? (
         <CommsRemindersPanel
