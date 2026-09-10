@@ -318,6 +318,28 @@ enum ItmInspectionVisitStatus {
   CLOSED
 }
 
+enum SsmCssmMemberRole {
+  PRESIDENT
+  SECRETARY
+  EMPLOYER_REPRESENTATIVE
+  EMPLOYEE_REPRESENTATIVE
+  OCCUPATIONAL_PHYSICIAN
+  DESIGNATED_WORKER
+  OTHER
+}
+
+enum SsmCssmMeetingKind {
+  ORDINARY
+  EXTRAORDINARY
+}
+
+enum SsmCssmMeetingStatus {
+  DRAFT
+  CONVENED
+  HELD
+  CANCELLED
+}
+
 enum EmployeeMaritalStatus {
   UNMARRIED
   MARRIED
@@ -402,6 +424,11 @@ model Tenant {
   ssmEipOrders               SsmEipOrder[]
   ssmEipRegisterSignoffs     SsmEipRegisterSignoff[]
   ssmMedicalAppointmentRequests SsmMedicalAppointmentRequest[]
+  ssmCssmCommittees          SsmCssmCommittee[]
+  ssmCssmMembers              SsmCssmMember[]
+  ssmCssmMeetings             SsmCssmMeeting[]
+  ssmCssmMeetingAttendees      SsmCssmMeetingAttendee[]
+  ssmCssmMinutes              SsmCssmMinutes[]
 }
 
 model User {
@@ -471,6 +498,7 @@ model LegalEntity {
   ssmDocuments    SsmDocument[]
   communicationPublishRights CommunicationPublishRight[]
   communicationChatChannels  CommunicationChatChannel[]
+  ssmCssmCommittees           SsmCssmCommittee[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, cui])
@@ -604,6 +632,9 @@ model Employee {
   groupMembers           EmployeeGroupMember[]
   ssmTrainingAssignments SsmTrainingAssignment[]
   ssmTrainingPlans       SsmTrainingPlan[]
+  ssmTrainingsAsTrainer   SsmTrainingPlan[]      @relation("SsmTrainingPlanTrainer")
+  ssmCssmMembers         SsmCssmMember[]
+  ssmCssmMeetingAttendees SsmCssmMeetingAttendee[]
   ssmEipMovements        SsmEipMovement[]
   ssmAccidentCases       SsmAccidentCase[]
   ssmMedicalControls     SsmMedicalControl[]
@@ -851,6 +882,9 @@ model SsmTrainingPlan {
   durationMinutes     Int?
   status              SsmTrainingPlanStatus @default(PENDING)
   blockedAdmission    Boolean               @default(false)
+  trainerEmployeeId   String?
+  trainerName         String?
+  trainerFunction     String?
   retentionArchivedAt DateTime?
   createdBy           String
   createdAt           DateTime              @default(now())
@@ -858,6 +892,7 @@ model SsmTrainingPlan {
 
   tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   employee     Employee                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  trainerEmployee Employee?           @relation("SsmTrainingPlanTrainer", fields: [trainerEmployeeId], references: [id], onDelete: SetNull)
   trainingType SsmTrainingType         @relation(fields: [trainingTypeId], references: [id], onDelete: Cascade)
   attempts     SsmTrainingTestAttempt[]
   signature    SsmTrainingSignature?
@@ -867,6 +902,7 @@ model SsmTrainingPlan {
   @@index([tenantId, dueAt, status])
   @@index([tenantId, blockedAdmission])
   @@index([tenantId, retentionArchivedAt])
+  @@index([tenantId, trainerEmployeeId])
 }
 
 model SsmTrainingTestAttempt {
@@ -2148,5 +2184,120 @@ model TenantSsoConfig {
   updatedAt         DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model SsmCssmCommittee {
+  id              String    @id @default(cuid())
+  tenantId        String
+  legalEntityId   String
+  name            String
+  decisionNumber  String?
+  decisionDate    DateTime?
+  constitutedAt   DateTime?
+  active          Boolean   @default(true)
+  notes           String?
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity  @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  members     SsmCssmMember[]
+  meetings    SsmCssmMeeting[]
+
+  @@index([tenantId, legalEntityId])
+  @@index([tenantId, active])
+}
+
+model SsmCssmMember {
+  id            String            @id @default(cuid())
+  tenantId      String
+  committeeId   String
+  employeeId    String?
+  fullName      String
+  role          SsmCssmMemberRole
+  functionTitle String?
+  appointedAt   DateTime?
+  termEndsAt    DateTime?
+  active        Boolean           @default(true)
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  committee SsmCssmCommittee      @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  employee  Employee?              @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  attendees SsmCssmMeetingAttendee[]
+
+  @@index([tenantId, committeeId, active])
+  @@index([tenantId, employeeId])
+}
+
+model SsmCssmMeeting {
+  id          String               @id @default(cuid())
+  tenantId    String
+  committeeId String
+  kind        SsmCssmMeetingKind    @default(ORDINARY)
+  status      SsmCssmMeetingStatus  @default(DRAFT)
+  title       String
+  scheduledAt DateTime
+  location    String?
+  agenda      String?
+  convenedAt  DateTime?
+  convenedBy  String?
+  heldAt      DateTime?
+  cancelledAt DateTime?
+  createdBy   String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  tenant    Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  committee SsmCssmCommittee        @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  attendees SsmCssmMeetingAttendee[]
+  minutes   SsmCssmMinutes?
+
+  @@index([tenantId, committeeId, scheduledAt])
+  @@index([tenantId, status, scheduledAt])
+}
+
+model SsmCssmMeetingAttendee {
+  id          String    @id @default(cuid())
+  tenantId    String
+  meetingId   String
+  memberId    String?
+  employeeId  String?
+  fullName    String
+  role        SsmCssmMemberRole?
+  present     Boolean   @default(false)
+  signature   String?
+  signedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  meeting SsmCssmMeeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member  SsmCssmMember?    @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  employee Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, meetingId])
+  @@unique([meetingId, memberId])
+}
+
+model SsmCssmMinutes {
+  id            String    @id @default(cuid())
+  tenantId      String
+  meetingId     String    @unique
+  number        String
+  topics        String?
+  decisions     String?
+  nextMeetingAt DateTime?
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  meeting SsmCssmMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, number])
 }
 

@@ -17,6 +17,7 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { TrainingTypeSelect } from "./TrainingTypeSelect";
+import { TrainingInstructorFields } from "./TrainingInstructorFields";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 import {
@@ -35,6 +36,7 @@ import {
   useTrainingPlans,
   useTrainingReminders,
   useTrainingTypes,
+  useUpdateTrainingPlan,
   useUpdateTrainingType,
   useUploadTrainingMaterial
 } from "../hooks/useSsmTrainingSuite";
@@ -70,7 +72,10 @@ const defaultPlan = (trainingTypeId = "", employeeId = ""): CreateSsmTrainingPla
   scheduledAt: new Date().toISOString(),
   dueAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
   materialTitle: "Material instruire",
-  materialUrl: ""
+  materialUrl: "",
+  trainerEmployeeId: "",
+  trainerName: "",
+  trainerFunction: ""
 });
 
 function mutationErrorMessage(error: unknown): string {
@@ -130,6 +135,7 @@ export function SsmTrainingSuiteManager() {
   const createType = useCreateTrainingType();
   const updateType = useUpdateTrainingType();
   const createPlan = useCreateTrainingPlan();
+  const updatePlan = useUpdateTrainingPlan();
   const completeMaterial = useMaterialComplete();
   const startMaterial = useStartMaterial();
   const uploadMaterial = useUploadTrainingMaterial();
@@ -153,6 +159,11 @@ export function SsmTrainingSuiteManager() {
   const [typeForm, setTypeForm] = useState<CreateSsmTrainingTypeRequest>(emptyTypeForm);
   const [editingTypeId, setEditingTypeId] = useState("");
   const [planForm, setPlanForm] = useState<CreateSsmTrainingPlanRequest>(defaultPlan());
+  const [trainerDraft, setTrainerDraft] = useState({
+    trainerEmployeeId: "",
+    trainerName: "",
+    trainerFunction: ""
+  });
   const [collectiveForm, setCollectiveForm] = useState({
     title: "Instructaj vizitatori / colaboratori",
     trainerName: "",
@@ -214,6 +225,11 @@ export function SsmTrainingSuiteManager() {
       setTestQuestions([]);
       setTestResult(null);
       setTestStartedAt(null);
+      setTrainerDraft({
+        trainerEmployeeId: activePlan.trainerEmployeeId ?? "",
+        trainerName: activePlan.trainerName ?? "",
+        trainerFunction: activePlan.trainerFunction ?? ""
+      });
     }
   }, [activePlan?.id]);
 
@@ -317,12 +333,20 @@ export function SsmTrainingSuiteManager() {
 
   const onCreatePlan = (event: FormEvent) => {
     event.preventDefault();
-    createPlan.mutate(planForm, {
-      onSuccess: (data) => {
-        setActivePlanId(data.id);
-        setTab("flow");
+    createPlan.mutate(
+      {
+        ...planForm,
+        trainerEmployeeId: planForm.trainerEmployeeId || undefined,
+        trainerName: planForm.trainerName?.trim() || undefined,
+        trainerFunction: planForm.trainerFunction?.trim() || undefined
+      },
+      {
+        onSuccess: (data) => {
+          setActivePlanId(data.id);
+          setTab("flow");
+        }
       }
-    });
+    );
   };
 
   const onGenerateCollective = (event: FormEvent) => {
@@ -440,6 +464,7 @@ export function SsmTrainingSuiteManager() {
                   <span>
                     {planStatusLabel(plan.status)} · scadență {new Date(plan.dueAt).toLocaleDateString("ro-RO")}
                     {plan.blockedAdmission ? " · blocare admitere" : ""}
+                    {plan.trainerName ? ` · instructor ${plan.trainerName}` : ""}
                   </span>
                   <span className={planStatusClass(plan.status)}>{plan.status}</span>
                 </button>
@@ -569,6 +594,7 @@ export function SsmTrainingSuiteManager() {
                 onChange={(e) => setPlanForm((p) => ({ ...p, dueAt: new Date(e.target.value).toISOString() }))}
               />
             </div>
+            <TrainingInstructorFields idPrefix="plan" value={planForm} onChange={setPlanForm} />
             <button
               className="btn-primary"
               type="submit"
@@ -924,7 +950,37 @@ export function SsmTrainingSuiteManager() {
                 </h4>
                 <p className="field-hint">
                   {activePlan.employeeName} · {planWorkflowLabel(activePlan)}
+                  {activePlan.trainerName
+                    ? ` · instructor ${activePlan.trainerName}${
+                        activePlan.trainerFunction ? `, ${activePlan.trainerFunction}` : ""
+                      }`
+                    : " · instructor neconfigurat"}
                 </p>
+
+                {showCatalogForms ? (
+                  <form
+                    className="form-stack"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      updatePlan.mutate({
+                        planId: activePlan.id,
+                        payload: {
+                          trainerEmployeeId: trainerDraft.trainerEmployeeId || null,
+                          trainerName: trainerDraft.trainerName.trim() || undefined,
+                          trainerFunction: trainerDraft.trainerFunction.trim() || undefined
+                        }
+                      });
+                    }}
+                  >
+                    <TrainingInstructorFields idPrefix="flow-trainer" value={trainerDraft} onChange={setTrainerDraft} />
+                    <button className="btn-secondary" type="submit" disabled={updatePlan.isPending}>
+                      {updatePlan.isPending ? "Se salvează…" : "Salvează instructorul pe fișa individuală"}
+                    </button>
+                    {updatePlan.isError ? (
+                      <p className="feedback error">{mutationErrorMessage(updatePlan.error)}</p>
+                    ) : null}
+                  </form>
+                ) : null}
 
                 <TrainingMaterialViewer
                   plan={activePlan}

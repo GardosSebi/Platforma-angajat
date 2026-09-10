@@ -34,6 +34,8 @@ export type Anexa11TrainingRow = {
   legalMinDurationHours?: number | null;
   score?: number | null;
   occupation?: string | null;
+  trainerName?: string | null;
+  trainerFunction?: string | null;
   signature?: Anexa11Signature | null;
 };
 
@@ -96,10 +98,11 @@ function drawHireBlock(
     doc.font(PdfFont.regular).fontSize(8);
   const date = plan ? formatRoDate(plan.completedAt ?? plan.scheduledAt) : "";
   const hours = plan ? hoursOf(plan) : "";
-  const instructor = plan?.signature?.responsibleSignedAt ? "Responsabil SSM" : "";
+  const instructor = plan?.trainerName?.trim() || "";
+  const instructorFunction = plan?.trainerFunction?.trim() || "";
   doc.text(
     `a fost efectuată la data ${dash(date)} timp de ${dash(hours)} ore, de către ${dash(instructor)} având funcția de ${
-      instructor ? "lucrător desemnat / responsabil SSM" : "—"
+      instructorFunction || (instructor ? "—" : "—")
     }.`
   );
   if (extraLine) doc.text(extraLine);
@@ -326,7 +329,7 @@ export function renderAnexa11IndividualSheet(input: {
         formatRoDate(row.completedAt ?? row.scheduledAt),
         row.materialTitle || row.typeName,
         row.score != null ? `${row.score}%` : "",
-        "Responsabil SSM"
+        row.trainerName || ""
       ]),
       { minRows: Math.max(4, tests.length) }
     );

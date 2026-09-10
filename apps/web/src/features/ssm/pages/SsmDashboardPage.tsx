@@ -14,6 +14,7 @@ import { SsmPsiManager } from "../components/SsmPsiManager";
 import { SsmComplianceDashboardManager } from "../components/SsmComplianceDashboardManager";
 import { SsmReportsManager } from "../components/SsmReportsManager";
 import { SsmGateManager } from "../components/SsmGateManager";
+import { SsmCssmManager } from "../components/SsmCssmManager";
 
 const SSM_SECTIONS: Array<{
   id: SsmSectionId;
@@ -77,6 +78,13 @@ const SSM_SECTIONS: Array<{
     caption: "Documente, echipamente, instruiri",
     description:
       "Lucrează pe secțiuni: documentație structurată, echipamente/verificări/alerte, instruiri unificate, responsabili și exerciții."
+  },
+  {
+    id: "cssm",
+    title: "CSSM",
+    caption: "Comisie, ședințe, PV",
+    description:
+      "Componența comitetului CSSM, convocări/ședințe și procese-verbale. Deciziile de numire rămân și la Documente (tip DECISION)."
   },
   {
     id: "compliance",
@@ -146,6 +154,8 @@ export function SsmDashboardPage() {
         return <SsmPppManager />;
       case "psi":
         return <SsmPsiManager />;
+      case "cssm":
+        return <SsmCssmManager />;
       case "compliance":
         return <SsmComplianceDashboardManager />;
       case "reports":

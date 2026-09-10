@@ -227,6 +227,9 @@ export interface CreateSsmTrainingPlanRequest {
   dueAt: string;
   materialTitle?: string;
   materialUrl?: string;
+  trainerEmployeeId?: string;
+  trainerName?: string;
+  trainerFunction?: string;
 }
 
 export interface CreateSsmTrainingPlanGroupRequest {
@@ -236,6 +239,9 @@ export interface CreateSsmTrainingPlanGroupRequest {
   dueAt: string;
   materialTitle?: string;
   materialUrl?: string;
+  trainerEmployeeId?: string;
+  trainerName?: string;
+  trainerFunction?: string;
 }
 
 export interface CreateSsmTrainingPlanGroupResponse {
@@ -286,6 +292,9 @@ export interface SsmTrainingPlanItem {
   durationMinutes?: number | null;
   status: SsmTrainingPlanStatus;
   blockedAdmission: boolean;
+  trainerEmployeeId?: string | null;
+  trainerName?: string | null;
+  trainerFunction?: string | null;
   employeeSignedAt?: string | null;
   managerSignedAt?: string | null;
   responsibleSignedAt?: string | null;
@@ -1377,4 +1386,163 @@ export interface SsmEmployeeMedicalSummary {
   reminderVisible: boolean;
   upcoming: SsmMedicalControlItem[];
   appointments: SsmMedicalAppointmentItem[];
+}
+
+export interface UpdateSsmTrainingPlanRequest {
+  trainerEmployeeId?: string | null;
+  trainerName?: string;
+  trainerFunction?: string;
+}
+
+export const SSM_CSSM_MEMBER_ROLES = [
+  "PRESIDENT",
+  "SECRETARY",
+  "EMPLOYER_REPRESENTATIVE",
+  "EMPLOYEE_REPRESENTATIVE",
+  "OCCUPATIONAL_PHYSICIAN",
+  "DESIGNATED_WORKER",
+  "OTHER"
+] as const;
+
+export type SsmCssmMemberRole = (typeof SSM_CSSM_MEMBER_ROLES)[number];
+
+export const SSM_CSSM_MEETING_KINDS = ["ORDINARY", "EXTRAORDINARY"] as const;
+export type SsmCssmMeetingKind = (typeof SSM_CSSM_MEETING_KINDS)[number];
+
+export const SSM_CSSM_MEETING_STATUSES = ["DRAFT", "CONVENED", "HELD", "CANCELLED"] as const;
+export type SsmCssmMeetingStatus = (typeof SSM_CSSM_MEETING_STATUSES)[number];
+
+export interface CreateSsmCssmCommitteeRequest {
+  legalEntityId: string;
+  name: string;
+  decisionNumber?: string;
+  decisionDate?: string;
+  constitutedAt?: string;
+  notes?: string;
+}
+
+export interface UpdateSsmCssmCommitteeRequest {
+  name?: string;
+  decisionNumber?: string;
+  decisionDate?: string;
+  constitutedAt?: string;
+  active?: boolean;
+  notes?: string;
+}
+
+export interface CreateSsmCssmMemberRequest {
+  employeeId?: string;
+  fullName?: string;
+  role: SsmCssmMemberRole;
+  functionTitle?: string;
+  appointedAt?: string;
+  termEndsAt?: string;
+  notes?: string;
+}
+
+export interface UpdateSsmCssmMemberRequest {
+  employeeId?: string | null;
+  fullName?: string;
+  role?: SsmCssmMemberRole;
+  functionTitle?: string;
+  appointedAt?: string;
+  termEndsAt?: string;
+  active?: boolean;
+  notes?: string;
+}
+
+export interface CreateSsmCssmMeetingRequest {
+  kind?: SsmCssmMeetingKind;
+  title: string;
+  scheduledAt: string;
+  location?: string;
+  agenda?: string;
+}
+
+export interface UpdateSsmCssmMeetingRequest {
+  kind?: SsmCssmMeetingKind;
+  title?: string;
+  scheduledAt?: string;
+  location?: string;
+  agenda?: string;
+}
+
+export interface UpsertSsmCssmMinutesRequest {
+  number?: string;
+  topics?: string;
+  decisions?: string;
+  nextMeetingAt?: string;
+}
+
+export interface UpdateSsmCssmAttendeeRequest {
+  present?: boolean;
+  signature?: string;
+}
+
+export interface SsmCssmMemberItem {
+  id: string;
+  employeeId?: string | null;
+  fullName: string;
+  role: SsmCssmMemberRole;
+  roleLabel: string;
+  functionTitle?: string | null;
+  appointedAt?: string | null;
+  termEndsAt?: string | null;
+  active: boolean;
+  notes?: string | null;
+}
+
+export interface SsmCssmAttendeeItem {
+  id: string;
+  memberId?: string | null;
+  employeeId?: string | null;
+  fullName: string;
+  role?: SsmCssmMemberRole | null;
+  roleLabel?: string | null;
+  present: boolean;
+  hasSignature: boolean;
+  signedAt?: string | null;
+}
+
+export interface SsmCssmMinutesItem {
+  id: string;
+  number: string;
+  topics?: string | null;
+  decisions?: string | null;
+  nextMeetingAt?: string | null;
+  updatedAt?: string;
+}
+
+export interface SsmCssmMeetingItem {
+  id: string;
+  committeeId: string;
+  kind: SsmCssmMeetingKind;
+  kindLabel: string;
+  status: SsmCssmMeetingStatus;
+  title: string;
+  scheduledAt: string;
+  location?: string | null;
+  agenda?: string | null;
+  convenedAt?: string | null;
+  heldAt?: string | null;
+  cancelledAt?: string | null;
+  attendees: SsmCssmAttendeeItem[];
+  minutes?: SsmCssmMinutesItem | null;
+  hasMinutes: boolean;
+}
+
+export interface SsmCssmCommitteeItem {
+  id: string;
+  legalEntityId: string;
+  legalEntityName: string;
+  legalEntityCui?: string | null;
+  name: string;
+  decisionNumber?: string | null;
+  decisionDate?: string | null;
+  constitutedAt?: string | null;
+  active: boolean;
+  notes?: string | null;
+  compositionWarnings: string[];
+  members: SsmCssmMemberItem[];
+  meetings: SsmCssmMeetingItem[];
 }

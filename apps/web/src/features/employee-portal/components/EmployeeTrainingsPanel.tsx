@@ -195,6 +195,11 @@ export function EmployeeTrainingsPanel() {
                   <h3 className="card-title">{activePlan.trainingTypeName}</h3>
                   <p className="field-hint">
                     {planCategoryLabel(activePlan)} · scadență {formatRoDate(activePlan.dueAt)}
+                    {activePlan.trainerName
+                      ? ` · instructor ${activePlan.trainerName}${
+                          activePlan.trainerFunction ? `, ${activePlan.trainerFunction}` : ""
+                        }`
+                      : ""}
                   </p>
                 </div>
                 <span className={planWorkflowClass(activePlan)}>{planWorkflowLabel(activePlan)}</span>

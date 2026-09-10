@@ -70,6 +70,7 @@ const TYPE_HINTS: Partial<Record<CreateSsmDocumentRequest["type"], string>> = {
   REGISTER: "→ Accidente",
   PSI: "→ PSI",
   EMERGENCY_PROCEDURE: "→ PSI",
+  DECISION: "→ CSSM",
   THEMATIC: "→ Instruire"
 };
 

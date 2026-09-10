@@ -4,6 +4,7 @@ import { useEmployeeOptions, useGroups } from "../../master-data/hooks/useMaster
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { useCreateTrainingPlan, useCreateTrainingPlanGroup } from "../hooks/useSsmTrainingSuite";
 import { TrainingTypeSelect } from "./TrainingTypeSelect";
+import { TrainingInstructorFields } from "./TrainingInstructorFields";
 
 type AssignMode = "individual" | "group";
 
@@ -29,6 +30,9 @@ export function TrainingAssignForm() {
     d.setDate(d.getDate() + 30);
     return d.toISOString();
   });
+  const [trainerEmployeeId, setTrainerEmployeeId] = useState("");
+  const [trainerName, setTrainerName] = useState("");
+  const [trainerFunction, setTrainerFunction] = useState("");
 
   const createPlan = useCreateTrainingPlan();
   const createGroupPlans = useCreateTrainingPlanGroup();
@@ -69,7 +73,10 @@ export function TrainingAssignForm() {
     const payload = {
       trainingTypeId,
       scheduledAt,
-      dueAt
+      dueAt,
+      trainerEmployeeId: trainerEmployeeId || undefined,
+      trainerName: trainerName.trim() || undefined,
+      trainerFunction: trainerFunction.trim() || undefined
     };
 
     if (mode === "group") {
@@ -167,6 +174,16 @@ export function TrainingAssignForm() {
           }}
         />
       </div>
+
+      <TrainingInstructorFields
+        idPrefix="assign"
+        value={{ trainerEmployeeId, trainerName, trainerFunction }}
+        onChange={(next) => {
+          setTrainerEmployeeId(next.trainerEmployeeId ?? "");
+          setTrainerName(next.trainerName ?? "");
+          setTrainerFunction(next.trainerFunction ?? "");
+        }}
+      />
 
       <button
         type="submit"

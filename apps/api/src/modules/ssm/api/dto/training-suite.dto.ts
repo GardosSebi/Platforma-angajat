@@ -149,6 +149,21 @@ export class CreateTrainingPlanDto {
   @IsString()
   @MaxLength(500)
   materialUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  trainerEmployeeId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  trainerName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  trainerFunction?: string;
 }
 
 export class CreateTrainingPlanGroupDto {
@@ -175,6 +190,38 @@ export class CreateTrainingPlanGroupDto {
   @IsString()
   @MaxLength(500)
   materialUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  trainerEmployeeId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  trainerName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  trainerFunction?: string;
+}
+
+export class UpdateTrainingPlanDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  trainerEmployeeId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  trainerName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  trainerFunction?: string;
 }
 
 export class CompleteTestDto {

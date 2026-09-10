@@ -243,6 +243,17 @@ export const ssmApi = {
       body: JSON.stringify(payload)
     });
   },
+  updateTrainingPlan(planId: string, payload: import("@repo/shared-types/ssm").UpdateSsmTrainingPlanRequest) {
+    return httpClient<{
+      id: string;
+      trainerEmployeeId: string | null;
+      trainerName: string | null;
+      trainerFunction: string | null;
+    }>(`/ssm/training-suite/plans/${planId}/trainer`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
   createTrainingPlanGroup(payload: CreateSsmTrainingPlanGroupRequest) {
     return httpClient<CreateSsmTrainingPlanGroupResponse>("/ssm/training-suite/plans/group", {
       method: "POST",
@@ -861,5 +872,80 @@ export const ssmApi = {
       method: "PATCH",
       body: JSON.stringify(payload)
     });
+  },
+  listCssmCommittees() {
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmCssmCommitteeItem[] }>("/ssm/cssm/committees");
+  },
+  getCssmCommittee(committeeId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmCommitteeItem>(`/ssm/cssm/committees/${committeeId}`);
+  },
+  createCssmCommittee(payload: import("@repo/shared-types/ssm").CreateSsmCssmCommitteeRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmCommitteeItem>("/ssm/cssm/committees", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateCssmCommittee(
+    committeeId: string,
+    payload: import("@repo/shared-types/ssm").UpdateSsmCssmCommitteeRequest
+  ) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmCommitteeItem>(`/ssm/cssm/committees/${committeeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  addCssmMember(committeeId: string, payload: import("@repo/shared-types/ssm").CreateSsmCssmMemberRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmMemberItem>(
+      `/ssm/cssm/committees/${committeeId}/members`,
+      { method: "POST", body: JSON.stringify(payload) }
+    );
+  },
+  updateCssmMember(memberId: string, payload: import("@repo/shared-types/ssm").UpdateSsmCssmMemberRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmMemberItem>(`/ssm/cssm/members/${memberId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  createCssmMeeting(committeeId: string, payload: import("@repo/shared-types/ssm").CreateSsmCssmMeetingRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmMeetingItem>(
+      `/ssm/cssm/committees/${committeeId}/meetings`,
+      { method: "POST", body: JSON.stringify(payload) }
+    );
+  },
+  conveneCssmMeeting(meetingId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmMeetingItem>(
+      `/ssm/cssm/meetings/${meetingId}/convene`,
+      { method: "POST" }
+    );
+  },
+  holdCssmMeeting(meetingId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmMeetingItem>(
+      `/ssm/cssm/meetings/${meetingId}/hold`,
+      { method: "POST" }
+    );
+  },
+  cancelCssmMeeting(meetingId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmMeetingItem>(
+      `/ssm/cssm/meetings/${meetingId}/cancel`,
+      { method: "POST" }
+    );
+  },
+  updateCssmAttendee(attendeeId: string, payload: import("@repo/shared-types/ssm").UpdateSsmCssmAttendeeRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmAttendeeItem>(
+      `/ssm/cssm/attendees/${attendeeId}`,
+      { method: "PATCH", body: JSON.stringify(payload) }
+    );
+  },
+  saveCssmMinutes(meetingId: string, payload: import("@repo/shared-types/ssm").UpsertSsmCssmMinutesRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmMeetingItem>(
+      `/ssm/cssm/meetings/${meetingId}/minutes`,
+      { method: "PUT", body: JSON.stringify(payload) }
+    );
+  },
+  getCssmConvocationUrl(meetingId: string) {
+    return `/ssm/cssm/meetings/${meetingId}/convocation.pdf`;
+  },
+  getCssmMinutesUrl(meetingId: string) {
+    return `/ssm/cssm/meetings/${meetingId}/minutes.pdf`;
   }
 };

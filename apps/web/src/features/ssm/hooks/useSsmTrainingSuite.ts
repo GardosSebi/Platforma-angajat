@@ -104,6 +104,22 @@ export function useCreateTrainingPlanGroup() {
   });
 }
 
+export function useUpdateTrainingPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      planId,
+      payload
+    }: {
+      planId: string;
+      payload: import("@repo/shared-types/ssm").UpdateSsmTrainingPlanRequest;
+    }) => ssmApi.updateTrainingPlan(planId, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
+    }
+  });
+}
+
 export function useMaterialComplete() {
   const queryClient = useQueryClient();
   return useMutation({

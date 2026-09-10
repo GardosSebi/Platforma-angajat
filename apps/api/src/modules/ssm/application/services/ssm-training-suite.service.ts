@@ -32,6 +32,7 @@ import {
   GenerateCollectiveSheetDto,
   SignPlanDto,
   SignPlansBatchDto,
+  UpdateTrainingPlanDto,
   UpdateTrainingTypeDto
 } from "../../api/dto/training-suite.dto";
 import {
@@ -375,6 +376,7 @@ export class SsmTrainingSuiteService {
       throw new BadRequestException("scheduledAt must be before dueAt.");
     }
 
+    const trainer = await this.resolveTrainer(tenantId, dto);
     const created = await this.prisma.ssmTrainingPlan.create({
       data: {
         tenantId,
@@ -384,6 +386,9 @@ export class SsmTrainingSuiteService {
         dueAt,
         materialTitle: dto.materialTitle?.trim(),
         materialUrl: dto.materialUrl?.trim(),
+        trainerEmployeeId: trainer.trainerEmployeeId,
+        trainerName: trainer.trainerName,
+        trainerFunction: trainer.trainerFunction,
         createdBy: actorId
       }
     });
@@ -462,7 +467,10 @@ export class SsmTrainingSuiteService {
         scheduledAt: dto.scheduledAt,
         dueAt: dto.dueAt,
         materialTitle: dto.materialTitle,
-        materialUrl: dto.materialUrl
+        materialUrl: dto.materialUrl,
+        trainerEmployeeId: dto.trainerEmployeeId,
+        trainerName: dto.trainerName,
+        trainerFunction: dto.trainerFunction
       });
       createdPlans.push(plan);
     }
@@ -472,6 +480,76 @@ export class SsmTrainingSuiteService {
       groupName: group.name,
       createdCount: createdPlans.length,
       planIds: createdPlans.map((plan) => plan.id)
+    };
+  }
+
+  async updateTrainingPlan(
+    tenantId: string,
+    actorId: string,
+    trainingPlanId: string,
+    dto: UpdateTrainingPlanDto,
+    viewer: JwtPayload
+  ) {
+    await this.assertTrainingPlanVisibleToViewer(tenantId, trainingPlanId, viewer);
+    const plan = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { id: trainingPlanId, tenantId },
+      select: { id: true }
+    });
+    if (!plan) {
+      throw new NotFoundException("Training plan not found.");
+    }
+    const trainer = await this.resolveTrainer(tenantId, dto);
+    const updated = await this.prisma.ssmTrainingPlan.update({
+      where: { id: trainingPlanId },
+      data: {
+        trainerEmployeeId: trainer.trainerEmployeeId,
+        trainerName: trainer.trainerName,
+        trainerFunction: trainer.trainerFunction
+      }
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "TRAINING_PLAN_TRAINER_UPDATED",
+      entityType: "SsmTrainingPlan",
+      entityId: updated.id,
+      payload: {
+        trainerEmployeeId: updated.trainerEmployeeId,
+        trainerName: updated.trainerName,
+        trainerFunction: updated.trainerFunction
+      }
+    });
+    return {
+      id: updated.id,
+      trainerEmployeeId: updated.trainerEmployeeId,
+      trainerName: updated.trainerName,
+      trainerFunction: updated.trainerFunction
+    };
+  }
+
+  private async resolveTrainer(
+    tenantId: string,
+    dto: { trainerEmployeeId?: string | null; trainerName?: string; trainerFunction?: string }
+  ) {
+    if (dto.trainerEmployeeId) {
+      const trainer = await this.prisma.employee.findFirst({
+        where: { id: dto.trainerEmployeeId, tenantId },
+        include: { jobPosition: { select: { name: true } } }
+      });
+      if (!trainer) {
+        throw new NotFoundException("Instructorul selectat nu a fost găsit.");
+      }
+      return {
+        trainerEmployeeId: trainer.id,
+        trainerName: dto.trainerName?.trim() || trainer.fullName,
+        trainerFunction: dto.trainerFunction?.trim() || trainer.jobPosition?.name || null
+      };
+    }
+    return {
+      trainerEmployeeId: null as string | null,
+      trainerName: dto.trainerName?.trim() || null,
+      trainerFunction: dto.trainerFunction?.trim() || null
     };
   }
 
@@ -1125,6 +1203,9 @@ export class SsmTrainingSuiteService {
         durationMinutes: row.durationMinutes,
         status: row.status,
         blockedAdmission: row.blockedAdmission,
+        trainerEmployeeId: row.trainerEmployeeId,
+        trainerName: row.trainerName,
+        trainerFunction: row.trainerFunction,
         employeeSignedAt: row.signature?.employeeSignedAt?.toISOString() ?? null,
         managerSignedAt: row.signature?.managerSignedAt?.toISOString() ?? null,
         responsibleSignedAt: row.signature?.responsibleSignedAt?.toISOString() ?? null
@@ -1661,6 +1742,8 @@ export class SsmTrainingSuiteService {
         legalMinDurationHours: plan.trainingType.legalMinDurationHours,
         score: plan.score,
         occupation: employee.jobPosition?.name,
+        trainerName: plan.trainerName,
+        trainerFunction: plan.trainerFunction,
         signature: plan.signature
       })),
       accidents: accidents.map((row) => ({

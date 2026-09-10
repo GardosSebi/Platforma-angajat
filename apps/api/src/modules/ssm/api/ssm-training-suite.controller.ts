@@ -33,7 +33,8 @@ import {
   MaterialCompleteDto,
   SignPlanDto,
   SignPlansBatchDto,
-  UpdateTrainingTypeDto
+  UpdateTrainingTypeDto,
+  UpdateTrainingPlanDto
 } from "./dto/training-suite.dto";
 import { assertSsmTrainingCatalogManagement } from "./ssm-viewer-scope";
 
@@ -101,6 +102,18 @@ export class SsmTrainingSuiteController {
   ) {
     assertSsmTrainingCatalogManagement(user);
     return this.trainingSuite.createTrainingPlansForGroup(tenantId, user.sub, dto);
+  }
+
+  @Patch("plans/:id/trainer")
+  @RequirePermissions(Permission.SSM_TRAINING_EDIT)
+  updatePlanTrainer(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: UpdateTrainingPlanDto
+  ) {
+    assertSsmTrainingCatalogManagement(user);
+    return this.trainingSuite.updateTrainingPlan(tenantId, user.sub, id, dto, user);
   }
 
   @Post("plans/:id/material")

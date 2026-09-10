@@ -21,6 +21,7 @@ export const DOCUMENT_TYPE_MODULE_HINTS: Partial<Record<SsmDocumentType, string>
   PPP: "ppp",
   PSI: "psi",
   EMERGENCY_PROCEDURE: "psi",
+  DECISION: "cssm",
   REGISTER: "accidents",
   THEMATIC: "training"
 };
