@@ -70,6 +70,32 @@ export function useUpsertEipNorm() {
   });
 }
 
+export function usePublishEipNormDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobPositionId: string) => ssmApi.publishEipNormDocument(jobPositionId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "norms"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "documents"] })
+      ]);
+    }
+  });
+}
+
+export function usePublishAllEipNormDocuments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ssmApi.publishAllEipNormDocuments(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ssm", "eip", "norms"] }),
+        queryClient.invalidateQueries({ queryKey: ["ssm", "documents"] })
+      ]);
+    }
+  });
+}
+
 export function useRegisterEipMovement() {
   const queryClient = useQueryClient();
   return useMutation({

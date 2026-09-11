@@ -170,7 +170,55 @@ export function EmployeeDossierPanel() {
             {data.riskExposureSheets.map((item) => (
               <li key={item.id}>
                 <strong>{item.title}</strong>
-                <span>{item.fileName ?? "Fișă evaluare risc"}</span>
+                <span>
+                  {item.generated ? "Generată automat" : item.fileName ?? "Fișă evaluare risc"}
+                </span>
+                {item.generated ? (
+                  <button
+                    type="button"
+                    className="btn-text"
+                    onClick={() => {
+                      setDownloadError(null);
+                      void downloadWithAuth(
+                        ssmApi.getDigitalFileExposureSheetUrl(employeeId),
+                        item.fileName ?? `fisa-expunere-${employeeId}.pdf`
+                      ).catch((err: unknown) => setDownloadError(mutationErrorMessage(err)));
+                    }}
+                  >
+                    Descarcă PDF
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {data?.eipDecisionCopies?.length ? (
+        <section className="card employee-dossier-section">
+          <h3 className="card-title">Decizie EIP</h3>
+          <ul className="employee-dossier-list">
+            {data.eipDecisionCopies.map((item) => (
+              <li key={item.id}>
+                <strong>{item.title}</strong>
+                <span>
+                  {item.generated ? "Generată automat" : item.fileName ?? "Decizie EIP"}
+                </span>
+                {item.generated ? (
+                  <button
+                    type="button"
+                    className="btn-text"
+                    onClick={() => {
+                      setDownloadError(null);
+                      void downloadWithAuth(
+                        ssmApi.getDigitalFileEipDecisionUrl(employeeId),
+                        item.fileName ?? `decizie-eip-${employeeId}.pdf`
+                      ).catch((err: unknown) => setDownloadError(mutationErrorMessage(err)));
+                    }}
+                  >
+                    Descarcă PDF
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

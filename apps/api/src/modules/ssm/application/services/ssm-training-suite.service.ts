@@ -49,6 +49,8 @@ import {
   renderAnexa11IndividualSheet,
   renderAnexa12CollectiveSheet
 } from "../legal-forms";
+import { SsmEipService } from "./ssm-eip.service";
+import { SsmRiskService } from "./ssm-risk.service";
 
 const MAX_MATERIAL_BYTES = 120 * 1024 * 1024;
 const ALLOWED_MATERIAL_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".mp4", ".mov", ".avi", ".mkv"]);
@@ -223,7 +225,9 @@ export class SsmTrainingSuiteService {
     private readonly auditLog: AuditLogService,
     private readonly mailService: MailService,
     private readonly notifications: NotificationsService,
-    private readonly encryption: DataEncryptionService
+    private readonly encryption: DataEncryptionService,
+    private readonly riskService: SsmRiskService,
+    private readonly eipService: SsmEipService
   ) {}
 
   private async syncOverdue(tenantId: string) {
@@ -1522,8 +1526,14 @@ export class SsmTrainingSuiteService {
       include: { eipType: { select: { name: true, code: true } } },
       orderBy: { movementDate: "desc" }
     });
-    const riskExposureSheets = documents.filter((doc) => doc.type === "RISK_ASSESSMENT");
-    const eipDecisionCopies = documents.filter((doc) => doc.type === "DECISION");
+    const riskExposureSheets = documents.filter((doc) => {
+      const type: string = doc.type;
+      return type === "EXPOSURE_SHEET" || type === "RISK_ASSESSMENT";
+    });
+    const eipDecisionCopies = documents.filter((doc) => {
+      const type: string = doc.type;
+      return type === "DECISION" || type === "EIP_NORM";
+    });
 
     return {
       employee: {
@@ -1551,16 +1561,34 @@ export class SsmTrainingSuiteService {
           fileName: doc.activeVersion?.fileName,
           updatedAt: doc.updatedAt
         })),
-      riskExposureSheets: riskExposureSheets.map((doc) => ({
-        id: doc.id,
-        title: doc.title,
-        fileName: doc.activeVersion?.fileName
-      })),
-      eipDecisionCopies: eipDecisionCopies.map((doc) => ({
-        id: doc.id,
-        title: doc.title,
-        fileName: doc.activeVersion?.fileName
-      })),
+      riskExposureSheets: [
+        {
+          id: "generated-exposure-sheet",
+          title: "Fișă de expunere la riscuri profesionale",
+          fileName: "Fisa-expunere-riscuri-profesionale.pdf",
+          generated: true
+        },
+        ...riskExposureSheets.map((doc) => ({
+          id: doc.id,
+          title: doc.title,
+          fileName: doc.activeVersion?.fileName,
+          generated: false
+        }))
+      ],
+      eipDecisionCopies: [
+        {
+          id: "generated-eip-decision",
+          title: "Decizie de acordare EIP",
+          fileName: "Decizie-acordare-EIP.pdf",
+          generated: true
+        },
+        ...eipDecisionCopies.map((doc) => ({
+          id: doc.id,
+          title: doc.title,
+          fileName: doc.activeVersion?.fileName,
+          generated: false
+        }))
+      ],
       medicalControls: medicalControls.map((control: MedicalControlForDossier) => ({
         id: control.id,
         controlType: control.controlType.name,
@@ -1598,7 +1626,8 @@ export class SsmTrainingSuiteService {
         "- documents/ — documente SSM aprobate aplicabile angajatului",
         "- instruiri/ — fișa individuală de instruire Anexa 11 HG 1425/2006 (PDF)",
         "- medicina-muncii/ — fișe de aptitudini",
-        "- eip/ — evidență EIP din dosar (în dossier.json)",
+        "- expunere/ — fișa de expunere la riscuri generată pentru angajat (PDF)",
+        "- eip/ — decizie de acordare EIP (PDF) și evidență în dossier.json",
         "- dossier.json — index structurat"
       ].join("\n")
     );
@@ -1636,6 +1665,20 @@ export class SsmTrainingSuiteService {
       warnings.push("Fișa de instruire individuală (Anexa 11) n-a putut fi generată.");
     }
 
+    try {
+      const exposurePdf = await this.riskService.generateExposureSheetPdf(tenantId, employeeId);
+      zip.file("expunere/Fisa-expunere-riscuri-profesionale.pdf", exposurePdf);
+    } catch {
+      warnings.push("Fișa de expunere la riscuri n-a putut fi generată.");
+    }
+
+    try {
+      const eipDecisionPdf = await this.eipService.generateEmployeeDecisionPdf(tenantId, employeeId);
+      zip.file("eip/Decizie-acordare-EIP.pdf", eipDecisionPdf);
+    } catch {
+      warnings.push("Decizia de acordare EIP n-a putut fi generată.");
+    }
+
     const medicalControls = await this.prisma.ssmMedicalControl.findMany({
       where: { tenantId, employeeId },
       select: { id: true, aptitudeSheetPath: true, aptitudeSheetName: true },
@@ -1670,6 +1713,16 @@ export class SsmTrainingSuiteService {
     }
 
     return zip.generateAsync({ type: "nodebuffer" });
+  }
+
+  async generateEmployeeExposureSheetPdf(tenantId: string, employeeId: string, viewer: JwtPayload) {
+    await this.assertDigitalFileEmployeeAccess(tenantId, employeeId, viewer);
+    return this.riskService.generateExposureSheetPdf(tenantId, employeeId);
+  }
+
+  async generateEmployeeEipDecisionPdf(tenantId: string, employeeId: string, viewer: JwtPayload) {
+    await this.assertDigitalFileEmployeeAccess(tenantId, employeeId, viewer);
+    return this.eipService.generateEmployeeDecisionPdf(tenantId, employeeId);
   }
 
   private sanitizeZipPath(value: string): string {

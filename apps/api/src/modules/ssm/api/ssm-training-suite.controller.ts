@@ -246,6 +246,34 @@ export class SsmTrainingSuiteController {
     });
   }
 
+  @Get("employees/:employeeId/exposure-sheet.pdf")
+  @RequirePermissions(Permission.SSM_TRAINING_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async employeeExposureSheet(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("employeeId") employeeId: string
+  ) {
+    const buffer = await this.trainingSuite.generateEmployeeExposureSheetPdf(tenantId, employeeId, user);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename=\"fisa-expunere-riscuri-${employeeId}.pdf\"`
+    });
+  }
+
+  @Get("employees/:employeeId/eip-decision.pdf")
+  @RequirePermissions(Permission.SSM_TRAINING_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async employeeEipDecision(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("employeeId") employeeId: string
+  ) {
+    const buffer = await this.trainingSuite.generateEmployeeEipDecisionPdf(tenantId, employeeId, user);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename=\"decizie-eip-${employeeId}.pdf\"`
+    });
+  }
+
   @Get("plans/:id/individual-sheet.pdf")
   @RequirePermissions(Permission.SSM_TRAINING_VIEW)
   @Header("Content-Type", "application/pdf")

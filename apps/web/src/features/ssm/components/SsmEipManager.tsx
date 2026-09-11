@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
   CreateSsmEipMovementRequest,
@@ -16,6 +16,8 @@ import {
   useDispatchEipNotifications,
   useRegisterEipMovement,
   useUpsertEipNorm,
+  usePublishAllEipNormDocuments,
+  usePublishEipNormDocument,
   useCreateEipOrder,
   useEipOrders,
   useEipRegisterSignoff,
@@ -123,6 +125,8 @@ export function SsmEipManager() {
 
   const createType = useCreateEipType();
   const upsertNorm = useUpsertEipNorm();
+  const publishNormDocument = usePublishEipNormDocument();
+  const publishAllNormDocuments = usePublishAllEipNormDocuments();
   const registerMovement = useRegisterEipMovement();
 
   const [typeForm, setTypeForm] = useState<CreateSsmEipTypeRequest>(EMPTY_TYPE);
@@ -131,6 +135,24 @@ export function SsmEipManager() {
 
   const isIntake = movementForm.movementType === "INTAKE";
   const activeTabMeta = EIP_TABS.find((item) => item.id === tab) ?? EIP_TABS[0];
+  const [normDocError, setNormDocError] = useState<string | null>(null);
+
+  const normsByJob = useMemo(() => {
+    const map = new Map<string, { jobPositionId: string; jobPositionName: string; count: number }>();
+    for (const item of normsQuery.data?.items ?? []) {
+      const existing = map.get(item.jobPositionId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(item.jobPositionId, {
+          jobPositionId: item.jobPositionId,
+          jobPositionName: item.jobPositionName,
+          count: 1
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [normsQuery.data?.items]);
 
   useEffect(() => {
     if (!isIntake && !movementForm.employeeId && employeeOptions[0]?.id) {
@@ -389,6 +411,88 @@ export function SsmEipManager() {
                         Cantitate {item.requiredQuantity} · {item.lifetimeDays} zile
                         {item.replacementRule ? ` · ${item.replacementRule}` : ""}
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card ssm-doc-card">
+            <h4 className="card-title">Document SSM — Normativ EIP</h4>
+            <p className="field-hint">
+              Generează PDF-ul de normativ pe post și îl înregistrează în registrul de documente SSM, cu tipul
+              distinct „Normativ EIP”.
+            </p>
+            <div className="ssm-inline-actions" style={{ marginBottom: "0.75rem" }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!normsByJob.length || publishAllNormDocuments.isPending}
+                onClick={() => {
+                  setNormDocError(null);
+                  publishAllNormDocuments.mutate(undefined, {
+                    onError: (err) => setNormDocError(mutationErrorMessage(err))
+                  });
+                }}
+              >
+                {publishAllNormDocuments.isPending ? "Se publică…" : "Publică toate posturile în registru"}
+              </button>
+            </div>
+            {publishAllNormDocuments.isSuccess ? (
+              <p className="feedback success" role="status">
+                {publishAllNormDocuments.data.published} normative EIP au fost înregistrate ca documente SSM.
+              </p>
+            ) : null}
+            {publishNormDocument.isSuccess ? (
+              <p className="feedback success" role="status">
+                Document SSM creat: {publishNormDocument.data.title} (v{publishNormDocument.data.versionNumber}).
+              </p>
+            ) : null}
+            {normDocError ? (
+              <p className="feedback error" role="alert">
+                {normDocError}
+              </p>
+            ) : null}
+            {normsByJob.length === 0 ? (
+              <p className="field-hint">Salvează cel puțin un normativ pe post pentru a genera documentul.</p>
+            ) : (
+              <div className="ssm-history-list">
+                {normsByJob.map((job) => (
+                  <div key={job.jobPositionId} className="ssm-history-item">
+                    <div>
+                      <strong>{job.jobPositionName}</strong>
+                      <div className="field-hint">
+                        {job.count} {job.count === 1 ? "echipament" : "echipamente"} în normativ
+                      </div>
+                    </div>
+                    <div className="ssm-inline-actions">
+                      <button
+                        type="button"
+                        className="btn-text"
+                        onClick={() => {
+                          setNormDocError(null);
+                          void downloadWithAuth(
+                            ssmApi.getEipNormPdfUrl(job.jobPositionId),
+                            `normativ-eip-${job.jobPositionName}.pdf`
+                          ).catch((err: unknown) => setNormDocError(mutationErrorMessage(err)));
+                        }}
+                      >
+                        Descarcă PDF
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-text"
+                        disabled={publishNormDocument.isPending}
+                        onClick={() => {
+                          setNormDocError(null);
+                          publishNormDocument.mutate(job.jobPositionId, {
+                            onError: (err) => setNormDocError(mutationErrorMessage(err))
+                          });
+                        }}
+                      >
+                        Publică în registru
+                      </button>
                     </div>
                   </div>
                 ))}

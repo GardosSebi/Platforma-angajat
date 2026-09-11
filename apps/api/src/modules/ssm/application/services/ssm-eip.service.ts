@@ -2,13 +2,15 @@ import { createReadStream } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import { extname, resolve } from "path";
 import { BadRequestException, Injectable, NotFoundException, StreamableFile } from "@nestjs/common";
-import { SsmEipMovementType, SsmEipOrderStatus } from "@prisma/client";
+import { SsmDocumentTargetType, SsmDocumentType, SsmEipMovementType, SsmEipOrderStatus } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
+import { renderEipDecision, renderEipNormDocument } from "../legal-forms";
+import { SsmDocumentsService } from "./ssm-documents.service";
 import {
   CreateEipMovementDto,
   CreateEipNormDto,
@@ -56,7 +58,8 @@ export class SsmEipService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly mailService: MailService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly documentsService: SsmDocumentsService
   ) {}
 
   async listTypes(tenantId: string) {
@@ -150,6 +153,164 @@ export class SsmEipService {
       entityId: norm.id
     });
     return norm;
+  }
+
+  private async loadJobNormLines(tenantId: string, jobPositionId: string) {
+    const rows = await this.prisma.ssmEipNorm.findMany({
+      where: { tenantId, jobPositionId },
+      include: { eipType: { select: { code: true, name: true } } },
+      orderBy: { eipType: { code: "asc" } }
+    });
+    return rows.map((row) => ({
+      code: row.eipType.code,
+      name: row.eipType.name,
+      requiredQuantity: row.requiredQuantity,
+      lifetimeDays: row.lifetimeDays,
+      replacementRule: row.replacementRule
+    }));
+  }
+
+  private async loadEmployerHeader(tenantId: string, worksiteId?: string | null) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+    const worksite = worksiteId
+      ? await this.prisma.worksite.findFirst({
+          where: { id: worksiteId, tenantId },
+          include: { legalEntity: { select: { name: true, cui: true, headquarters: true } } }
+        })
+      : null;
+    const entity =
+      worksite?.legalEntity ??
+      (await this.prisma.legalEntity.findFirst({
+        where: { tenantId, active: true },
+        orderBy: { createdAt: "asc" },
+        select: { name: true, cui: true, headquarters: true }
+      }));
+    return {
+      employerName: entity?.name ?? tenant?.name ?? tenantId,
+      cui: entity?.cui ?? null,
+      headquarters: entity?.headquarters ?? null
+    };
+  }
+
+  async generateJobNormPdf(tenantId: string, jobPositionId: string) {
+    const job = await this.prisma.jobPosition.findFirst({
+      where: { id: jobPositionId, tenantId },
+      select: { id: true, name: true, code: true }
+    });
+    if (!job) throw new NotFoundException("Postul nu a fost găsit.");
+    const [lines, header] = await Promise.all([
+      this.loadJobNormLines(tenantId, job.id),
+      this.loadEmployerHeader(tenantId)
+    ]);
+    return renderEipNormDocument({
+      ...header,
+      jobPositionName: job.name,
+      jobPositionCode: job.code,
+      generatedAt: new Date(),
+      lines
+    });
+  }
+
+  async publishJobNormDocument(tenantId: string, actorId: string, jobPositionId: string) {
+    const job = await this.prisma.jobPosition.findFirst({
+      where: { id: jobPositionId, tenantId },
+      select: { id: true, name: true, code: true }
+    });
+    if (!job) throw new NotFoundException("Postul nu a fost găsit.");
+    const buffer = await this.generateJobNormPdf(tenantId, jobPositionId);
+    const safeJob = job.name.replace(/[<>:"/\\|?*]+/g, "_").slice(0, 80);
+    const result = await this.documentsService.upsertGeneratedPdf(tenantId, actorId, {
+      type: SsmDocumentType.EIP_NORM,
+      title: `Normativ de acordare EIP — ${job.name}`,
+      targetType: SsmDocumentTargetType.JOB_POSITION,
+      targetRefId: job.id,
+      targetLabel: job.name,
+      jobPositionName: job.name,
+      fileName: `Normativ-EIP-${safeJob}.pdf`,
+      buffer,
+      changeNote: "Generat automat din modulul EIP (normativ pe post)",
+      isControlFolder: true
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "EIP_NORM_DOCUMENT_PUBLISHED",
+      entityType: "SsmDocument",
+      entityId: result.documentId,
+      payload: { jobPositionId: job.id, created: result.created, versionNumber: result.versionNumber }
+    });
+    return {
+      ...result,
+      jobPositionId: job.id,
+      jobPositionName: job.name,
+      title: `Normativ de acordare EIP — ${job.name}`
+    };
+  }
+
+  async publishAllJobNormDocuments(tenantId: string, actorId: string) {
+    const rows = await this.prisma.ssmEipNorm.findMany({
+      where: { tenantId },
+      select: { jobPositionId: true },
+      distinct: ["jobPositionId"]
+    });
+    const items: Array<{
+      documentId: string;
+      versionId: string;
+      versionNumber: number;
+      created: boolean;
+      jobPositionId: string;
+      jobPositionName: string;
+      title: string;
+    }> = [];
+    for (const row of rows) {
+      items.push(await this.publishJobNormDocument(tenantId, actorId, row.jobPositionId));
+    }
+    return { published: items.length, items };
+  }
+
+  async generateEmployeeDecisionPdf(tenantId: string, employeeId: string) {
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      include: {
+        jobPosition: { select: { id: true, name: true } },
+        department: { select: { name: true } },
+        worksite: { select: { id: true, name: true } }
+      }
+    });
+    if (!employee) throw new NotFoundException("Employee not found.");
+
+    const [header, norms, allocated] = await Promise.all([
+      this.loadEmployerHeader(tenantId, employee.worksiteId),
+      employee.jobPositionId ? this.loadJobNormLines(tenantId, employee.jobPositionId) : Promise.resolve([]),
+      this.prisma.ssmEipMovement.findMany({
+        where: {
+          tenantId,
+          employeeId,
+          movementType: SsmEipMovementType.DISTRIBUTION
+        },
+        include: { eipType: { select: { code: true, name: true } } },
+        orderBy: { movementDate: "desc" }
+      })
+    ]);
+
+    return renderEipDecision({
+      ...header,
+      employeeName: employee.fullName,
+      jobPositionName: employee.jobPosition?.name,
+      departmentName: employee.department?.name,
+      worksiteName: employee.worksite?.name,
+      generatedAt: new Date(),
+      norms,
+      allocated: allocated.map((row) => ({
+        code: row.eipType.code,
+        name: row.eipType.name,
+        quantity: row.quantity,
+        movementDate: row.movementDate,
+        replacementDueAt: row.replacementDueAt,
+        signed: Boolean(row.signedAt)
+      }))
+    });
   }
 
   private async resolveLocation(

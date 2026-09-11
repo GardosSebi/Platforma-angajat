@@ -17,6 +17,8 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   DECISION: "Decizie",
   PSI: "PSI / SU",
   REGISTER: "Registru",
+  EXPOSURE_SHEET: "Fișă expunere",
+  EIP_NORM: "Normativ EIP",
   OTHER: "Altele"
 };
 

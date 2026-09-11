@@ -324,8 +324,8 @@ export const ssmApi = {
     return httpClient<{
       trainings: Array<{ id: string; type: string; dueAt: string; status: string; score?: number | null }>;
       documents: Array<{ id: string; title: string; type: string; fileName?: string }>;
-      riskExposureSheets?: Array<{ id: string; title: string; fileName?: string }>;
-      eipDecisionCopies?: Array<{ id: string; title: string; fileName?: string }>;
+      riskExposureSheets?: Array<{ id: string; title: string; fileName?: string; generated?: boolean }>;
+      eipDecisionCopies?: Array<{ id: string; title: string; fileName?: string; generated?: boolean }>;
       medicalControls?: Array<{
         id: string;
         controlType: string;
@@ -365,6 +365,12 @@ export const ssmApi = {
   getDigitalFileZipUrl(employeeId: string) {
     return `/ssm/training-suite/employees/${employeeId}/digital-file.zip`;
   },
+  getDigitalFileExposureSheetUrl(employeeId: string) {
+    return `/ssm/training-suite/employees/${employeeId}/exposure-sheet.pdf`;
+  },
+  getDigitalFileEipDecisionUrl(employeeId: string) {
+    return `/ssm/training-suite/employees/${employeeId}/eip-decision.pdf`;
+  },
   listEipTypes() {
     return httpClient<SsmEipTypeItem[]>("/ssm/eip/types");
   },
@@ -382,6 +388,35 @@ export const ssmApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  getEipNormPdfUrl(jobPositionId: string) {
+    return `/ssm/eip/norms/jobs/${jobPositionId}/document.pdf`;
+  },
+  publishEipNormDocument(jobPositionId: string) {
+    return httpClient<{
+      documentId: string;
+      versionId: string;
+      versionNumber: number;
+      created: boolean;
+      jobPositionId: string;
+      jobPositionName: string;
+      title: string;
+    }>(`/ssm/eip/norms/jobs/${jobPositionId}/ssm-document`, { method: "POST" });
+  },
+  publishAllEipNormDocuments() {
+    return httpClient<{
+      published: number;
+      items: Array<{
+        documentId: string;
+        jobPositionId: string;
+        jobPositionName: string;
+        versionNumber: number;
+        created: boolean;
+      }>;
+    }>("/ssm/eip/norms/publish-documents", { method: "POST" });
+  },
+  getEipDecisionPdfUrl(employeeId: string) {
+    return `/ssm/eip/employees/${employeeId}/decision.pdf`;
   },
   registerEipMovement(payload: CreateSsmEipMovementRequest) {
     return httpClient("/ssm/eip/movements", {

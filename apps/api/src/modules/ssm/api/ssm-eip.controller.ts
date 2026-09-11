@@ -41,6 +41,42 @@ export class SsmEipController {
     return this.eipService.listNorms(tenantId);
   }
 
+  @Get("norms/jobs/:jobPositionId/document.pdf")
+  @RequirePermissions(Permission.SSM_EIP_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async jobNormPdf(@TenantId() tenantId: string, @Param("jobPositionId") jobPositionId: string) {
+    const buffer = await this.eipService.generateJobNormPdf(tenantId, jobPositionId);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename="normativ-eip-${jobPositionId}.pdf"`
+    });
+  }
+
+  @Post("norms/jobs/:jobPositionId/ssm-document")
+  @RequirePermissions(Permission.SSM_EIP_EDIT)
+  publishJobNormDocument(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("jobPositionId") jobPositionId: string
+  ) {
+    return this.eipService.publishJobNormDocument(tenantId, user.sub, jobPositionId);
+  }
+
+  @Post("norms/publish-documents")
+  @RequirePermissions(Permission.SSM_EIP_EDIT)
+  publishAllJobNormDocuments(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }) {
+    return this.eipService.publishAllJobNormDocuments(tenantId, user.sub);
+  }
+
+  @Get("employees/:employeeId/decision.pdf")
+  @RequirePermissions(Permission.SSM_EIP_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async employeeDecisionPdf(@TenantId() tenantId: string, @Param("employeeId") employeeId: string) {
+    const buffer = await this.eipService.generateEmployeeDecisionPdf(tenantId, employeeId);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename="decizie-eip-${employeeId}.pdf"`
+    });
+  }
+
   @Post("norms")
   @RequirePermissions(Permission.SSM_EIP_EDIT)
   upsertNorm(@TenantId() tenantId: string, @CurrentUser() user: { sub: string }, @Body() dto: CreateEipNormDto) {

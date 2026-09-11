@@ -14,7 +14,7 @@ export type DocumentTypePolicyRow = {
   relatedModuleHint: string | null;
 };
 
-/** Default related structured modules for dual-path clarification. */
+/** Default related structured modules for dual-path clarification (EIP_NORM -> eip). */
 export const DOCUMENT_TYPE_MODULE_HINTS: Partial<Record<SsmDocumentType, string>> = {
   RISK_ASSESSMENT: "risk",
   EXPOSURE_SHEET: "risk",
@@ -23,7 +23,8 @@ export const DOCUMENT_TYPE_MODULE_HINTS: Partial<Record<SsmDocumentType, string>
   EMERGENCY_PROCEDURE: "psi",
   DECISION: "cssm",
   REGISTER: "accidents",
-  THEMATIC: "training"
+  THEMATIC: "training",
+  EIP_NORM: "eip"
 };
 
 const DEFAULT_ROLE_SETS: Partial<
@@ -79,6 +80,17 @@ const DEFAULT_ROLE_SETS: Partial<
       SystemRole.SSM_ADMIN,
       SystemRole.SSM_ENTITY_RESPONSIBLE,
       SystemRole.DEPARTMENT_MANAGER,
+      SystemRole.EMPLOYEE
+    ],
+    edit: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE],
+    approve: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE]
+  },
+  EIP_NORM: {
+    view: [
+      SystemRole.SSM_ADMIN,
+      SystemRole.SSM_ENTITY_RESPONSIBLE,
+      SystemRole.DEPARTMENT_MANAGER,
+      SystemRole.ITM_INSPECTOR,
       SystemRole.EMPLOYEE
     ],
     edit: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE],

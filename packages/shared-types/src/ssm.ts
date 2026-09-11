@@ -21,10 +21,27 @@ export const SSM_DOCUMENT_TYPES = [
   "SSM_CONVENTION",
   "DANGEROUS_SUBSTANCES",
   "EMERGENCY_PROCEDURE",
+  "EIP_NORM",
   "OTHER"
 ] as const;
 
 export type SsmDocumentType = (typeof SSM_DOCUMENT_TYPES)[number];
+
+export const SSM_DOCUMENT_TYPE_LABELS: Record<SsmDocumentType, string> = {
+  IPSSM: "Instrucțiuni proprii SSM",
+  RISK_ASSESSMENT: "Evaluare de risc",
+  PPP: "Plan prevenire și protecție",
+  THEMATIC: "Tematică instruire",
+  DECISION: "Decizie internă SSM",
+  PSI: "Instrucțiuni PSI / evacuare",
+  REGISTER: "Registru obligatoriu",
+  EXPOSURE_SHEET: "Fișă expunere la riscuri",
+  SSM_CONVENTION: "Convenție SSM",
+  DANGEROUS_SUBSTANCES: "Listă substanțe periculoase",
+  EMERGENCY_PROCEDURE: "Procedură situații de urgență",
+  EIP_NORM: "Normativ EIP",
+  OTHER: "Altele"
+};
 
 export const SSM_DOCUMENT_TARGET_TYPES = [
   "JOB_POSITION",

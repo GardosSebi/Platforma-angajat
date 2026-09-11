@@ -6,6 +6,8 @@ import { stringOptions } from "../../../shared/components/field-select-options";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import {
   type CreateSsmDocumentRequest,
+  SSM_DOCUMENT_TYPES,
+  SSM_DOCUMENT_TYPE_LABELS,
   type SsmDocumentStatus,
   type SsmDocumentTypePolicyItem
 } from "@repo/shared-types/ssm";
@@ -27,21 +29,6 @@ import { ssmApi } from "../api/ssm.api";
 import { WordTemplateEditor } from "./WordTemplateEditor";
 
 type DocsTab = "library" | "upload" | "templates" | "control" | "policies";
-
-const SSM_DOCUMENT_TYPES: ReadonlyArray<CreateSsmDocumentRequest["type"]> = [
-  "IPSSM",
-  "RISK_ASSESSMENT",
-  "PPP",
-  "THEMATIC",
-  "DECISION",
-  "PSI",
-  "REGISTER",
-  "EXPOSURE_SHEET",
-  "SSM_CONVENTION",
-  "DANGEROUS_SUBSTANCES",
-  "EMERGENCY_PROCEDURE",
-  "OTHER"
-];
 
 const SSM_DOCUMENT_TARGET_TYPES: ReadonlyArray<CreateSsmDocumentRequest["targetType"]> = [
   "JOB_POSITION",
@@ -71,7 +58,8 @@ const TYPE_HINTS: Partial<Record<CreateSsmDocumentRequest["type"], string>> = {
   PSI: "→ PSI",
   EMERGENCY_PROCEDURE: "→ PSI",
   DECISION: "→ CSSM",
-  THEMATIC: "→ Instruire"
+  THEMATIC: "→ Instruire",
+  EIP_NORM: "→ EIP (normativ pe post)"
 };
 
 const EMPTY_DOC: CreateSsmDocumentRequest = {
@@ -384,7 +372,10 @@ function DocumentTypePoliciesPanel() {
               <div key={item.id} className="ssm-history-item" style={{ flexDirection: "column", alignItems: "stretch" }}>
                 <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
                   <div>
-                    <strong>{item.documentType}</strong>
+                    <strong>
+                      {SSM_DOCUMENT_TYPE_LABELS[item.documentType as CreateSsmDocumentRequest["type"]] ??
+                        item.documentType}
+                    </strong>
                     <div className="field-hint">
                       View: {item.viewRoles.join(", ") || "—"} · Edit: {item.editRoles.join(", ") || "—"} · Approve:{" "}
                       {item.approveRoles.join(", ") || "—"}
@@ -706,7 +697,10 @@ export function SsmDocumentsManager() {
                   onChange={(type) => setFilters((prev) => ({ ...prev, type }))}
                   allowEmpty
                   emptyLabel="Toate tipurile"
-                  options={stringOptions(SSM_DOCUMENT_TYPES)}
+                  options={stringOptions(
+                    SSM_DOCUMENT_TYPES,
+                    (type) => SSM_DOCUMENT_TYPE_LABELS[type as CreateSsmDocumentRequest["type"]] ?? type
+                  )}
                 />
                 <FieldSelect
                   id="doc-filter-target"
@@ -808,7 +802,8 @@ export function SsmDocumentsManager() {
                     <div>
                       <strong>{doc.title}</strong>
                       <div className="field-hint">
-                        {doc.type} · {doc.targetLabel ?? doc.targetType} · v{doc.activeVersion.versionNumber}
+                        {SSM_DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type} · {doc.targetLabel ?? doc.targetType} · v
+                        {doc.activeVersion.versionNumber}
                       </div>
                     </div>
                     <span className={`ssm-chip ${documentStatusChip(doc.status)}`}>
@@ -1029,7 +1024,10 @@ export function SsmDocumentsManager() {
               onChange={(type) =>
                 setCreatePayload((prev) => ({ ...prev, type: type as CreateSsmDocumentRequest["type"] }))
               }
-              options={stringOptions(SSM_DOCUMENT_TYPES)}
+              options={stringOptions(
+                SSM_DOCUMENT_TYPES,
+                (type) => SSM_DOCUMENT_TYPE_LABELS[type as CreateSsmDocumentRequest["type"]] ?? type
+              )}
             />
             {TYPE_HINTS[createPayload.type] ? (
               <p className="field-hint">{TYPE_HINTS[createPayload.type]}</p>

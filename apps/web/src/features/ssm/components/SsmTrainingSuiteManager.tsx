@@ -1204,6 +1204,43 @@ export function SsmTrainingSuiteManager() {
               >
                 Export ZIP
               </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!digitalEmployeeId.trim()}
+                onClick={() => {
+                  const id = digitalEmployeeId.trim();
+                  if (!id) {
+                    setDownloadError("Selectează un angajat.");
+                    return;
+                  }
+                  setDownloadError(null);
+                  void downloadWithAuth(
+                    ssmApi.getDigitalFileExposureSheetUrl(id),
+                    `fisa-expunere-${id}.pdf`
+                  ).catch((err: unknown) => setDownloadError(mutationErrorMessage(err)));
+                }}
+              >
+                Fișă expunere PDF
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!digitalEmployeeId.trim()}
+                onClick={() => {
+                  const id = digitalEmployeeId.trim();
+                  if (!id) {
+                    setDownloadError("Selectează un angajat.");
+                    return;
+                  }
+                  setDownloadError(null);
+                  void downloadWithAuth(ssmApi.getDigitalFileEipDecisionUrl(id), `decizie-eip-${id}.pdf`).catch(
+                    (err: unknown) => setDownloadError(mutationErrorMessage(err))
+                  );
+                }}
+              >
+                Decizie EIP PDF
+              </button>
             </div>
             {downloadError ? <p className="feedback error">{downloadError}</p> : null}
             {dossierData ? (
@@ -1212,6 +1249,7 @@ export function SsmTrainingSuiteManager() {
                   {dossierData.trainings.length} instruiri · {dossierData.documents.length} documente
                   {dossierData.eipRecords?.length ? ` · ${dossierData.eipRecords.length} EIP` : ""}
                   {dossierData.medicalControls?.length ? ` · ${dossierData.medicalControls.length} controale medicale` : ""}
+                  {" · fișă expunere PDF · decizie EIP PDF"}
                 </p>
                 {dossierData.trainings.slice(0, 12).map((t) => (
                   <div key={t.id} className="ssm-history-item">

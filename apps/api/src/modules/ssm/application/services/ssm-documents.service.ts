@@ -1108,6 +1108,14 @@ export class SsmDocumentsService {
         type: SsmDocumentType.EMERGENCY_PROCEDURE,
         targetType: SsmDocumentTargetType.WORKSITE,
         checklistItems: ["Tip urgență", "Pași intervenție", "Contacte"]
+      },
+      {
+        name: "normativ-eip-post",
+        title: "Normativ de acordare EIP — {post}",
+        type: SsmDocumentType.EIP_NORM,
+        targetType: SsmDocumentTargetType.JOB_POSITION,
+        isControlFolder: true,
+        checklistItems: ["Normativ pe post", "Cantitate și durată de viață", "Generat din modulul EIP", "Aprobat SSM"]
       }
     ];
     let created = 0;
@@ -1337,18 +1345,91 @@ export class SsmDocumentsService {
     );
   }
 
+  /**
+   * Creează sau actualizează un document SSM dintr-un PDF generat intern (ex. normativ EIP).
+   * Nu aplică ACL pe viewer — apelantul trebuie să fie un serviciu deja autorizat.
+   */
+  async upsertGeneratedPdf(
+    tenantId: string,
+    actorId: string,
+    params: {
+      type: SsmDocumentType;
+      title: string;
+      targetType: SsmDocumentTargetType;
+      targetRefId?: string;
+      targetLabel?: string;
+      jobPositionName?: string;
+      entityName?: string;
+      fileName: string;
+      buffer: Buffer;
+      changeNote: string;
+      isControlFolder?: boolean;
+    }
+  ) {
+    const fakeFile = {
+      originalname: params.fileName,
+      mimetype: "application/pdf",
+      size: params.buffer.length,
+      buffer: params.buffer
+    } as Express.Multer.File;
+
+    const existing = await this.prisma.ssmDocument.findFirst({
+      where: {
+        tenantId,
+        type: params.type,
+        targetType: params.targetType,
+        ...(params.targetRefId ? { targetRefId: params.targetRefId } : {}),
+        status: { not: SsmDocumentStatus.ARCHIVED }
+      },
+      orderBy: { updatedAt: "desc" }
+    });
+
+    if (existing) {
+      const version = await this.addVersion(tenantId, actorId, existing.id, params.changeNote, fakeFile);
+      await this.prisma.ssmDocument.update({
+        where: { id: existing.id },
+        data: {
+          title: params.title,
+          targetLabel: params.targetLabel?.trim() || existing.targetLabel,
+          jobPositionName: params.jobPositionName?.trim() || existing.jobPositionName,
+          entityName: params.entityName?.trim() || existing.entityName,
+          isControlFolder: params.isControlFolder ?? existing.isControlFolder
+        }
+      });
+      return {
+        documentId: existing.id,
+        versionId: version.versionId,
+        versionNumber: version.versionNumber,
+        created: false
+      };
+    }
+
+    const created = await this.createDocument(tenantId, actorId, {
+      title: params.title,
+      type: params.type,
+      targetType: params.targetType,
+      targetRefId: params.targetRefId,
+      targetLabel: params.targetLabel,
+      jobPositionName: params.jobPositionName,
+      entityName: params.entityName,
+      isControlFolder: params.isControlFolder ?? true,
+      changeNote: params.changeNote
+    }, fakeFile);
+
+    return {
+      documentId: created.documentId,
+      versionId: created.versionId,
+      versionNumber: created.versionNumber,
+      created: true
+    };
+  }
+
   async listTypePolicies(tenantId: string) {
-    let rows = await this.prisma.ssmDocumentTypePolicy.findMany({
+    await this.seedDefaultTypePolicies(tenantId);
+    const rows = await this.prisma.ssmDocumentTypePolicy.findMany({
       where: { tenantId },
       orderBy: { documentType: "asc" }
     });
-    if (!rows.length) {
-      await this.seedDefaultTypePolicies(tenantId);
-      rows = await this.prisma.ssmDocumentTypePolicy.findMany({
-        where: { tenantId },
-        orderBy: { documentType: "asc" }
-      });
-    }
     return {
       items: rows.map((row) => ({
         id: row.id,
