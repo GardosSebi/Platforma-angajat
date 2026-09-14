@@ -257,6 +257,7 @@ export class SsmDocumentsService {
           entityName: dto.entityName?.trim(),
           departmentName: dto.departmentName?.trim(),
           jobPositionName: dto.jobPositionName?.trim(),
+          legalEntityId: dto.legalEntityId?.trim() || undefined,
           periodStart,
           periodEnd,
           targetType: dto.targetType,
@@ -1116,6 +1117,14 @@ export class SsmDocumentsService {
         targetType: SsmDocumentTargetType.JOB_POSITION,
         isControlFolder: true,
         checklistItems: ["Normativ pe post", "Cantitate și durată de viață", "Generat din modulul EIP", "Aprobat SSM"]
+      },
+      {
+        name: "decizie-numire-cssm",
+        title: "Decizie de numire CSSM — {entitate}",
+        type: SsmDocumentType.DECISION,
+        targetType: SsmDocumentTargetType.ENTITY,
+        isControlFolder: true,
+        checklistItems: ["Nr. și data decizie", "Componență CSSM", "Generată din modulul CSSM", "Dosar control ITM"]
       }
     ];
     let created = 0;
@@ -1360,6 +1369,7 @@ export class SsmDocumentsService {
       targetLabel?: string;
       jobPositionName?: string;
       entityName?: string;
+      legalEntityId?: string;
       fileName: string;
       buffer: Buffer;
       changeNote: string;
@@ -1393,6 +1403,7 @@ export class SsmDocumentsService {
           targetLabel: params.targetLabel?.trim() || existing.targetLabel,
           jobPositionName: params.jobPositionName?.trim() || existing.jobPositionName,
           entityName: params.entityName?.trim() || existing.entityName,
+          legalEntityId: params.legalEntityId ?? existing.legalEntityId,
           isControlFolder: params.isControlFolder ?? existing.isControlFolder
         }
       });
@@ -1412,6 +1423,7 @@ export class SsmDocumentsService {
       targetLabel: params.targetLabel,
       jobPositionName: params.jobPositionName,
       entityName: params.entityName,
+      legalEntityId: params.legalEntityId,
       isControlFolder: params.isControlFolder ?? true,
       changeNote: params.changeNote
     }, fakeFile);

@@ -11,6 +11,7 @@ import {
   useDepartmentsLookup,
   useEmployeeOptions,
   useJobPositionsLookup,
+  useLegalEntitiesLookup,
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
 import { paginationFromResult } from "../../../shared/components/PaginationBar";
@@ -116,7 +117,7 @@ export function ChatbotPage() {
 
   const audienceTypesForForm = useMemo(() => {
     let types = AUDIENCE_TYPES;
-    if (worksiteRestricted) types = types.filter((type) => type !== "ALL" && type !== "EXTERNAL");
+    if (worksiteRestricted) types = types.filter((type) => type !== "ALL" && type !== "EXTERNAL" && type !== "LEGAL_ENTITY");
     if (!myRightsQuery.data?.canCommunicateExternal && !canManageExternalContacts) {
       types = types.filter((type) => type !== "EXTERNAL");
     }
@@ -139,6 +140,7 @@ export function ChatbotPage() {
     queryFn: () => surveysApi.listSurveys({ page: 1, pageSize: 100 })
   });
   const worksitesLookup = useWorksitesLookup();
+  const legalEntitiesLookup = useLegalEntitiesLookup();
   const departmentsLookup = useDepartmentsLookup();
   const jobPositionsLookup = useJobPositionsLookup();
   const employeesOptions = useEmployeeOptions();
@@ -173,9 +175,15 @@ export function ChatbotPage() {
   useEffect(() => {
     if (!worksiteRestricted) return;
     setAnnouncementForm((prev) =>
-      prev.audienceType === "ALL" ? { ...prev, audienceType: "WORKSITE" } : prev
+      prev.audienceType === "ALL" || prev.audienceType === "LEGAL_ENTITY"
+        ? { ...prev, audienceType: "WORKSITE" }
+        : prev
     );
-    setTemplateForm((prev) => (prev.audienceType === "ALL" ? { ...prev, audienceType: "WORKSITE" } : prev));
+    setTemplateForm((prev) =>
+      prev.audienceType === "ALL" || prev.audienceType === "LEGAL_ENTITY"
+        ? { ...prev, audienceType: "WORKSITE" }
+        : prev
+    );
   }, [worksiteRestricted]);
 
   const announcementsPaged = paginationFromResult(
@@ -204,6 +212,12 @@ export function ChatbotPage() {
   );
 
   const audienceOptions = useMemo(() => {
+    if (announcementForm.audienceType === "LEGAL_ENTITY") {
+      return (legalEntitiesLookup.data?.items ?? []).map((item) => ({
+        id: item.id,
+        label: `${item.name}${item.cui ? ` (${item.cui})` : ""}`
+      }));
+    }
     if (announcementForm.audienceType === "WORKSITE") {
       return (worksitesLookup.data?.items ?? []).map((item) => ({ id: item.id, label: `${item.code} - ${item.name}` }));
     }
@@ -234,6 +248,7 @@ export function ChatbotPage() {
     employeesOptions.data?.items,
     groupsLookup.data?.items,
     jobPositionsLookup.data?.items,
+    legalEntitiesLookup.data?.items,
     worksitesLookup.data?.items,
     externalContactsQuery.data?.items
   ]);

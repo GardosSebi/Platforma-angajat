@@ -39,6 +39,16 @@ export class SsmCssmController {
     return this.cssm.createCommittee(tenantId, user.sub, dto);
   }
 
+  @Get("committees/:id/decision.pdf")
+  @RequirePermissions(Permission.SSM_CSSM_VIEW)
+  @Header("Content-Type", "application/pdf")
+  async decisionPdf(@TenantId() tenantId: string, @Param("id") id: string) {
+    const buffer = await this.cssm.decisionPdf(tenantId, id);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename="decizie-cssm-${id}.pdf"`
+    });
+  }
+
   @Get("committees/:id")
   @RequirePermissions(Permission.SSM_CSSM_VIEW)
   get(@TenantId() tenantId: string, @Param("id") id: string) {

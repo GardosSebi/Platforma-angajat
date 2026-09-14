@@ -57,6 +57,7 @@ function dedupe(values?: string[]): string[] {
 function audienceLabel(audienceType: CommunicationAudienceType): string {
   const labels: Record<CommunicationAudienceType, string> = {
     ALL: "Toți angajații",
+    LEGAL_ENTITY: "Companie (entitate juridică)",
     WORKSITE: "Punct de lucru",
     DEPARTMENT: "Departament",
     JOB_POSITION: "Post",
@@ -906,6 +907,20 @@ export class CommunicationsService {
       });
       return rows.map((item) => item.id);
     }
+    if (row.audienceType === CommunicationAudienceType.LEGAL_ENTITY) {
+      const rows = await this.prisma.employee.findMany({
+        where: {
+          tenantId,
+          active: true,
+          OR: [
+            { worksite: { legalEntityId: row.audienceRefId } },
+            { jobPosition: { legalEntityId: row.audienceRefId } }
+          ]
+        },
+        select: { id: true }
+      });
+      return rows.map((item) => item.id);
+    }
     if (row.audienceType === CommunicationAudienceType.WORKSITE) {
       const rows = await this.prisma.employee.findMany({
         where: { tenantId, active: true, worksiteId: row.audienceRefId },
@@ -1095,6 +1110,11 @@ export class CommunicationsService {
           "Nu poți trimite anunțuri către toți angajații. Audiența este limitată la punctul tău de lucru."
         );
       }
+      if (audienceType === CommunicationAudienceType.LEGAL_ENTITY) {
+        throw new ForbiddenException(
+          "Nu poți trimite anunțuri către o întreagă companie. Audiența este limitată la punctul tău de lucru."
+        );
+      }
       if (audienceType === CommunicationAudienceType.EXTERNAL) {
         throw new ForbiddenException("Comunicarea externă nu este disponibilă pe contul limitat la punctul de lucru.");
       }
@@ -1130,6 +1150,16 @@ export class CommunicationsService {
     }
     if (!audienceRefId?.trim()) {
       throw new BadRequestException(`Audiența "${audienceLabel(audienceType)}" necesită selectarea unui segment.`);
+    }
+
+    if (audienceType === CommunicationAudienceType.LEGAL_ENTITY) {
+      const entity = await this.prisma.legalEntity.findFirst({
+        where: { id: audienceRefId.trim(), tenantId, active: true }
+      });
+      if (!entity) {
+        throw new NotFoundException("Entitatea juridică nu a fost găsită sau este inactivă.");
+      }
+      return;
     }
 
     if (scopedIds !== null) {

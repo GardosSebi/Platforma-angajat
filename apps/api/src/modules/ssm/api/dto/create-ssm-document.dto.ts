@@ -27,6 +27,11 @@ export class CreateSsmDocumentDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
+  legalEntityId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   departmentName?: string;
 
   @IsOptional()

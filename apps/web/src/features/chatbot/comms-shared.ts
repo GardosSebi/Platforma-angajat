@@ -23,6 +23,7 @@ export const MESSAGE_TYPES: CommunicationMessageType[] = ["ANNOUNCEMENT", "QUEST
 
 export const AUDIENCE_TYPES: CommunicationAudienceType[] = [
   "ALL",
+  "LEGAL_ENTITY",
   "WORKSITE",
   "DEPARTMENT",
   "JOB_POSITION",
@@ -61,6 +62,7 @@ export const STATUS_LABELS: Record<CommunicationAnnouncementItem["status"], stri
 
 export const AUDIENCE_LABELS: Record<CommunicationAudienceType, string> = {
   ALL: "Toți angajații",
+  LEGAL_ENTITY: "Companie (entitate juridică)",
   WORKSITE: "Punct de lucru",
   DEPARTMENT: "Departament",
   JOB_POSITION: "Post",

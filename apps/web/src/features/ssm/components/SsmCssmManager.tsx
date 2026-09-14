@@ -122,6 +122,13 @@ export function SsmCssmManager() {
   const [committeeId, setCommitteeId] = useState("");
   const [meetingId, setMeetingId] = useState("");
   const [committeeForm, setCommitteeForm] = useState(EMPTY_COMMITTEE);
+  const [committeeEdit, setCommitteeEdit] = useState({
+    name: "",
+    decisionNumber: "",
+    decisionDate: "",
+    constitutedAt: "",
+    notes: ""
+  });
   const [memberForm, setMemberForm] = useState(EMPTY_MEMBER);
   const [meetingForm, setMeetingForm] = useState(EMPTY_MEETING);
   const [minutesForm, setMinutesForm] = useState({ number: "", topics: "", decisions: "", nextMeetingAt: "" });
@@ -167,6 +174,16 @@ export function SsmCssmManager() {
       nextMeetingAt: toDateInput(activeMeeting?.minutes?.nextMeetingAt)
     });
   }, [activeMeeting?.id, activeMeeting?.minutes?.number, activeMeeting?.minutes?.topics, activeMeeting?.minutes?.decisions, activeMeeting?.minutes?.nextMeetingAt]);
+
+  useEffect(() => {
+    setCommitteeEdit({
+      name: committee?.name ?? "",
+      decisionNumber: committee?.decisionNumber ?? "",
+      decisionDate: toDateInput(committee?.decisionDate),
+      constitutedAt: toDateInput(committee?.constitutedAt),
+      notes: committee?.notes ?? ""
+    });
+  }, [committee?.id, committee?.name, committee?.decisionNumber, committee?.decisionDate, committee?.constitutedAt, committee?.notes]);
 
   const entityOptions = useMemo(
     () => mapToOptions(legalEntities.data?.items ?? [], (item) => item.id, (item) => `${item.name}${item.cui ? ` (${item.cui})` : ""}`),
@@ -251,8 +268,8 @@ export function SsmCssmManager() {
           <h4 className="card-title">Comisii CSSM</h4>
         </div>
         <p className="field-hint">
-          Comitetul de securitate și sănătate în muncă — componență, convocări și procese-verbale. Deciziile de
-          numire rămân și în biblioteca de documente (tip DECISION).
+          Comitetul de securitate și sănătate în muncă — componență, convocări și procese-verbale. Completarea
+          numărului de decizie publică automat documentul în bibliotecă (tip Decizie), pentru control ITM.
         </p>
         <div className="ssm-doc-items">
           {committees.map((item) => (
@@ -347,7 +364,100 @@ export function SsmCssmManager() {
             <p className="field-hint">
               {committee.legalEntityName}
               {committee.decisionNumber ? ` · Decizie ${committee.decisionNumber}` : ""}
+              {committee.decisionDocumentId ? " · publicată în Documente" : ""}
             </p>
+            {canEdit ? (
+              <form
+                className="form-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  updateCommittee.mutate({
+                    committeeId: committee.id,
+                    payload: {
+                      name: committeeEdit.name.trim(),
+                      decisionNumber: committeeEdit.decisionNumber.trim() || undefined,
+                      decisionDate: committeeEdit.decisionDate || undefined,
+                      constitutedAt: committeeEdit.constitutedAt || undefined,
+                      notes: committeeEdit.notes.trim() || undefined
+                    }
+                  });
+                }}
+              >
+                <h5 className="ssm-subtitle">Decizie de numire</h5>
+                <div className="field">
+                  <label htmlFor="cssm-edit-name">Denumire</label>
+                  <input
+                    id="cssm-edit-name"
+                    value={committeeEdit.name}
+                    onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, name: event.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="cssm-edit-decision">Nr. decizie constituire</label>
+                  <input
+                    id="cssm-edit-decision"
+                    value={committeeEdit.decisionNumber}
+                    onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, decisionNumber: event.target.value }))}
+                    placeholder="ex. 12/2026"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="cssm-edit-decision-date">Data deciziei</label>
+                  <input
+                    id="cssm-edit-decision-date"
+                    type="date"
+                    value={committeeEdit.decisionDate}
+                    onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, decisionDate: event.target.value }))}
+                  />
+                </div>
+                <div className="ssm-inline-actions">
+                  <button className="btn-primary" type="submit" disabled={updateCommittee.isPending}>
+                    {updateCommittee.isPending ? "Se salvează…" : "Salvează și publică în Documente"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() =>
+                      downloadWithAuth(
+                        ssmApi.getCssmDecisionUrl(committee.id),
+                        `decizie-cssm-${committee.id}.pdf`
+                      ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)))
+                    }
+                  >
+                    Descarcă decizia (PDF)
+                  </button>
+                </div>
+                {committee.decisionDocumentId ? (
+                  <p className="field-hint">
+                    Decizia este în biblioteca SSM (tip Decizie), dosar control ITM. Salvarea actualizează versiunea.
+                  </p>
+                ) : (
+                  <p className="field-hint">
+                    Completează numărul deciziei și salvează pentru a o publica automat la Documente.
+                  </p>
+                )}
+                {updateCommittee.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(updateCommittee.error)}</p>
+                ) : null}
+              </form>
+            ) : (
+              <div className="ssm-inline-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() =>
+                    downloadWithAuth(
+                      ssmApi.getCssmDecisionUrl(committee.id),
+                      `decizie-cssm-${committee.id}.pdf`
+                    ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)))
+                  }
+                >
+                  Descarcă decizia (PDF)
+                </button>
+              </div>
+            )}
+            {downloadError ? <p className="feedback error">{downloadError}</p> : null}
             {committee.compositionWarnings.length ? (
               <div className="callout-warn" role="status">
                 {committee.compositionWarnings.map((warning) => (

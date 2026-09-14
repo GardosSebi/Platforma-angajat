@@ -143,6 +143,14 @@ export class CommunicationRightsService {
       }
     }
 
+    if (audienceType === CommunicationAudienceType.LEGAL_ENTITY && audienceRefId) {
+      const ok = rights.some(
+        (r) =>
+          r.scopeType === CommunicationPublishScope.LEGAL_ENTITY && r.legalEntityId === audienceRefId
+      );
+      if (ok) return;
+    }
+
     if (audienceType === CommunicationAudienceType.EMPLOYEE_GROUP && audienceRefId) {
       const ok = rights.some(
         (r) =>

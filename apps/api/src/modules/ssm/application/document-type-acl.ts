@@ -95,6 +95,16 @@ const DEFAULT_ROLE_SETS: Partial<
     ],
     edit: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE],
     approve: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE]
+  },
+  DECISION: {
+    view: [
+      SystemRole.SSM_ADMIN,
+      SystemRole.SSM_ENTITY_RESPONSIBLE,
+      SystemRole.DEPARTMENT_MANAGER,
+      SystemRole.ITM_INSPECTOR
+    ],
+    edit: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE],
+    approve: [SystemRole.SSM_ADMIN, SystemRole.SSM_ENTITY_RESPONSIBLE]
   }
 };
 

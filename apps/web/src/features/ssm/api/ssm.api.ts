@@ -982,5 +982,8 @@ export const ssmApi = {
   },
   getCssmMinutesUrl(meetingId: string) {
     return `/ssm/cssm/meetings/${meetingId}/minutes.pdf`;
+  },
+  getCssmDecisionUrl(committeeId: string) {
+    return `/ssm/cssm/committees/${committeeId}/decision.pdf`;
   }
 };

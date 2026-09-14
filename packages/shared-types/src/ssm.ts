@@ -59,6 +59,7 @@ export interface CreateSsmDocumentRequest {
   title: string;
   type: SsmDocumentType;
   entityName?: string;
+  legalEntityId?: string;
   departmentName?: string;
   jobPositionName?: string;
   periodStart?: string;
@@ -1562,4 +1563,5 @@ export interface SsmCssmCommitteeItem {
   compositionWarnings: string[];
   members: SsmCssmMemberItem[];
   meetings: SsmCssmMeetingItem[];
+  decisionDocumentId?: string | null;
 }

@@ -58,6 +58,7 @@ export const COMMUNICATION_CATEGORY_LABELS: Record<CommunicationCategory, string
 
 export const COMMUNICATION_AUDIENCE_TYPES = [
   "ALL",
+  "LEGAL_ENTITY",
   "WORKSITE",
   "DEPARTMENT",
   "JOB_POSITION",

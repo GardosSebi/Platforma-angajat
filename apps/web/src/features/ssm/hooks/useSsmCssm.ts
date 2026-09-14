@@ -11,7 +11,10 @@ import type {
 import { ssmApi } from "../api/ssm.api";
 
 function invalidateCssm(queryClient: ReturnType<typeof useQueryClient>) {
-  return queryClient.invalidateQueries({ queryKey: ["ssm", "cssm"] });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["ssm", "cssm"] }),
+    queryClient.invalidateQueries({ queryKey: ["ssm", "documents"] })
+  ]);
 }
 
 export function useCssmCommittees() {

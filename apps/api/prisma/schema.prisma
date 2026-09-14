@@ -190,6 +190,7 @@ enum CommunicationAudienceType {
   EMPLOYEE
   CUSTOM
   EXTERNAL
+  LEGAL_ENTITY
 }
 
 enum CommunicationAnnouncementStatus {

@@ -84,7 +84,7 @@ const SSM_SECTIONS: Array<{
     title: "CSSM",
     caption: "Comisie, ședințe, PV",
     description:
-      "Componența comitetului CSSM, convocări/ședințe și procese-verbale. Deciziile de numire rămân și la Documente (tip DECISION)."
+      "Componența comitetului CSSM, convocări/ședințe și procese-verbale. Decizia de numire se publică automat în Documente (tip Decizie)."
   },
   {
     id: "compliance",

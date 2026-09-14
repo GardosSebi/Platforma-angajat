@@ -2,7 +2,10 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import {
   SsmCssmMeetingKind,
   SsmCssmMeetingStatus,
-  SsmCssmMemberRole
+  SsmCssmMemberRole,
+  SsmDocumentStatus,
+  SsmDocumentTargetType,
+  SsmDocumentType
 } from "@prisma/client";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
@@ -17,7 +20,9 @@ import {
   UpsertSsmCssmMinutesDto
 } from "../../api/dto/ssm-cssm.dto";
 import { renderCssmConvocation } from "../legal-forms/cssm-convocation";
+import { renderCssmDecision } from "../legal-forms/cssm-decision";
 import { renderCssmMinutes } from "../legal-forms/cssm-minutes";
+import { SsmDocumentsService } from "./ssm-documents.service";
 
 const CSSM_ROLE_LABEL: Record<SsmCssmMemberRole, string> = {
   PRESIDENT: "Președinte",
@@ -51,7 +56,8 @@ function parseOptionalDate(value?: string | null): Date | null {
 export class SsmCssmService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly documentsService: SsmDocumentsService
   ) {}
 
   async listCommittees(tenantId: string) {
@@ -68,7 +74,8 @@ export class SsmCssmService {
       },
       orderBy: [{ active: "desc" }, { name: "asc" }]
     });
-    return { items: rows.map((row) => this.mapCommittee(row)) };
+    const items = rows.map((row) => this.mapCommittee(row));
+    return { items: await this.attachDecisionDocuments(tenantId, items) };
   }
 
   async getCommittee(tenantId: string, committeeId: string) {
@@ -87,7 +94,8 @@ export class SsmCssmService {
       }
     });
     if (!row) throw new NotFoundException("Comisia CSSM nu a fost găsită.");
-    return this.mapCommittee(row, true);
+    const [committee] = await this.attachDecisionDocuments(tenantId, [this.mapCommittee(row, true)]);
+    return committee;
   }
 
   async createCommittee(tenantId: string, actorId: string, dto: CreateSsmCssmCommitteeDto) {
@@ -117,6 +125,7 @@ export class SsmCssmService {
       entityId: created.id,
       payload: { legalEntityId: entity.id }
     });
+    await this.publishAppointmentDecision(tenantId, actorId, created.id);
     return this.getCommittee(tenantId, created.id);
   }
 
@@ -142,6 +151,7 @@ export class SsmCssmService {
       entityId: committeeId,
       payload: { ...dto }
     });
+    await this.publishAppointmentDecision(tenantId, actorId, committeeId);
     return this.getCommittee(tenantId, committeeId);
   }
 
@@ -170,6 +180,7 @@ export class SsmCssmService {
       entityId: created.id,
       payload: { committeeId, role: dto.role }
     });
+    await this.publishAppointmentDecision(tenantId, actorId, committeeId);
     return this.mapMember(created);
   }
 
@@ -211,6 +222,7 @@ export class SsmCssmService {
       entityId: memberId,
       payload: { ...dto }
     });
+    await this.publishAppointmentDecision(tenantId, actorId, existing.committeeId);
     return this.mapMember(updated);
   }
 
@@ -411,6 +423,11 @@ export class SsmCssmService {
     return this.getMeeting(tenantId, meetingId);
   }
 
+  async decisionPdf(tenantId: string, committeeId: string) {
+    const committee = await this.loadCommitteeForDecision(tenantId, committeeId);
+    return this.renderAppointmentDecision(committee);
+  }
+
   async convocationPdf(tenantId: string, meetingId: string) {
     const meeting = await this.loadMeetingForPdf(tenantId, meetingId);
     return renderCssmConvocation({
@@ -582,6 +599,103 @@ export class SsmCssmService {
       warnings.push("Numărul reprezentanților angajatorului și al lucrătorilor trebuie să fie egal.");
     }
     return warnings;
+  }
+
+  private async loadCommitteeForDecision(tenantId: string, committeeId: string) {
+    const committee = await this.prisma.ssmCssmCommittee.findFirst({
+      where: { id: committeeId, tenantId },
+      include: {
+        legalEntity: { select: { id: true, name: true, cui: true, headquarters: true } },
+        members: { orderBy: [{ active: "desc" }, { fullName: "asc" }] }
+      }
+    });
+    if (!committee) throw new NotFoundException("Comisia CSSM nu a fost găsită.");
+    return committee;
+  }
+
+  private renderAppointmentDecision(
+    committee: Awaited<ReturnType<SsmCssmService["loadCommitteeForDecision"]>>
+  ) {
+    return renderCssmDecision({
+      employerName: committee.legalEntity.name,
+      cui: committee.legalEntity.cui,
+      headquarters: committee.legalEntity.headquarters,
+      committeeName: committee.name,
+      decisionNumber: committee.decisionNumber,
+      decisionDate: committee.decisionDate,
+      constitutedAt: committee.constitutedAt,
+      notes: committee.notes,
+      members: committee.members.map((member) => ({
+        fullName: member.fullName,
+        role: CSSM_ROLE_LABEL[member.role],
+        functionTitle: member.functionTitle,
+        appointedAt: member.appointedAt,
+        termEndsAt: member.termEndsAt,
+        active: member.active
+      }))
+    });
+  }
+
+  private async publishAppointmentDecision(tenantId: string, actorId: string, committeeId: string) {
+    const committee = await this.loadCommitteeForDecision(tenantId, committeeId);
+    if (!committee.decisionNumber?.trim()) return null;
+    const buffer = await this.renderAppointmentDecision(committee);
+    const safeName = (committee.decisionNumber || committee.name).replace(/[<>:"/\\|?*]+/g, "_").slice(0, 80);
+    const result = await this.documentsService.upsertGeneratedPdf(tenantId, actorId, {
+      type: SsmDocumentType.DECISION,
+      title: `Decizie de numire CSSM — ${committee.legalEntity.name}${
+        committee.decisionNumber ? ` nr. ${committee.decisionNumber}` : ""
+      }`,
+      targetType: SsmDocumentTargetType.ENTITY,
+      targetRefId: committee.id,
+      targetLabel: committee.legalEntity.name,
+      entityName: committee.legalEntity.name,
+      legalEntityId: committee.legalEntityId,
+      fileName: `Decizie-CSSM-${safeName}.pdf`,
+      buffer,
+      changeNote: "Generat automat din modulul CSSM (decizie de numire)",
+      isControlFolder: true
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "CSSM_DECISION_DOCUMENT_PUBLISHED",
+      entityType: "SsmDocument",
+      entityId: result.documentId,
+      payload: {
+        committeeId: committee.id,
+        created: result.created,
+        versionNumber: result.versionNumber,
+        decisionNumber: committee.decisionNumber
+      }
+    });
+    return result;
+  }
+
+  private async attachDecisionDocuments<T extends { id: string }>(tenantId: string, items: T[]) {
+    if (!items.length) return items.map((item) => ({ ...item, decisionDocumentId: null as string | null }));
+    const docs = await this.prisma.ssmDocument.findMany({
+      where: {
+        tenantId,
+        type: SsmDocumentType.DECISION,
+        targetType: SsmDocumentTargetType.ENTITY,
+        targetRefId: { in: items.map((item) => item.id) },
+        status: { not: SsmDocumentStatus.ARCHIVED }
+      },
+      select: { id: true, targetRefId: true },
+      orderBy: { updatedAt: "desc" }
+    });
+    const byCommittee = new Map<string, string>();
+    for (const doc of docs) {
+      if (doc.targetRefId && !byCommittee.has(doc.targetRefId)) {
+        byCommittee.set(doc.targetRefId, doc.id);
+      }
+    }
+    return items.map((item) => ({
+      ...item,
+      decisionDocumentId: byCommittee.get(item.id) ?? null
+    }));
   }
 
   private mapMember(row: {
