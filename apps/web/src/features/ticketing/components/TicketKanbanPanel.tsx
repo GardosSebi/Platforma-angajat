@@ -125,11 +125,12 @@ export function TicketKanbanPanel({
         />
         <FieldSelect
           id="filter-destinatar"
-          label="Destinatar"
+          label="Destinatar (categorie)"
           value={filters.category ?? ""}
           onChange={(category) => onFiltersChange({ category: category || undefined })}
           allowEmpty
           emptyLabel="Toate"
+          hint="Filtrează după categoria destinatară (HR, IT…), nu după o persoană."
           options={TICKET_CATEGORIES.map((category) => ({
             value: category,
             label: TICKET_CATEGORY_LABELS[category]
@@ -238,7 +239,7 @@ export function TicketKanbanPanel({
                 <th>Titlu</th>
                 <th>Stare</th>
                 <th>Prioritate</th>
-                <th>Categorie</th>
+                <th>Destinatar (categorie)</th>
                 <th>Operator</th>
                 <th>Scadență</th>
               </tr>

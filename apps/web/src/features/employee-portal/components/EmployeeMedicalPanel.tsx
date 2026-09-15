@@ -83,6 +83,7 @@ export function EmployeeMedicalPanel() {
               : `următorul control este pe ${formatRoDate(data.nextDueAt)}${
                   data.daysUntilDue != null ? ` (în ${data.daysUntilDue} zile)` : ""
                 }.`}
+          {!data.blockedAdmission ? " Reminder-ul este doar în aplicație, nu pe email." : ""}
         </div>
       ) : null}
 

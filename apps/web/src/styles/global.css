@@ -5849,6 +5849,27 @@ button.ssm-doc-item:hover {
   color: var(--color-muted);
 }
 
+.survey-question-preview li.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+.survey-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.survey-editor-preview,
+.survey-editor-preview-pane {
+  margin-top: 0.85rem;
+}
+
+.survey-editor-preview-pane {
+  max-width: 52rem;
+}
+
 .survey-manage-stack {
   display: flex;
   flex-direction: column;

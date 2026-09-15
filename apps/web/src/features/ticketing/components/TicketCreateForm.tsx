@@ -75,9 +75,10 @@ export function TicketCreateForm({
         <div className="comms-form-row">
           <FieldSelect
             id="ticket-category"
-            label="Destinatar *"
+            label="Destinatar (categorie) *"
             value={form.category ?? "HR"}
             onChange={(category) => onChange({ category })}
+            hint="Echipa/categoria care preia tichetul (HR, IT…), nu un destinatar persoană."
             options={TICKET_CATEGORIES.map((category) => ({
               value: category,
               label: TICKET_CATEGORY_LABELS[category]

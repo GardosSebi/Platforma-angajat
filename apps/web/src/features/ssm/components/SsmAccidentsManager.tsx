@@ -122,7 +122,7 @@ function typeLabel(type: SsmAccidentType): string {
     case "ACCIDENT":
       return "Accident de muncă";
     case "INCIDENT":
-      return "Incident periculos (near-miss)";
+      return "Incident periculos";
     case "OCCUPATIONAL_DISEASE":
       return "Boală profesională";
     default:
@@ -449,6 +449,11 @@ export function SsmAccidentsManager() {
                   value={caseForm.type}
                   onChange={(type) => setCaseForm((p) => ({ ...p, type: type as SsmAccidentType }))}
                   options={ACCIDENT_TYPES.map((type) => ({ value: type, label: typeLabel(type) }))}
+                  hint={
+                    caseForm.type === "INCIDENT"
+                      ? "Include evenimente fără accident (near-miss). Nu există etichetă separată — se înregistrează ca incident."
+                      : undefined
+                  }
                 />
                 <FieldSelect
                   id="acc-severity"

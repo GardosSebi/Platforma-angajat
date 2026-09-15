@@ -608,7 +608,7 @@ export class SsmMedicalService {
     return { reminders };
   }
 
-  /** Remindere controale medicale scadente — cron zilnic. */
+  /** Remindere controale medicale scadente — doar in-app (fără email), spre deosebire de instruiri / EIP / PSI. */
   async dispatchMedicalReminders(tenantId: string, actorId: string) {
     const controls = await this.prisma.ssmMedicalControl.findMany({
       where: { tenantId, nextDueAt: { not: null } },

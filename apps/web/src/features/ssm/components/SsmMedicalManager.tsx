@@ -31,7 +31,7 @@ const MEDICAL_TABS: Array<{ id: MedicalTab; title: string; caption: string }> = 
   { id: "types", title: "Tipuri control", caption: "Config pe post și categorie" },
   { id: "register", title: "Registru", caption: "Listă și înregistrare" },
   { id: "update", title: "Actualizare", caption: "Rezultat și fișă aptitudini" },
-  { id: "reminders", title: "Reminder", caption: "Scadențe și întârzieri" },
+  { id: "reminders", title: "Reminder", caption: "In-app, fără email" },
   { id: "appointments", title: "Programări", caption: "Cereri din portalul angajatului" }
 ];
 
@@ -576,6 +576,10 @@ export function SsmMedicalManager() {
 
       {tab === "reminders" ? (
         <div className="card form-stack ssm-doc-card">
+          <p className="field-hint">
+            Reminder-ele de medicină a muncii apar în aplicație (notificări + portalul angajatului). Nu se trimit pe
+            email, spre deosebire de instruiri, EIP și PSI.
+          </p>
           <div className="form-actions" style={{ marginBottom: "0.85rem" }}>
             <button
               type="button"
@@ -583,12 +587,12 @@ export function SsmMedicalManager() {
               disabled={dispatchReminders.isPending}
               onClick={() => dispatchReminders.mutate()}
             >
-              {dispatchReminders.isPending ? "Se trimit…" : "Trimite reminder-ele acum"}
+              {dispatchReminders.isPending ? "Se trimit…" : "Trimite notificările in-app acum"}
             </button>
           </div>
           {dispatchReminders.isSuccess ? (
             <p className="feedback success" role="status">
-              Trimise {dispatchReminders.data.sent} reminder-e.
+              Trimise {dispatchReminders.data.sent} notificări in-app.
             </p>
           ) : null}
           {dispatchReminders.isError ? (

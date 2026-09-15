@@ -59,7 +59,9 @@ const TYPE_HINTS: Partial<Record<CreateSsmDocumentRequest["type"], string>> = {
   EMERGENCY_PROCEDURE: "→ PSI",
   DECISION: "→ CSSM",
   THEMATIC: "→ Instruire",
-  EIP_NORM: "→ EIP (normativ pe post)"
+  EIP_NORM: "→ EIP (normativ pe post)",
+  DANGEROUS_SUBSTANCES:
+    "Listă documentară (PDF/Word) pe punct de lucru — nu este registru de inventar cu fișe și cantități."
 };
 
 const EMPTY_DOC: CreateSsmDocumentRequest = {
@@ -1006,7 +1008,8 @@ export function SsmDocumentsManager() {
               Upload document nou
             </h4>
             <p className="field-hint" style={{ marginTop: 0 }}>
-              Word / PDF / video. Unele tipuri apar și în modulele dedicate (risc, PPP, accidente, PSI).
+              Word / PDF / video. Unele tipuri apar și în modulele dedicate (risc, PPP, accidente, PSI). Substanțele
+              periculoase se încarcă ca listă documentară, nu ca registru de inventar.
             </p>
             <div className="field">
               <label htmlFor="doc-title">Titlu</label>

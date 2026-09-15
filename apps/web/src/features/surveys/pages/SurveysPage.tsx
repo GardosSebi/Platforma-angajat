@@ -2,8 +2,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
-import type { CreateSurveyRequest, SurveyConditionalRule, SurveyItem, SurveyQuestion, SurveyQuestionOption, UpdateSurveyRequest } from "@repo/shared-types/surveys";
-import { surveyQuestionNeedsOptions } from "@repo/shared-types/surveys";
+import type { CreateSurveyRequest, SurveyConditionalRule, SurveyItem, SurveyQuestion, SurveyQuestionOption, SurveyQuestionType, UpdateSurveyRequest } from "@repo/shared-types/surveys";
+import { surveyQuestionNeedsOptions, surveyQuestionNeedsRange } from "@repo/shared-types/surveys";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import {
   useDepartmentsLookup,
@@ -83,6 +83,35 @@ function cleanOptions(options: SurveyQuestionOption[]): SurveyQuestionOption[] {
     .filter((option): option is SurveyQuestionOption => option !== null);
 }
 
+function nextQuestionId(questions: SurveyQuestion[]): string {
+  let max = 0;
+  for (const question of questions) {
+    const match = /^q(\d+)$/.exec(question.id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return `q${max + 1}`;
+}
+
+function rangeDefaults(type: SurveyQuestionType): { min: number; max: number } {
+  if (type === "RATING_NPS") return { min: 0, max: 10 };
+  return { min: 1, max: 5 };
+}
+
+function questionToForm(question: SurveyQuestion, titleEn: string): QuestionFormState {
+  const defaults = rangeDefaults(question.type);
+  return {
+    id: question.id,
+    type: question.type,
+    title: question.title,
+    titleEn,
+    required: question.required ?? false,
+    options: question.options?.length ? question.options : EMPTY_QUESTION.options,
+    min: question.min ?? defaults.min,
+    max: question.max ?? defaults.max,
+    multiTextCount: question.multiTextCount ?? 3
+  };
+}
+
 function canOpenSurveyToComplete(roles: string[] | undefined): boolean {
   return hasPermission(roles, "surveys:respond") || hasPermission(roles, "surveys:edit");
 }
@@ -116,6 +145,7 @@ export function SurveysPage() {
   const [questionTitlesEn, setQuestionTitlesEn] = useState<Record<string, string>>({});
   const [conditionalLogic, setConditionalLogic] = useState<SurveyConditionalRule[]>([]);
   const [editingSurveyId, setEditingSurveyId] = useState<string | null>(null);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [selectedSurveyId, setSelectedSurveyId] = useState("");
   const [publicExpiresAt, setPublicExpiresAt] = useState("");
   const [publicResponseLimit, setPublicResponseLimit] = useState("100");
@@ -176,16 +206,21 @@ export function SurveysPage() {
     worksitesLookup.data?.items
   ]);
 
-  const buildQuestionFromForm = (position: number): SurveyQuestion => ({
-    id: `q${position}`,
+  const buildQuestionFromForm = (id: string): SurveyQuestion => ({
+    id,
     title: questionForm.title.trim(),
     type: questionForm.type,
     required: questionForm.required,
     options: surveyQuestionNeedsOptions(questionForm.type) ? cleanOptions(questionForm.options) : undefined,
-    min: questionForm.type === "SCALE" ? questionForm.min : undefined,
-    max: questionForm.type === "SCALE" ? questionForm.max : undefined,
+    min: surveyQuestionNeedsRange(questionForm.type) ? questionForm.min : undefined,
+    max: surveyQuestionNeedsRange(questionForm.type) ? questionForm.max : undefined,
     multiTextCount: questionForm.type === "MULTI_TEXT" ? questionForm.multiTextCount : undefined
   });
+
+  const resetQuestionForm = (existing: SurveyQuestion[] = questions) => {
+    setEditingQuestionId(null);
+    setQuestionForm({ ...EMPTY_QUESTION, id: nextQuestionId(existing) });
+  };
 
   const addQuestion = () => {
     setCreateFeedback(null);
@@ -193,12 +228,61 @@ export function SurveysPage() {
       setCreateFeedback({ type: "error", message: "Completează întrebarea și, dacă este cazul, opțiunile." });
       return;
     }
-    const next = buildQuestionFromForm(questions.length + 1);
-    setQuestions((prev) => [...prev, next]);
+    if (editingQuestionId) {
+      const updated = buildQuestionFromForm(editingQuestionId);
+      setQuestions((prev) => prev.map((question) => (question.id === editingQuestionId ? updated : question)));
+      setQuestionTitlesEn((prev) => {
+        const next = { ...prev };
+        if (questionForm.titleEn.trim()) next[editingQuestionId] = questionForm.titleEn.trim();
+        else delete next[editingQuestionId];
+        return next;
+      });
+      resetQuestionForm();
+      return;
+    }
+    const id = nextQuestionId(questions);
+    const next = buildQuestionFromForm(id);
+    const nextList = [...questions, next];
+    setQuestions(nextList);
     if (questionForm.titleEn.trim()) {
       setQuestionTitlesEn((prev) => ({ ...prev, [next.id]: questionForm.titleEn.trim() }));
     }
-    setQuestionForm((prev) => ({ ...prev, id: `q${questions.length + 2}`, title: "", titleEn: "" }));
+    resetQuestionForm(nextList);
+  };
+
+  const editQuestion = (id: string) => {
+    const question = questions.find((item) => item.id === id);
+    if (!question) return;
+    setEditingQuestionId(id);
+    setQuestionForm(questionToForm(question, questionTitlesEn[id] ?? ""));
+  };
+
+  const removeQuestion = (id: string) => {
+    const nextList = questions.filter((question) => question.id !== id);
+    setQuestions(nextList);
+    setQuestionTitlesEn((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setConditionalLogic((prev) => prev.filter((rule) => rule.questionId !== id && rule.showQuestionId !== id));
+    if (editingQuestionId === id) resetQuestionForm(nextList);
+  };
+
+  const moveQuestion = (id: string, direction: "up" | "down") => {
+    setQuestions((prev) => {
+      const index = prev.findIndex((question) => question.id === id);
+      if (index < 0) return prev;
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const current = next[index];
+      const swap = next[target];
+      if (!current || !swap) return prev;
+      next[index] = swap;
+      next[target] = current;
+      return next;
+    });
   };
 
   const onAudienceRefChange = (value: string) => {
@@ -213,6 +297,7 @@ export function SurveysPage() {
     setQuestionTitlesEn({});
     setConditionalLogic([]);
     setQuestionForm(EMPTY_QUESTION);
+    setEditingQuestionId(null);
     setCreateFeedback(null);
   };
 
@@ -248,6 +333,7 @@ export function SurveysPage() {
     setQuestionTitlesEn(survey.translations?.en?.questions ?? {});
     setConditionalLogic(survey.conditionalLogic ?? []);
     setQuestionForm(EMPTY_QUESTION);
+    setEditingQuestionId(null);
     setSelectedSurveyId(survey.id);
     setTab("create");
   };
@@ -261,7 +347,7 @@ export function SurveysPage() {
   };
 
   const buildSurveyPayload = (): CreateSurveyRequest => {
-    const questionSchema = questions.length > 0 ? questions : [buildQuestionFromForm(1)];
+    const questionSchema = questions.length > 0 ? questions : [buildQuestionFromForm(nextQuestionId(questions))];
     const enQuestions: Record<string, string> = { ...questionTitlesEn };
     if (questions.length === 0 && questionForm.titleEn.trim()) {
       enQuestions[questionSchema[0]!.id] = questionForm.titleEn.trim();
@@ -506,13 +592,24 @@ export function SurveysPage() {
           canSave={canSaveSurvey}
           isPending={createSurvey.isPending || updateSurvey.isPending}
           feedback={createFeedback}
+          editingQuestionId={editingQuestionId}
           onSurveyChange={(patch) => setSurveyForm((prev) => ({ ...prev, ...patch }))}
-          onQuestionChange={(patch) => setQuestionForm((prev) => ({ ...prev, ...patch }))}
+          onQuestionChange={(patch) =>
+            setQuestionForm((prev) => {
+              if (!patch.type) return { ...prev, ...patch };
+              const defaults = rangeDefaults(patch.type);
+              return { ...prev, ...patch, min: defaults.min, max: defaults.max };
+            })
+          }
           onQuestionTitleEnChange={(questionId, titleEn) =>
             setQuestionTitlesEn((prev) => ({ ...prev, [questionId]: titleEn }))
           }
           onAudienceRefChange={onAudienceRefChange}
           onAddQuestion={addQuestion}
+          onEditQuestion={editQuestion}
+          onRemoveQuestion={removeQuestion}
+          onMoveQuestion={moveQuestion}
+          onCancelQuestionEdit={() => resetQuestionForm()}
           onUpdateOption={(index, label) =>
             setQuestionForm((prev) => ({
               ...prev,

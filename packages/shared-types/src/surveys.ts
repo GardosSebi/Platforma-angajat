@@ -46,6 +46,10 @@ export function surveyQuestionNeedsOptions(type: SurveyQuestionType): boolean {
   );
 }
 
+export function surveyQuestionNeedsRange(type: SurveyQuestionType): boolean {
+  return type === "SCALE" || type === "NUMBER" || type === "RATING_NPS";
+}
+
 export const SURVEY_TYPES = ["ENGAGEMENT", "COMPLIANCE", "FEEDBACK", "EXIT", "PULSE", "CUSTOM"] as const;
 export type SurveyType = (typeof SURVEY_TYPES)[number];
 

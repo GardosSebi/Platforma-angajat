@@ -238,7 +238,7 @@ export function renderProcesVerbalCercetare(input: PvCercetareInput): Promise<Bu
     } else if (input.type === SsmAccidentType.INCIDENT) {
       drawParagraph(
         doc,
-        `Incident periculos (near-miss). Măsuri imediate: ${dash(input.immediateMeasures)}`
+        `Incident periculos. Măsuri imediate: ${dash(input.immediateMeasures)}`
       );
     } else {
       drawParagraph(

@@ -1101,7 +1101,12 @@ export class SsmDocumentsService {
         title: "Listă substanțe periculoase",
         type: SsmDocumentType.DANGEROUS_SUBSTANCES,
         targetType: SsmDocumentTargetType.WORKSITE,
-        checklistItems: ["Denumire substanță", "Clasificare", "Măsuri manipulare"]
+        checklistItems: [
+          "Listă documentară pe punct de lucru",
+          "Denumire și clasificare substanțe",
+          "Măsuri de manipulare",
+          "Nu este registru de stoc (inventar, fișe, cantități)"
+        ]
       },
       {
         name: "procedura-urgenta",

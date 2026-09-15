@@ -1,4 +1,4 @@
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import type {
   CreateSurveyRequest,
   SurveyAudienceType,
@@ -13,11 +13,13 @@ import {
   SURVEY_QUESTION_TYPES,
   SURVEY_TYPE_LABELS,
   SURVEY_TYPES,
-  surveyQuestionNeedsOptions
+  surveyQuestionNeedsOptions,
+  surveyQuestionNeedsRange
 } from "@repo/shared-types/surveys";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { AUDIENCE_LABELS, AUDIENCE_TYPES } from "../surveys-shared";
+import { SurveyFormFiller } from "./SurveyFormFiller";
 
 export type SurveyFormState = Omit<CreateSurveyRequest, "questionSchema" | "conditionalLogic" | "targetEmployeeIds" | "translations"> & {
   targetEmployeeIdsCsv: string;
@@ -64,8 +66,13 @@ type Props = {
   onSurveyChange: (patch: Partial<SurveyFormState>) => void;
   onQuestionChange: (patch: Partial<QuestionFormState>) => void;
   onQuestionTitleEnChange: (questionId: string, titleEn: string) => void;
+  editingQuestionId: string | null;
   onAudienceRefChange: (value: string) => void;
   onAddQuestion: () => void;
+  onEditQuestion: (id: string) => void;
+  onRemoveQuestion: (id: string) => void;
+  onMoveQuestion: (id: string, direction: "up" | "down") => void;
+  onCancelQuestionEdit: () => void;
   onUpdateOption: (index: number, label: string) => void;
   onUpdateOptionImageUrl: (index: number, imageUrl: string) => void;
   onAddOption: () => void;
@@ -105,11 +112,16 @@ export function SurveyCreateForm({
   canSave,
   isPending,
   feedback,
+  editingQuestionId,
   onSurveyChange,
   onQuestionChange,
   onQuestionTitleEnChange,
   onAudienceRefChange,
   onAddQuestion,
+  onEditQuestion,
+  onRemoveQuestion,
+  onMoveQuestion,
+  onCancelQuestionEdit,
   onUpdateOption,
   onUpdateOptionImageUrl,
   onAddOption,
@@ -119,7 +131,10 @@ export function SurveyCreateForm({
   onCancel
 }: Props) {
   const needsOptions = surveyQuestionNeedsOptions(questionForm.type);
+  const needsRange = surveyQuestionNeedsRange(questionForm.type);
   const isEdit = mode === "edit";
+  const isEditingQuestion = Boolean(editingQuestionId);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const questionChoices = questions.map((question) => ({
     value: question.id,
     label: `${question.id} — ${question.title}`
@@ -132,14 +147,14 @@ export function SurveyCreateForm({
   };
 
   return (
+    <>
     <form className="card form-stack comms-panel survey-create-form" onSubmit={onSubmit}>
       <div className="comms-compose-head">
         <div>
           <h2 className="card-title">{isEdit ? "Editează sondaj" : "Sondaj nou"}</h2>
           <p className="comms-toolbar-hint">
-            {isEdit
-              ? "Actualizează datele, întrebările și logica condițională, apoi salvează."
-              : "Completează datele, adaugă întrebări, apoi salvează ca ciornă."}
+            Editor formular cu toate tipurile de întrebări (radio, checkbox, dropdown, da/nu, scală, clasament, text,
+            fișier, imagini). Nu este canvas drag-and-drop.
           </p>
         </div>
         <button type="button" className="btn-secondary" onClick={onCancel}>
@@ -261,6 +276,10 @@ export function SurveyCreateForm({
 
       <fieldset className="comms-fieldset survey-section">
         <legend>2. Întrebări ({questions.length} adăugate)</legend>
+        <p className="field-hint">
+          Alege tipul, completează textul și opțiunile, apoi adaugă întrebarea în listă. Poți edita, muta sau șterge
+          oricând.
+        </p>
         <div className="comms-form-row">
           <FieldSelect
             id="question-type"
@@ -291,6 +310,36 @@ export function SurveyCreateForm({
             />
           </div>
         </div>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={questionForm.required}
+            onChange={(event) => onQuestionChange({ required: event.target.checked })}
+          />
+          <span>Întrebare obligatorie</span>
+        </label>
+        {needsRange ? (
+          <div className="comms-form-row">
+            <div className="field">
+              <label htmlFor="question-min">{questionForm.type === "RATING_NPS" ? "Minim NPS" : "Minim"}</label>
+              <input
+                id="question-min"
+                type="number"
+                value={questionForm.min}
+                onChange={(event) => onQuestionChange({ min: Number(event.target.value) })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="question-max">{questionForm.type === "RATING_NPS" ? "Maxim NPS" : "Maxim"}</label>
+              <input
+                id="question-max"
+                type="number"
+                value={questionForm.max}
+                onChange={(event) => onQuestionChange({ max: Number(event.target.value) })}
+              />
+            </div>
+          </div>
+        ) : null}
         {questionForm.type === "MULTI_TEXT" ? (
           <div className="field">
             <label htmlFor="question-multi-text-count">Număr casete text</label>
@@ -339,17 +388,52 @@ export function SurveyCreateForm({
             </button>
           </div>
         ) : null}
-        <button type="button" className="btn-secondary survey-add-question" onClick={onAddQuestion}>
-          Adaugă întrebarea la listă
-        </button>
+        <div className="comms-inline-actions">
+          <button type="button" className="btn-secondary survey-add-question" onClick={onAddQuestion}>
+            {isEditingQuestion ? "Actualizează întrebarea" : "Adaugă întrebarea la listă"}
+          </button>
+          {isEditingQuestion ? (
+            <button type="button" className="btn-text" onClick={onCancelQuestionEdit}>
+              Anulează editarea
+            </button>
+          ) : null}
+        </div>
         {questions.length > 0 ? (
           <ul className="survey-question-preview">
             {questions.map((question, index) => (
-              <li key={question.id}>
+              <li key={question.id} className={editingQuestionId === question.id ? "selected" : undefined}>
                 <strong>
                   {index + 1}. {question.title}
+                  {question.required ? " *" : ""}
                 </strong>
-                <span>{SURVEY_QUESTION_TYPE_LABELS[question.type]}</span>
+                <span>
+                  {SURVEY_QUESTION_TYPE_LABELS[question.type]}
+                  {question.options?.length ? ` · ${question.options.length} opțiuni` : ""}
+                </span>
+                <div className="survey-question-actions">
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => onEditQuestion(question.id)}>
+                    Editează
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    disabled={index === 0}
+                    onClick={() => onMoveQuestion(question.id, "up")}
+                  >
+                    Sus
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    disabled={index === questions.length - 1}
+                    onClick={() => onMoveQuestion(question.id, "down")}
+                  >
+                    Jos
+                  </button>
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => onRemoveQuestion(question.id)}>
+                    Șterge
+                  </button>
+                </div>
                 <div className="field" style={{ marginTop: "0.35rem" }}>
                   <label htmlFor={`q-en-${question.id}`}>EN</label>
                   <input
@@ -365,6 +449,13 @@ export function SurveyCreateForm({
         ) : (
           <p className="field-hint">Poți salva direct cu întrebarea completată sau adaugă mai multe întrebări.</p>
         )}
+        {questions.length > 0 ? (
+          <div className="survey-editor-preview">
+            <button type="button" className="btn-secondary btn-sm" onClick={() => setPreviewOpen((open) => !open)}>
+              {previewOpen ? "Ascunde previzualizarea" : "Previzualizează formularul"}
+            </button>
+          </div>
+        ) : null}
       </fieldset>
 
       <fieldset className="comms-fieldset survey-section">
@@ -533,5 +624,18 @@ export function SurveyCreateForm({
         </div>
       ) : null}
     </form>
+    {previewOpen && questions.length > 0 ? (
+      <div className="survey-editor-preview-pane">
+        <SurveyFormFiller
+          title={surveyForm.title.trim() || "Sondaj fără titlu"}
+          description={surveyForm.description}
+          questions={questions}
+          conditionalLogic={conditionalLogic}
+          onSubmit={async () => undefined}
+          previewMode
+        />
+      </div>
+    ) : null}
+    </>
   );
 }
