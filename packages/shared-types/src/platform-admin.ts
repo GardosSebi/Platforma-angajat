@@ -34,7 +34,37 @@ export interface UsageSummaryResponse {
     surveyResponsesInPeriod: number;
     announcementsPublishedInPeriod: number;
     announcementReadsInPeriod: number;
+    remindersSentInPeriod: number;
+    reactionsInPeriod: number;
+    announcementAnswersInPeriod: number;
+    chatMessagesInPeriod: number;
+    readRatePercent: number;
   };
+  announcementsByContentType: Array<{ contentType: string; count: number }>;
+}
+
+export interface AuditLogListItem {
+  id: string;
+  actorId: string;
+  actorEmail: string | null;
+  actorName: string | null;
+  module: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  payload: unknown;
+  createdAt: string;
+}
+
+export interface GdprOverviewResponse {
+  policy: {
+    retentionYears: number;
+    dsarExportEnabled: false;
+    dsarEraseEnabled: false;
+  };
+  cutoff: string;
+  archivedCounts: Array<{ category: string; archived: number }>;
+  recentRetentionEvents: AuditLogListItem[];
 }
 
 export interface EmployeeStaticPageRow {

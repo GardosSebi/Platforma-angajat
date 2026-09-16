@@ -38,8 +38,7 @@ import {
   usePublishAnnouncement,
   useRetractAnnouncement,
   useUpdateAnnouncement,
-  useUpdateCommunicationTemplate,
-  useUsageSummary
+  useUpdateCommunicationTemplate
 } from "../hooks/useChatbot";
 import {
   AUDIENCE_TYPES,
@@ -130,7 +129,6 @@ export function ChatbotPage() {
   const templatesQuery = useCommunicationTemplates();
   const remindersQuery = useCommunicationReminders();
   const calendarQuery = useCommunicationCalendar(canViewDashboard);
-  const usageQuery = useUsageSummary(canViewUsage);
   const groupsLookup = useQuery({
     queryKey: ["master-data", "groups-lookup"],
     queryFn: () => masterDataApi.listGroups({ page: 1, pageSize: 200 })
@@ -622,9 +620,7 @@ export function ChatbotPage() {
         />
       ) : null}
 
-      {tab === "usage" && canViewUsage ? (
-        <CommsUsagePanel data={usageQuery.data} isLoading={usageQuery.isLoading} />
-      ) : null}
+      {tab === "usage" && canViewUsage ? <CommsUsagePanel enabled={canViewUsage} /> : null}
 
       {tab === "rights" && canManagePublishRights ? <CommsPublishRightsPanel /> : null}
 

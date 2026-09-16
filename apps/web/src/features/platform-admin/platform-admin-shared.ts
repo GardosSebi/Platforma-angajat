@@ -1,10 +1,11 @@
-export type PlatformAdminTab = "users" | "scoped-roles" | "itm-access" | "static-pages";
+export type PlatformAdminTab = "users" | "scoped-roles" | "itm-access" | "static-pages" | "gdpr";
 
 export const PLATFORM_ADMIN_TABS: Array<{ id: PlatformAdminTab; label: string }> = [
   { id: "users", label: "Utilizatori" },
   { id: "scoped-roles", label: "Roluri scoped" },
   { id: "itm-access", label: "Acces ITM" },
-  { id: "static-pages", label: "Pagini statice" }
+  { id: "static-pages", label: "Pagini statice" },
+  { id: "gdpr", label: "GDPR / retenție" }
 ];
 
 export const SCOPED_ROLE_OPTIONS = [

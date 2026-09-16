@@ -65,7 +65,7 @@ export class PlatformCronService {
     );
     const commReminders = await this.communications.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
     const closedSurveys = await this.surveys.closeExpiredSurveys(tenantId, SYSTEM_CRON_ACTOR);
-    const retention = await this.retention.archiveExpiredDocumentVersions(tenantId);
+    const retention = await this.retention.archiveDueRecords(tenantId);
     const absence = await this.trainingAutomation.processAbsenceTriggers(tenantId, SYSTEM_CRON_ACTOR);
     const scheduledReports = await this.scheduledReports.dispatchDueForTenant(tenantId);
     this.logger.log(

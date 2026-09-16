@@ -10,6 +10,15 @@ type Props = {
   alt?: string;
 };
 
+function isPdfUrl(contentUrl: string, contentType?: string) {
+  if (/\.pdf(\?|$)/i.test(contentUrl)) return true;
+  return contentType === "SLIDE" && !/\.(ppt|pptx)(\?|$)/i.test(contentUrl);
+}
+
+function isPptUrl(contentUrl: string) {
+  return /\.(ppt|pptx)(\?|$)/i.test(contentUrl);
+}
+
 export function CommsMediaPreview({ contentUrl, contentType, className, alt = "" }: Props) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +66,9 @@ export function CommsMediaPreview({ contentUrl, contentType, className, alt = ""
   const src = uploaded ? objectUrl : contentUrl;
   const isImage = contentType === "IMAGE" || /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(contentUrl);
   const isVideo = contentType === "VIDEO" || /\.(mp4|webm|ogg)(\?|$)/i.test(contentUrl);
+  const isPdf = isPdfUrl(contentUrl, contentType);
+  const isPpt = isPptUrl(contentUrl) || (contentType === "SLIDE" && !isPdf);
+  const fileName = contentUrl.split("/").pop() ?? "fișier";
 
   if (uploaded && loading) {
     return <p className="field-hint">Se încarcă media…</p>;
@@ -72,6 +84,45 @@ export function CommsMediaPreview({ contentUrl, contentType, className, alt = ""
     return <video src={src} controls className={className ?? "employee-announcement-media"} />;
   }
 
+  if (isPdf && src) {
+    return (
+      <div className="comms-slide-preview">
+        <iframe title="Previzualizare slide / PDF" src={src} className="comms-slide-frame" />
+        {uploaded && objectUrl ? (
+          <p>
+            <a href={objectUrl} download={fileName} className="btn-text-link">
+              Descarcă PDF
+            </a>
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (isPpt) {
+    return (
+      <div className="comms-slide-fallback">
+        <p className="field-hint">
+          Previzualizarea în aplicație este disponibilă pentru PDF. Fișierele PowerPoint se descarcă — nu există player
+          de prezentare.
+        </p>
+        {objectUrl ? (
+          <p>
+            <a href={objectUrl} download={fileName} className="btn-text-link">
+              Descarcă prezentarea ({fileName})
+            </a>
+          </p>
+        ) : external ? (
+          <p>
+            <a href={contentUrl} target="_blank" rel="noreferrer" className="btn-text-link">
+              Deschide prezentarea
+            </a>
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   if (external) {
     return (
       <p>
@@ -85,8 +136,8 @@ export function CommsMediaPreview({ contentUrl, contentType, className, alt = ""
   if (objectUrl) {
     return (
       <p>
-        <a href={objectUrl} download className="btn-text-link">
-          Descarcă fișierul
+        <a href={objectUrl} download={fileName} className="btn-text-link">
+          Descarcă fișierul ({fileName})
         </a>
       </p>
     );

@@ -7,7 +7,9 @@ import type {
 import { COMMUNICATION_CATEGORIES, COMMUNICATION_CATEGORY_LABELS } from "@repo/shared-types/communications";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
+import { FormattedText } from "../../../shared/rich-text/FormattedText";
 import { chatbotApi } from "../api/chatbot.api";
+import { CommsMediaPreview } from "./CommsMediaPreview";
 import {
   AUDIENCE_LABELS,
   CONTENT_TYPE_LABELS,
@@ -177,15 +179,27 @@ export function CommsAnnouncementForm({
             id="announcement-body"
             value={form.body}
             onChange={(event) => onChange({ body: event.target.value })}
-            placeholder="Scrie mesajul pe care îl vor vedea angajații..."
+            placeholder={
+              form.contentType === "RICH_TEXT"
+                ? "Text formatat: **aldin**, *cursiv*, liste cu - și [link](https://…)"
+                : "Scrie mesajul pe care îl vor vedea angajații..."
+            }
             rows={5}
             required
           />
         </div>
         {form.contentType === "RICH_TEXT" ? (
           <div className="field">
+            <p className="field-hint">
+              Text formatat simplu, fără editor WYSIWYG. Folosește **aldin**, *cursiv*, `cod`, liste cu - și
+              [text](https://…). Previzualizarea de mai jos este ce văd angajații.
+            </p>
             <label>Previzualizare text formatat</label>
-            <div className="comms-rich-preview" dangerouslySetInnerHTML={{ __html: form.body.replace(/\n/g, "<br/>") }} />
+            {form.body.trim() ? (
+              <FormattedText text={form.body} />
+            ) : (
+              <p className="field-hint">Scrie mesajul pentru a vedea previzualizarea.</p>
+            )}
           </div>
         ) : null}
         <FieldSelect
@@ -200,7 +214,11 @@ export function CommsAnnouncementForm({
         />
         {showMediaUpload ? (
           <div className="field">
-            <label htmlFor="content-file">Încarcă fișier (imagine, video, document, slide)</label>
+            <label htmlFor="content-file">
+              {form.contentType === "SLIDE"
+                ? "Încarcă slide (PDF pentru preview; PPT se descarcă)"
+                : "Încarcă fișier (imagine, video, document, slide)"}
+            </label>
             <input
               id="content-file"
               type="file"
@@ -210,7 +228,7 @@ export function CommsAnnouncementForm({
                   : form.contentType === "VIDEO"
                     ? "video/*"
                     : form.contentType === "SLIDE"
-                      ? ".pdf,.ppt,.pptx,application/pdf"
+                      ? ".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                       : undefined
               }
               disabled={uploadPending || isPending}
@@ -220,10 +238,19 @@ export function CommsAnnouncementForm({
                 event.target.value = "";
               }}
             />
+            {form.contentType === "SLIDE" ? (
+              <p className="field-hint">
+                Upload + previzualizare PDF în aplicație. Nu există player de prezentare; fișierele .ppt/.pptx se
+                descarcă.
+              </p>
+            ) : null}
             {uploadPending ? <p className="field-hint">Se încarcă…</p> : null}
             {uploadError ? <p className="feedback error">{uploadError}</p> : null}
             {form.contentUrl && !/^https?:\/\//i.test(form.contentUrl) ? (
               <p className="field-hint">Fișier încărcat: {form.contentUrl.split("/").pop()}</p>
+            ) : null}
+            {form.contentUrl ? (
+              <CommsMediaPreview contentUrl={form.contentUrl} contentType={form.contentType} />
             ) : null}
           </div>
         ) : null}

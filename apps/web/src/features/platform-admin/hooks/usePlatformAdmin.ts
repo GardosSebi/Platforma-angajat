@@ -116,6 +116,22 @@ export function useItmAccessLogs() {
   });
 }
 
+export function useGdprOverview(enabled = true) {
+  return useQuery({
+    queryKey: ["platform-admin", "gdpr-overview"],
+    queryFn: () => platformAdminApi.gdprOverview(),
+    enabled
+  });
+}
+
+export function useAuditLogs(params?: PaginationParams & { module?: string }, enabled = true) {
+  return useQuery({
+    queryKey: ["platform-admin", "audit-logs", params?.page ?? 1, params?.pageSize ?? 25, params?.module ?? ""],
+    queryFn: () => platformAdminApi.listAuditLogs(params),
+    enabled
+  });
+}
+
 export function useGrantItmAccess() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -41,7 +41,7 @@ export const CONTENT_TYPE_LABELS: Record<CommunicationContentType, string> = {
   SURVEY: "Sondaj integrat",
   IMAGE: "Imagine",
   VIDEO: "Video",
-  SLIDE: "Slide / prezentare",
+  SLIDE: "Slide / prezentare (PDF)",
   BUTTON: "Buton acțiune"
 };
 

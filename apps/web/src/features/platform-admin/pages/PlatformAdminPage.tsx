@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GdprPanel } from "../components/GdprPanel";
 import { ItmAccessPanel } from "../components/ItmAccessPanel";
 import { ScopedRolesPanel } from "../components/ScopedRolesPanel";
 import { StaticPagesPanel } from "../components/StaticPagesPanel";
@@ -14,7 +15,7 @@ export function PlatformAdminPage() {
         <div>
           <h1 className="page-title">Administrare platformă</h1>
           <p className="page-lead">
-            Gestionează conturile de utilizator, roluri scoped, acces inspector ITM și paginile statice vizibile angajaților.
+            Gestionează conturile de utilizator, roluri scoped, acces inspector ITM, paginile statice și retenția GDPR.
           </p>
         </div>
       </header>
@@ -36,6 +37,7 @@ export function PlatformAdminPage() {
       {tab === "scoped-roles" ? <ScopedRolesPanel /> : null}
       {tab === "itm-access" ? <ItmAccessPanel /> : null}
       {tab === "static-pages" ? <StaticPagesPanel /> : null}
+      {tab === "gdpr" ? <GdprPanel /> : null}
     </div>
   );
 }

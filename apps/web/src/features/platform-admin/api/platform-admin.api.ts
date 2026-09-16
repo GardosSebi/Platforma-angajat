@@ -1,6 +1,7 @@
 import type {
-  EmployeeStaticPageListItem,
+  AuditLogListItem,
   EmployeeStaticPageRow,
+  GdprOverviewResponse,
   ItmAccessLogRow,
   TenantUserSummary,
   UsageSummaryResponse,
@@ -114,5 +115,16 @@ export const platformAdminApi = {
   },
   listItmAccessLogs() {
     return httpClient<ItmAccessLogRow[]>("/ssm/itm/access-logs");
+  },
+  gdprOverview() {
+    return httpClient<GdprOverviewResponse>("/admin/gdpr/overview");
+  },
+  listAuditLogs(params?: PaginationParams & { module?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    if (params?.module) qs.set("module", params.module);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return httpClient<PaginatedResult<AuditLogListItem>>(`/admin/audit-logs${suffix}`);
   }
 };

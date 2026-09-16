@@ -12,6 +12,7 @@ import {
   formatCommsDate,
   statusTone
 } from "../comms-shared";
+import { FormattedText } from "../../../shared/rich-text/FormattedText";
 import { CommsMediaPreview } from "./CommsMediaPreview";
 
 type Props = {
@@ -114,7 +115,11 @@ export function CommsAnnouncementDetail({
               <h3 id="comms-main-body-heading" className="comms-detail-section-title">
                 Mesaj principal
               </h3>
-              <p className="comms-modal-body">{announcement.body}</p>
+              {announcement.contentType === "RICH_TEXT" ? (
+                <FormattedText text={announcement.body} className="comms-modal-body comms-rich-preview" />
+              ) : (
+                <p className="comms-modal-body">{announcement.body}</p>
+              )}
             </section>
 
             {translationEntries.length > 0 ? (

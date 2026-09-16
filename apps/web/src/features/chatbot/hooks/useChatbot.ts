@@ -57,10 +57,10 @@ export function useCommunicationCalendar(enabled = true) {
   });
 }
 
-export function useUsageSummary(enabled = true) {
+export function useUsageSummary(enabled = true, from?: string, to?: string) {
   return useQuery({
-    queryKey: ["chatbot", "usage"],
-    queryFn: () => chatbotApi.usageSummary(),
+    queryKey: ["chatbot", "usage", from ?? "default", to ?? "default"],
+    queryFn: () => chatbotApi.usageSummary(from, to),
     enabled
   });
 }

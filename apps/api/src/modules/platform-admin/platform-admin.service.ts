@@ -662,7 +662,14 @@ export class PlatformAdminService {
       ticketCount,
       surveyResponseCount,
       announcementsPublished,
-      announcementReads
+      announcementReads,
+      remindersSent,
+      reactions,
+      answers,
+      chatMessages,
+      byContentType,
+      distinctReaders,
+      activeUsersInPeriod
     ] = await Promise.all([
       this.prisma.auditLog.groupBy({
         by: ["module"],
@@ -687,12 +694,37 @@ export class PlatformAdminService {
       }),
       this.prisma.communicationAnnouncementRead.count({
         where: { tenantId, readAt: { gte: from, lte: to } }
+      }),
+      this.prisma.communicationReminderDispatch.count({
+        where: { tenantId, sentAt: { gte: from, lte: to } }
+      }),
+      this.prisma.communicationAnnouncementReaction.count({
+        where: { tenantId, createdAt: { gte: from, lte: to } }
+      }),
+      this.prisma.communicationAnnouncementAnswer.count({
+        where: { tenantId, createdAt: { gte: from, lte: to } }
+      }),
+      this.prisma.communicationChatMessage.count({
+        where: { tenantId, createdAt: { gte: from, lte: to } }
+      }),
+      this.prisma.communicationAnnouncement.groupBy({
+        by: ["contentType"],
+        where: { tenantId, status: "PUBLISHED", publishAt: { gte: from, lte: to } },
+        _count: { _all: true }
+      }),
+      this.prisma.communicationAnnouncementRead.findMany({
+        where: { tenantId, readAt: { gte: from, lte: to } },
+        distinct: ["employeeId"],
+        select: { employeeId: true }
+      }),
+      this.prisma.user.count({
+        where: { tenantId, active: true, lastLoginAt: { gte: from, lte: to } }
       })
     ]);
 
-    const activeUsersInPeriod = await this.prisma.user.count({
-      where: { tenantId, active: true, lastLoginAt: { gte: from, lte: to } }
-    });
+    const readRatePercent = employeeCount
+      ? Math.min(100, Math.round((distinctReaders.length / employeeCount) * 100))
+      : 0;
 
     return {
       period: { from: from.toISOString(), to: to.toISOString() },
@@ -708,8 +740,17 @@ export class PlatformAdminService {
         helpdeskTicketsCreatedInPeriod: ticketCount,
         surveyResponsesInPeriod: surveyResponseCount,
         announcementsPublishedInPeriod: announcementsPublished,
-        announcementReadsInPeriod: announcementReads
-      }
+        announcementReadsInPeriod: announcementReads,
+        remindersSentInPeriod: remindersSent,
+        reactionsInPeriod: reactions,
+        announcementAnswersInPeriod: answers,
+        chatMessagesInPeriod: chatMessages,
+        readRatePercent
+      },
+      announcementsByContentType: byContentType.map((row) => ({
+        contentType: row.contentType,
+        count: row._count._all
+      }))
     };
   }
 }

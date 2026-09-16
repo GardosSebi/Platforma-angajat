@@ -5,6 +5,7 @@ import type {
   CreateCommunicationTemplateRequest
 } from "@repo/shared-types/communications";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { FormattedText } from "../../../shared/rich-text/FormattedText";
 import { CONTENT_TYPE_LABELS, CONTENT_TYPES } from "../comms-shared";
 
 type Props = {
@@ -120,6 +121,14 @@ export function CommsTemplatesPanel({
             required
           />
         </div>
+        {form.contentType === "RICH_TEXT" ? (
+          <div className="field">
+            <p className="field-hint">
+              Text formatat simplu: **aldin**, *cursiv*, liste cu - și [link](https://…). Fără editor WYSIWYG.
+            </p>
+            {form.body.trim() ? <FormattedText text={form.body} /> : null}
+          </div>
+        ) : null}
         <button className="btn-primary" type="submit" disabled={isPending}>
           {isPending ? "Se salvează..." : editingId ? "Salvează modificările" : "Salvează șablon"}
         </button>

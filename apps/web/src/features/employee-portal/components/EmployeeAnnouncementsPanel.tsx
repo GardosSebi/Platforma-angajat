@@ -5,6 +5,7 @@ import type { CommunicationReaction } from "@repo/shared-types/communications";
 import { COMMUNICATION_REACTION_LABELS } from "@repo/shared-types/communications";
 import { chatbotApi } from "../../chatbot/api/chatbot.api";
 import { CommsMediaPreview } from "../../chatbot/components/CommsMediaPreview";
+import { FormattedText } from "../../../shared/rich-text/FormattedText";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
 import { formatRoDateTime, mutationErrorMessage } from "../utils";
@@ -101,7 +102,11 @@ export function EmployeeAnnouncementsPanel() {
                 <span className="field-hint">{formatRoDateTime(item.publishAt ?? item.createdAt)}</span>
               </header>
               {isQuestion ? <span className="ssm-chip warn">Întrebare</span> : null}
-              <p className="employee-announcement-body">{text.body}</p>
+              {item.contentType === "RICH_TEXT" ? (
+                <FormattedText text={text.body} className="employee-announcement-body comms-rich-preview" />
+              ) : (
+                <p className="employee-announcement-body">{text.body}</p>
+              )}
               {item.contentUrl ? (
                 <CommsMediaPreview contentUrl={item.contentUrl} contentType={item.contentType} />
               ) : null}

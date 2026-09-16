@@ -652,6 +652,10 @@ export class CommunicationsService {
       mimeType = lower.endsWith(".webm") ? "video/webm" : lower.endsWith(".ogg") ? "video/ogg" : "video/mp4";
     } else if (lower.endsWith(".pdf")) {
       mimeType = "application/pdf";
+    } else if (lower.endsWith(".pptx")) {
+      mimeType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    } else if (lower.endsWith(".ppt")) {
+      mimeType = "application/vnd.ms-powerpoint";
     }
     return {
       stream: opened.stream,
