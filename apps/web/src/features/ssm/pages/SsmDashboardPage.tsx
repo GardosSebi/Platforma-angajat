@@ -15,6 +15,7 @@ import { SsmComplianceDashboardManager } from "../components/SsmComplianceDashbo
 import { SsmReportsManager } from "../components/SsmReportsManager";
 import { SsmGateManager } from "../components/SsmGateManager";
 import { SsmCssmManager } from "../components/SsmCssmManager";
+import { SsmSubstancesManager } from "../components/SsmSubstancesManager";
 
 const SSM_SECTIONS: Array<{
   id: SsmSectionId;
@@ -34,6 +35,13 @@ const SSM_SECTIONS: Array<{
     caption: "Vizualizare / upload",
     description:
       "Documente aplicabile postului și istoricul versiunilor; angajații văd doar documentele relevante pentru ei."
+  },
+  {
+    id: "substances",
+    title: "Substanțe periculoase",
+    caption: "Registru, cantități, SDS",
+    description:
+      "Evidență pe punct de lucru: fișe SDS, cantități, locații de depozitare și scadențe de valabilitate."
   },
   {
     id: "training",
@@ -140,6 +148,8 @@ export function SsmDashboardPage() {
     switch (activeSection) {
       case "documents":
         return <SsmDocumentsManager />;
+      case "substances":
+        return <SsmSubstancesManager />;
       case "training":
         return <SsmTrainingSuiteManager />;
       case "eip":

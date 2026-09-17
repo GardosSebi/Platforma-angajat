@@ -23,6 +23,7 @@ const REPORT_TYPE_OPTIONS: Array<{ value: SsmReportType; label: string }> = [
   { value: "documents", label: "Documente & versiuni" },
   { value: "accidents", label: "Accidente" },
   { value: "psi", label: "PSI" },
+  { value: "substances", label: "Substanțe periculoase" },
   { value: "compliance", label: "Conformitate" }
 ];
 

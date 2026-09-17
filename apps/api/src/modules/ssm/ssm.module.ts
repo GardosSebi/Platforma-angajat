@@ -17,6 +17,7 @@ import { SsmItmPortalService } from "./application/services/ssm-itm-portal.servi
 import { SsmPppService } from "./application/services/ssm-ppp.service";
 import { SsmGateService } from "./application/services/ssm-gate.service";
 import { SsmCssmService } from "./application/services/ssm-cssm.service";
+import { SsmSubstancesService } from "./application/services/ssm-substances.service";
 import { SsmController } from "./api/ssm.controller";
 import { SsmDocumentsController } from "./api/ssm-documents.controller";
 import { SsmTrainingSuiteController } from "./api/ssm-training-suite.controller";
@@ -31,6 +32,7 @@ import { SsmItmController } from "./api/ssm-itm.controller";
 import { SsmScheduledReportsController } from "./api/ssm-scheduled-reports.controller";
 import { SsmGateController } from "./api/ssm-gate.controller";
 import { SsmCssmController } from "./api/ssm-cssm.controller";
+import { SsmSubstancesController } from "./api/ssm-substances.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
 import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-training.repository";
 import { SsmScheduledReportsService } from "./application/services/ssm-scheduled-reports.service";
@@ -51,7 +53,8 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmItmController,
     SsmScheduledReportsController,
     SsmGateController,
-    SsmCssmController
+    SsmCssmController,
+    SsmSubstancesController
   ],
   providers: [
     PermissionsGuard,
@@ -71,6 +74,7 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmItmPortalService,
     SsmGateService,
     SsmCssmService,
+    SsmSubstancesService,
     {
       provide: SSM_TRAINING_REPOSITORY,
       useClass: PrismaSsmTrainingRepository

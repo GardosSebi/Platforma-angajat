@@ -59,6 +59,12 @@ const REPORT_TYPES: Array<{ type: SsmReportType; label: string; shortLabel: stri
   },
   { type: "psi", label: "PSI", shortLabel: "PSI", description: "Echipamente și instruiri PSI." },
   {
+    type: "substances",
+    label: "Substanțe periculoase",
+    shortLabel: "Substanțe",
+    description: "Registru stoc, locații, fișe SDS și scadențe."
+  },
+  {
     type: "compliance",
     label: "Conformitate",
     shortLabel: "Conformitate",
@@ -101,6 +107,12 @@ const FIELD_LABELS: Record<string, string> = {
   severity: "Severitate",
   occurredAt: "Data",
   location: "Locație",
+  casNumber: "CAS",
+  hazardClass: "Pericol",
+  quantity: "Cantitate",
+  unit: "UM",
+  sdsValidUntil: "SDS până la",
+  sdsSheetName: "Fișă SDS",
   category: "Categorie",
   name: "Denumire",
   validUntil: "Valabil",
@@ -157,6 +169,17 @@ const REPORT_PREVIEW_FIELDS: Record<SsmReportType, string[]> = {
   ],
   accidents: ["title", "type", "severity", "status", "employee", "occurredAt", "location", "worksite", "department"],
   psi: ["category", "name", "worksite", "nextDueAt", "validUntil", "employee"],
+  substances: [
+    "name",
+    "casNumber",
+    "hazardClass",
+    "quantity",
+    "unit",
+    "location",
+    "worksite",
+    "sdsValidUntil",
+    "status"
+  ],
   compliance: ["globalScore", "trafficLight", "module", "total", "noncompliant", "score"]
 };
 
@@ -223,6 +246,9 @@ function rowTitle(type: SsmReportType, row: Record<string, unknown>, index: numb
   }
   if (type === "psi") {
     return `${formatReportValue(row.category)} · ${formatReportValue(row.name)}`;
+  }
+  if (type === "substances") {
+    return `${formatReportValue(row.name)} · ${formatReportValue(row.location)}`;
   }
   if (type === "compliance") {
     return row.module

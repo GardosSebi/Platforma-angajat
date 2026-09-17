@@ -943,7 +943,8 @@ export type SsmCalendarSource =
   | "EIP"
   | "PSI"
   | "PSI_TRAINING"
-  | "EVACUATION_DRILL";
+  | "EVACUATION_DRILL"
+  | "DANGEROUS_SUBSTANCE";
 export type SsmTrafficLight = "GREEN" | "YELLOW" | "RED";
 export type SsmReportType =
   | "trainings"
@@ -953,6 +954,7 @@ export type SsmReportType =
   | "documents"
   | "accidents"
   | "psi"
+  | "substances"
   | "compliance";
 
 export type SsmDocumentReportIssue = "expired" | "needsReview" | "";
@@ -1564,4 +1566,106 @@ export interface SsmCssmCommitteeItem {
   members: SsmCssmMemberItem[];
   meetings: SsmCssmMeetingItem[];
   decisionDocumentId?: string | null;
+}
+
+export const SSM_DANGEROUS_SUBSTANCE_HAZARDS = [
+  "FLAMMABLE",
+  "TOXIC",
+  "CORROSIVE",
+  "EXPLOSIVE",
+  "OXIDIZING",
+  "HARMFUL",
+  "ENVIRONMENTAL",
+  "COMPRESSED_GAS",
+  "OTHER"
+] as const;
+export type SsmDangerousSubstanceHazard = (typeof SSM_DANGEROUS_SUBSTANCE_HAZARDS)[number];
+
+export const SSM_DANGEROUS_SUBSTANCE_HAZARD_LABELS: Record<SsmDangerousSubstanceHazard, string> = {
+  FLAMMABLE: "Inflamabil",
+  TOXIC: "Toxic",
+  CORROSIVE: "Coroziv",
+  EXPLOSIVE: "Exploziv",
+  OXIDIZING: "Oxidant",
+  HARMFUL: "Nociv / iritant",
+  ENVIRONMENTAL: "Periculos pentru mediu",
+  COMPRESSED_GAS: "Gaz sub presiune",
+  OTHER: "Altele"
+};
+
+export const SSM_DANGEROUS_SUBSTANCE_UNITS = ["KG", "L", "G", "ML", "PCS", "M3"] as const;
+export type SsmDangerousSubstanceUnit = (typeof SSM_DANGEROUS_SUBSTANCE_UNITS)[number];
+
+export const SSM_DANGEROUS_SUBSTANCE_UNIT_LABELS: Record<SsmDangerousSubstanceUnit, string> = {
+  KG: "kg",
+  L: "l",
+  G: "g",
+  ML: "ml",
+  PCS: "buc",
+  M3: "m³"
+};
+
+export const SSM_DANGEROUS_SUBSTANCE_STATUSES = ["ACTIVE", "DEPLETED", "RETIRED"] as const;
+export type SsmDangerousSubstanceStatus = (typeof SSM_DANGEROUS_SUBSTANCE_STATUSES)[number];
+
+export const SSM_DANGEROUS_SUBSTANCE_STATUS_LABELS: Record<SsmDangerousSubstanceStatus, string> = {
+  ACTIVE: "Activ",
+  DEPLETED: "Epuizat",
+  RETIRED: "Scos din evidență"
+};
+
+export interface SsmDangerousSubstanceItem {
+  id: string;
+  worksiteId: string;
+  worksiteName: string;
+  worksiteCode: string;
+  name: string;
+  tradeName?: string | null;
+  casNumber?: string | null;
+  unNumber?: string | null;
+  hazardClass: SsmDangerousSubstanceHazard;
+  location: string;
+  quantity: number;
+  unit: SsmDangerousSubstanceUnit;
+  containerType?: string | null;
+  hasSdsSheet: boolean;
+  sdsSheetName?: string | null;
+  sdsValidUntil?: string | null;
+  responsibleName?: string | null;
+  notes?: string | null;
+  status: SsmDangerousSubstanceStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSsmDangerousSubstanceRequest {
+  worksiteId: string;
+  name: string;
+  tradeName?: string;
+  casNumber?: string;
+  unNumber?: string;
+  hazardClass?: SsmDangerousSubstanceHazard;
+  location: string;
+  quantity: number;
+  unit?: SsmDangerousSubstanceUnit;
+  containerType?: string;
+  sdsValidUntil?: string;
+  responsibleName?: string;
+  notes?: string;
+}
+
+export interface UpdateSsmDangerousSubstanceRequest {
+  name?: string;
+  tradeName?: string | null;
+  casNumber?: string | null;
+  unNumber?: string | null;
+  hazardClass?: SsmDangerousSubstanceHazard;
+  location?: string;
+  quantity?: number;
+  unit?: SsmDangerousSubstanceUnit;
+  containerType?: string | null;
+  sdsValidUntil?: string | null;
+  responsibleName?: string | null;
+  notes?: string | null;
+  status?: SsmDangerousSubstanceStatus;
 }

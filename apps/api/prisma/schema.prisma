@@ -154,6 +154,33 @@ enum SsmPsiEquipmentCategory {
   OTHER
 }
 
+enum SsmDangerousSubstanceStatus {
+  ACTIVE
+  DEPLETED
+  RETIRED
+}
+
+enum SsmDangerousSubstanceUnit {
+  KG
+  L
+  G
+  ML
+  PCS
+  M3
+}
+
+enum SsmDangerousSubstanceHazard {
+  FLAMMABLE
+  TOXIC
+  CORROSIVE
+  EXPLOSIVE
+  OXIDIZING
+  HARMFUL
+  ENVIRONMENTAL
+  COMPRESSED_GAS
+  OTHER
+}
+
 enum CommunicationContentType {
   TEXT
   RICH_TEXT
@@ -430,6 +457,8 @@ model Tenant {
   ssmCssmMembers              SsmCssmMember[]
   ssmCssmMeetings             SsmCssmMeeting[]
   ssmCssmMeetingAttendees      SsmCssmMeetingAttendee[]
+  ssmMedicalReminderDispatches SsmMedicalReminderDispatch[]
+  ssmDangerousSubstances       SsmDangerousSubstance[]
   ssmCssmMinutes              SsmCssmMinutes[]
 }
 
@@ -540,6 +569,7 @@ model Worksite {
   ssmGateVisits              SsmGateVisit[]
   itmInspectionVisits        ItmInspectionVisit[]
   ssmEipOrders               SsmEipOrder[]
+  ssmDangerousSubstances     SsmDangerousSubstance[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -1224,6 +1254,7 @@ model SsmMedicalControl {
   employee    Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   controlType SsmMedicalControlType @relation(fields: [controlTypeId], references: [id], onDelete: Cascade)
   appointmentRequests SsmMedicalAppointmentRequest[]
+  reminderDispatches  SsmMedicalReminderDispatch[]
 
   @@index([tenantId, employeeId, scheduledAt])
   @@index([tenantId, nextDueAt])
@@ -2301,5 +2332,54 @@ model SsmCssmMinutes {
   meeting SsmCssmMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, number])
+}
+
+model SsmMedicalReminderDispatch {
+  id               String   @id @default(cuid())
+  tenantId         String
+  medicalControlId String
+  daysUntilDue     Int
+  channel          String
+  sentAt           DateTime @default(now())
+
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  medicalControl SsmMedicalControl @relation(fields: [medicalControlId], references: [id], onDelete: Cascade)
+
+  @@unique([medicalControlId, daysUntilDue, channel], map: "SsmMedicalReminder_unique_dispatch")
+  @@index([tenantId, sentAt])
+}
+
+model SsmDangerousSubstance {
+  id              String                         @id @default(cuid())
+  tenantId        String
+  worksiteId      String
+  name            String
+  tradeName       String?
+  casNumber       String?
+  unNumber        String?
+  hazardClass     SsmDangerousSubstanceHazard    @default(OTHER)
+  location        String
+  quantity        Float
+  unit            SsmDangerousSubstanceUnit      @default(L)
+  containerType   String?
+  sdsSheetPath    String?
+  sdsSheetName    String?
+  sdsSheetMime    String?
+  sdsSheetSize    Int?
+  sdsValidUntil   DateTime?
+  responsibleName String?
+  notes           String?
+  status          SsmDangerousSubstanceStatus    @default(ACTIVE)
+  createdBy       String
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite Worksite @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, worksiteId, status])
+  @@index([tenantId, sdsValidUntil])
+  @@index([tenantId, casNumber])
+  @@index([tenantId, name])
 }
 

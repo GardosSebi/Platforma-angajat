@@ -1102,10 +1102,10 @@ export class SsmDocumentsService {
         type: SsmDocumentType.DANGEROUS_SUBSTANCES,
         targetType: SsmDocumentTargetType.WORKSITE,
         checklistItems: [
-          "Listă documentară pe punct de lucru",
+          "Listă documentară pe punct de lucru (politici / măsuri)",
           "Denumire și clasificare substanțe",
           "Măsuri de manipulare",
-          "Nu este registru de stoc (inventar, fișe, cantități)"
+          "Stocul, cantitățile și fișele SDS se țin în modulul Substanțe periculoase"
         ]
       },
       {

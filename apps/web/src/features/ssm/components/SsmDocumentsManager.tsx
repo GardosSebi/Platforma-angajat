@@ -61,7 +61,7 @@ const TYPE_HINTS: Partial<Record<CreateSsmDocumentRequest["type"], string>> = {
   THEMATIC: "→ Instruire",
   EIP_NORM: "→ EIP (normativ pe post)",
   DANGEROUS_SUBSTANCES:
-    "Listă documentară (PDF/Word) pe punct de lucru — nu este registru de inventar cu fișe și cantități."
+    "Listele documentare rămân aici; evidența de stoc (cantități, locații, fișe SDS) este în modulul Substanțe periculoase."
 };
 
 const EMPTY_DOC: CreateSsmDocumentRequest = {

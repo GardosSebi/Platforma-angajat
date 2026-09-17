@@ -5,6 +5,7 @@ import {
   SsmEipMovementType,
   SsmMedicalControlResult,
   SsmPsiEquipmentStatus,
+  SsmDangerousSubstanceStatus,
   SsmTrainingPlanStatus
 } from "@prisma/client";
 import ExcelJS from "exceljs";
@@ -22,6 +23,7 @@ const REPORT_TYPES = [
   "documents",
   "accidents",
   "psi",
+  "substances",
   "compliance"
 ] as const;
 const CALENDAR_SOURCES = [
@@ -30,7 +32,8 @@ const CALENDAR_SOURCES = [
   "EIP",
   "PSI",
   "PSI_TRAINING",
-  "EVACUATION_DRILL"
+  "EVACUATION_DRILL",
+  "DANGEROUS_SUBSTANCE"
 ] as const;
 
 type ReportType = (typeof REPORT_TYPES)[number];
@@ -311,6 +314,12 @@ export class SsmOverviewService {
       nextDueAt: { not: null },
       ...(scope.worksiteWhere ? { worksite: scope.worksiteWhere } : {})
     };
+    const substancesWhere: Prisma.SsmDangerousSubstanceWhereInput = {
+      tenantId,
+      status: { not: SsmDangerousSubstanceStatus.RETIRED },
+      sdsValidUntil: { not: null },
+      ...(scope.worksiteWhere ? { worksite: scope.worksiteWhere } : {})
+    };
 
     const employeeInclude = {
       select: {
@@ -328,7 +337,8 @@ export class SsmOverviewService {
       eipMovements,
       psiEquipment,
       psiTrainings,
-      evacuationDrills
+      evacuationDrills,
+      substances
     ] = await Promise.all([
       wants("TRAINING")
         ? this.prisma.ssmTrainingPlan.findMany({
@@ -391,6 +401,16 @@ export class SsmOverviewService {
               worksite: { select: { id: true, name: true, legalEntityId: true } }
             },
             orderBy: { nextDueAt: "asc" },
+            take: 500
+          })
+        : Promise.resolve([]),
+      wants("DANGEROUS_SUBSTANCE") && !employeeLinkedOnly
+        ? this.prisma.ssmDangerousSubstance.findMany({
+            where: substancesWhere,
+            include: {
+              worksite: { select: { id: true, name: true, legalEntityId: true } }
+            },
+            orderBy: { sdsValidUntil: "asc" },
             take: 500
           })
         : Promise.resolve([])
@@ -474,6 +494,19 @@ export class SsmOverviewService {
         departmentId: null as string | null,
         worksiteId: drill.worksite.id,
         legalEntityId: drill.worksite.legalEntityId
+      })),
+      ...substances.map((item) => ({
+        id: item.id,
+        source: "DANGEROUS_SUBSTANCE" as const,
+        title: `SDS ${item.name} - ${item.worksite.name}`,
+        startAt: item.sdsValidUntil ?? item.createdAt,
+        dueAt: item.sdsValidUntil ?? item.createdAt,
+        status: "SDS_DUE",
+        ownerLabel: item.responsibleName || item.worksite.name,
+        employeeId: null as string | null,
+        departmentId: null as string | null,
+        worksiteId: item.worksite.id,
+        legalEntityId: item.worksite.legalEntityId
       }))
     ]
       .filter((event) => eventInPeriod(event, from, to))
@@ -514,7 +547,8 @@ export class SsmOverviewService {
       EIP: "EIP",
       PSI: "PSI",
       PSI_TRAINING: "Instruire PSI",
-      EVACUATION_DRILL: "Simulare evacuare"
+      EVACUATION_DRILL: "Simulare evacuare",
+      DANGEROUS_SUBSTANCE: "Substanțe periculoase"
     };
     return pdfBuffer(
       "Calendar SSM unificat",
@@ -1179,6 +1213,35 @@ export class SsmOverviewService {
           validUntil: row.validUntil?.toISOString() ?? null
         }))
       ];
+    }
+
+    if (type === "substances") {
+      const rows = await this.prisma.ssmDangerousSubstance.findMany({
+        where: {
+          tenantId,
+          ...(worksiteWhere ? { worksite: worksiteWhere } : {})
+        },
+        include: {
+          worksite: { select: { name: true, code: true, legalEntity: { select: { name: true } } } }
+        },
+        orderBy: [{ status: "asc" }, { name: "asc" }],
+        take: 5000
+      });
+      return rows.map((row) => ({
+        name: row.name,
+        tradeName: row.tradeName,
+        casNumber: row.casNumber,
+        hazardClass: row.hazardClass,
+        quantity: row.quantity,
+        unit: row.unit,
+        location: row.location,
+        worksite: row.worksite.name,
+        legalEntity: row.worksite.legalEntity?.name ?? null,
+        sdsSheetName: row.sdsSheetName,
+        sdsValidUntil: row.sdsValidUntil?.toISOString() ?? null,
+        status: row.status,
+        responsibleName: row.responsibleName
+      }));
     }
 
     if (type === "compliance") {

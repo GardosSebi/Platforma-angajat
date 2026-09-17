@@ -12,6 +12,9 @@ import type {
   CreateSsmMedicalControlRequest,
   CreateSsmMedicalControlTypeRequest,
   UpdateSsmMedicalControlRequest,
+  CreateSsmDangerousSubstanceRequest,
+  UpdateSsmDangerousSubstanceRequest,
+  SsmDangerousSubstanceItem,
   CreateSsmPsiEquipmentRequest,
   CreateSsmPsiResponsibleRequest,
   CreateSsmPsiTrainingRecordRequest,
@@ -567,7 +570,38 @@ export const ssmApi = {
     return httpClient<{ reminders: SsmMedicalReminderItem[] }>("/ssm/medical/reminders");
   },
   dispatchMedicalReminders() {
-    return httpClient<{ sent: number }>("/ssm/medical/reminders/dispatch", { method: "POST" });
+    return httpClient<{ sent: number; sentEmail: number; sentInApp: number; sentResponsible: number }>(
+      "/ssm/medical/reminders/dispatch",
+      { method: "POST" }
+    );
+  },
+  listDangerousSubstances(worksiteId?: string) {
+    const q = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
+    return httpClient<{ items: SsmDangerousSubstanceItem[] }>(`/ssm/substances${q}`);
+  },
+  createDangerousSubstance(payload: CreateSsmDangerousSubstanceRequest, sdsSheet?: File) {
+    const body = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      body.append(key, String(value));
+    });
+    if (sdsSheet) body.append("sdsSheet", sdsSheet);
+    return httpClient<SsmDangerousSubstanceItem>("/ssm/substances", { method: "POST", body });
+  },
+  updateDangerousSubstance(id: string, payload: UpdateSsmDangerousSubstanceRequest, sdsSheet?: File) {
+    const body = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      body.append(key, String(value));
+    });
+    if (sdsSheet) body.append("sdsSheet", sdsSheet);
+    return httpClient<SsmDangerousSubstanceItem>(`/ssm/substances/${id}`, { method: "PATCH", body });
+  },
+  retireDangerousSubstance(id: string) {
+    return httpClient<SsmDangerousSubstanceItem>(`/ssm/substances/${id}/retire`, { method: "PATCH" });
+  },
+  getDangerousSubstanceSdsUrl(id: string) {
+    return `/ssm/substances/${id}/sds-sheet`;
   },
   listRiskAssessments(query?: URLSearchParams) {
     const q = query?.toString();

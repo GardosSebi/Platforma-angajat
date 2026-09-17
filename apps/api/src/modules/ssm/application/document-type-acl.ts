@@ -24,7 +24,8 @@ export const DOCUMENT_TYPE_MODULE_HINTS: Partial<Record<SsmDocumentType, string>
   DECISION: "cssm",
   REGISTER: "accidents",
   THEMATIC: "training",
-  EIP_NORM: "eip"
+  EIP_NORM: "eip",
+  DANGEROUS_SUBSTANCES: "substances"
 };
 
 const DEFAULT_ROLE_SETS: Partial<

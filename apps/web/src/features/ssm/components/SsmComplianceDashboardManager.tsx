@@ -33,7 +33,8 @@ const SOURCE_LABELS: Record<SsmCalendarSource, string> = {
   EIP: "EIP",
   PSI: "PSI",
   PSI_TRAINING: "Instruire PSI",
-  EVACUATION_DRILL: "Simulare evacuare"
+  EVACUATION_DRILL: "Simulare evacuare",
+  DANGEROUS_SUBSTANCE: "Substanțe periculoase"
 };
 
 const SOURCE_OPTIONS: Array<{ value: SsmCalendarSource; label: string }> = (

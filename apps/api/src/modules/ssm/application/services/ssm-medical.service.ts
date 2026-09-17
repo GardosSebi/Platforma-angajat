@@ -11,6 +11,7 @@ import { SsmMedicalControlCategory, SsmMedicalControlResult } from "@prisma/clie
 import { SystemRole } from "../../../../common/prisma-enums";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { MailService } from "../../../../infrastructure/mail/mail.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import {
   CreateMedicalControlDto,
@@ -64,7 +65,8 @@ export class SsmMedicalService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly notifications: NotificationsService,
-    private readonly trainingAutomation: SsmTrainingAutomationService
+    private readonly trainingAutomation: SsmTrainingAutomationService,
+    private readonly mailService: MailService
   ) {}
 
   private assertAptitudeSheet(file?: Express.Multer.File) {
@@ -608,39 +610,133 @@ export class SsmMedicalService {
     return { reminders };
   }
 
-  /** Remindere controale medicale scadente — doar in-app (fără email), spre deosebire de instruiri / EIP / PSI. */
+  /** Remindere controale medicale scadente — email + in-app, ca la instruiri / EIP / PSI. */
   async dispatchMedicalReminders(tenantId: string, actorId: string) {
     const controls = await this.prisma.ssmMedicalControl.findMany({
       where: { tenantId, nextDueAt: { not: null } },
       include: {
-        employee: { select: { id: true, email: true, fullName: true } },
+        employee: { select: { id: true, email: true, fullName: true, worksiteId: true } },
         controlType: { select: { name: true, reminderDays: true } }
       }
     });
+    const responsibles = await this.prisma.ssmResponsible.findMany({
+      where: { tenantId, active: true, email: { not: null } },
+      select: { email: true, worksiteId: true, personName: true }
+    });
     const now = new Date();
-    let sent = 0;
+    let sentEmail = 0;
+    let sentInApp = 0;
+    let sentResponsible = 0;
+
     for (const row of controls) {
       if (!row.nextDueAt) continue;
       const daysUntilDue = daysDiff(now, row.nextDueAt);
       const reminderDays = row.controlType.reminderDays ?? [30, 15, 7];
       if (daysUntilDue > 0 && !reminderDays.includes(daysUntilDue)) continue;
       if (daysUntilDue > 30) continue;
-      const text =
+
+      const dueLabel = row.nextDueAt.toLocaleDateString("ro-RO");
+      const reminderText =
         daysUntilDue < 0
-          ? `Control medical (${row.controlType.name}) restant cu ${Math.abs(daysUntilDue)} zile.`
-          : `Control medical (${row.controlType.name}) în ${daysUntilDue} zile.`;
-      const notified = await this.notifications.notifyEmployee({
-        tenantId,
-        employeeId: row.employeeId,
-        category: "SSM_MEDICAL",
-        title: "Reminder medicina muncii",
-        body: text,
-        linkPath: "/portal?tab=dossier",
-        entityType: "SsmMedicalControl",
-        entityId: row.id
+          ? `Control medical (${row.controlType.name}) pentru ${row.employee.fullName} este restant cu ${Math.abs(daysUntilDue)} zile (scadență ${dueLabel}).`
+          : `Control medical (${row.controlType.name}) pentru ${row.employee.fullName} este programat în ${daysUntilDue} zile (scadență ${dueLabel}).`;
+
+      const emailSent = await this.prisma.ssmMedicalReminderDispatch.findUnique({
+        where: {
+          medicalControlId_daysUntilDue_channel: {
+            medicalControlId: row.id,
+            daysUntilDue,
+            channel: "email"
+          }
+        }
       });
-      if (notified) sent += 1;
+      if (!emailSent && row.employee.email) {
+        await this.mailService.sendMail({
+          to: row.employee.email,
+          subject: `Reminder medicina muncii: ${row.controlType.name}`,
+          text: `${reminderText}\n\nDeschide portalul: /portal?tab=medical`
+        });
+        await this.prisma.ssmMedicalReminderDispatch.create({
+          data: {
+            tenantId,
+            medicalControlId: row.id,
+            daysUntilDue,
+            channel: "email"
+          }
+        });
+        sentEmail += 1;
+      }
+
+      const inAppSent = await this.prisma.ssmMedicalReminderDispatch.findUnique({
+        where: {
+          medicalControlId_daysUntilDue_channel: {
+            medicalControlId: row.id,
+            daysUntilDue,
+            channel: "in_app"
+          }
+        }
+      });
+      if (!inAppSent) {
+        const notified = await this.notifications.notifyEmployee({
+          tenantId,
+          employeeId: row.employeeId,
+          category: "SSM_MEDICAL",
+          title: "Reminder medicina muncii",
+          body: reminderText,
+          linkPath: "/portal?tab=medical",
+          entityType: "SsmMedicalControl",
+          entityId: row.id
+        });
+        if (notified) {
+          await this.prisma.ssmMedicalReminderDispatch.create({
+            data: {
+              tenantId,
+              medicalControlId: row.id,
+              daysUntilDue,
+              channel: "in_app"
+            }
+          });
+          sentInApp += 1;
+        }
+      }
+
+      const responsibleSent = await this.prisma.ssmMedicalReminderDispatch.findUnique({
+        where: {
+          medicalControlId_daysUntilDue_channel: {
+            medicalControlId: row.id,
+            daysUntilDue,
+            channel: "ssm_responsible"
+          }
+        }
+      });
+      if (!responsibleSent) {
+        const targets = responsibles.filter(
+          (item) => item.email && (!item.worksiteId || item.worksiteId === row.employee.worksiteId)
+        );
+        let anySent = false;
+        for (const responsible of targets) {
+          await this.mailService.sendMail({
+            to: responsible.email!,
+            subject: `Alerte medicina muncii: ${row.controlType.name}`,
+            text: `${reminderText}\n\nResponsabil: ${responsible.personName}`
+          });
+          anySent = true;
+          sentResponsible += 1;
+        }
+        if (anySent || targets.length === 0) {
+          await this.prisma.ssmMedicalReminderDispatch.create({
+            data: {
+              tenantId,
+              medicalControlId: row.id,
+              daysUntilDue,
+              channel: "ssm_responsible"
+            }
+          });
+        }
+      }
     }
+
+    const sent = sentEmail + sentInApp + sentResponsible;
     if (sent) {
       await this.auditLog.write({
         tenantId,
@@ -649,10 +745,10 @@ export class SsmMedicalService {
         action: "MEDICAL_REMINDERS_DISPATCHED",
         entityType: "SsmMedicalControl",
         entityId: "batch",
-        payload: { sent }
+        payload: { sent, sentEmail, sentInApp, sentResponsible }
       });
     }
-    return { sent };
+    return { sent, sentEmail, sentInApp, sentResponsible };
   }
 
   async employeeSummary(tenantId: string, userEmail: string) {
