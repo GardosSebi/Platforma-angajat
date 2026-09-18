@@ -301,10 +301,11 @@ export const masterDataApi = {
   getEmployee(id: string) {
     return httpClient<EmployeeDetailItem>(`/master-data/employees/${encodeURIComponent(id)}`);
   },
-  listEmployeeOptions(search?: string, limit = 100) {
+  listEmployeeOptions(search?: string, limit = 100, options?: { includeInactive?: boolean }) {
     const qs = new URLSearchParams();
     if (search?.trim()) qs.set("search", search.trim());
     qs.set("limit", String(limit));
+    if (options?.includeInactive) qs.set("includeInactive", "true");
     return httpClient<{ items: EmployeeOptionItem[] }>(`/master-data/employees/options?${qs.toString()}`);
   },
   createEmployee(payload: CreateEmployeePayload) {

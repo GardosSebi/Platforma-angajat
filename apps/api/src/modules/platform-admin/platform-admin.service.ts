@@ -9,11 +9,13 @@ import * as bcrypt from "bcrypt";
 import { EmployeeStaticAudienceType, Prisma, RoleAssignmentScope } from "@prisma/client";
 import { SystemRole } from "../../common/prisma-enums";
 import { PrismaService } from "../../infrastructure/prisma/prisma.service";
+import { AuditLogService } from "../../infrastructure/logging/audit-log.service";
 import { MasterDataService } from "../master-data/master-data.service";
 import { CreateScopedRoleDto } from "./api/dto/create-scoped-role.dto";
 import { CreateStaticPageDto, UpdateStaticPageDto } from "./api/dto/create-static-page.dto";
 import { CreateTenantUserDto } from "./api/dto/create-tenant-user.dto";
 import { PatchTenantUserDto } from "./api/dto/patch-tenant-user.dto";
+import { UpsertTenantSsoConfigDto } from "./api/dto/upsert-sso-config.dto";
 import { PaginationQueryDto, resolvePagination } from "../../common/dto/pagination-query.dto";
 import { paginatedResult } from "../../common/pagination";
 import { JwtPayload } from "../../auth/jwt.strategy";
@@ -27,7 +29,8 @@ import {
 export class PlatformAdminService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly masterData: MasterDataService
+    private readonly masterData: MasterDataService,
+    private readonly auditLog: AuditLogService
   ) {}
 
   async listTenantUsers(tenantId: string, query?: PaginationQueryDto) {
@@ -751,6 +754,126 @@ export class PlatformAdminService {
         contentType: row.contentType,
         count: row._count._all
       }))
+    };
+  }
+
+  async getSsoConfig(tenantId: string) {
+    const config = await this.prisma.tenantSsoConfig.findUnique({ where: { tenantId } });
+    return this.presentSsoConfig(config);
+  }
+
+  async upsertSsoConfig(tenantId: string, actorId: string, dto: UpsertTenantSsoConfigDto) {
+    const existing = await this.prisma.tenantSsoConfig.findUnique({ where: { tenantId } });
+    const azureClientSecret =
+      dto.azureClientSecret?.trim() || existing?.azureClientSecret || null;
+    const ldapBindPassword = dto.ldapBindPassword?.trim() || existing?.ldapBindPassword || null;
+    const azureEnabled = dto.azureEnabled ?? existing?.azureEnabled ?? false;
+    const ldapEnabled = dto.ldapEnabled ?? existing?.ldapEnabled ?? false;
+
+    const azureTenantId = this.emptyToNull(dto.azureTenantId, existing?.azureTenantId);
+    const azureClientId = this.emptyToNull(dto.azureClientId, existing?.azureClientId);
+    const azureRedirectUri = this.emptyToNull(dto.azureRedirectUri, existing?.azureRedirectUri);
+    const ldapUrl = this.emptyToNull(dto.ldapUrl, existing?.ldapUrl);
+    const ldapBaseDn = this.emptyToNull(dto.ldapBaseDn, existing?.ldapBaseDn);
+    const ldapBindDn = this.emptyToNull(dto.ldapBindDn, existing?.ldapBindDn);
+    const ldapSearchFilter =
+      this.emptyToNull(dto.ldapSearchFilter, existing?.ldapSearchFilter) ?? "(mail={{username}})";
+
+    if (azureEnabled && (!azureTenantId || !azureClientId || !azureClientSecret)) {
+      throw new BadRequestException(
+        "Azure AD activ necesită Directory (tenant) ID, Application (client) ID și secret."
+      );
+    }
+    if (ldapEnabled && (!ldapUrl || !ldapBaseDn)) {
+      throw new BadRequestException("LDAP activ necesită URL server și Base DN.");
+    }
+
+    const saved = existing
+      ? await this.prisma.tenantSsoConfig.update({
+          where: { tenantId },
+          data: {
+            azureEnabled,
+            azureTenantId,
+            azureClientId,
+            azureClientSecret,
+            azureRedirectUri,
+            ldapEnabled,
+            ldapUrl,
+            ldapBaseDn,
+            ldapBindDn,
+            ldapBindPassword,
+            ldapSearchFilter
+          }
+        })
+      : await this.prisma.tenantSsoConfig.create({
+          data: {
+            tenantId,
+            azureEnabled,
+            azureTenantId,
+            azureClientId,
+            azureClientSecret,
+            azureRedirectUri,
+            ldapEnabled,
+            ldapUrl,
+            ldapBaseDn,
+            ldapBindDn,
+            ldapBindPassword,
+            ldapSearchFilter
+          }
+        });
+
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "AUTH",
+      action: "SSO_CONFIG_UPDATED",
+      entityType: "TenantSsoConfig",
+      entityId: saved.id,
+      payload: {
+        azureEnabled: saved.azureEnabled,
+        ldapEnabled: saved.ldapEnabled,
+        azureClientSecretSet: Boolean(saved.azureClientSecret),
+        ldapBindPasswordSet: Boolean(saved.ldapBindPassword)
+      }
+    });
+
+    return this.presentSsoConfig(saved);
+  }
+
+  private emptyToNull(value: string | null | undefined, fallback?: string | null): string | null {
+    if (value === undefined) return fallback ?? null;
+    if (value === null) return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private presentSsoConfig(
+    config: {
+      azureEnabled: boolean;
+      azureTenantId: string | null;
+      azureClientId: string | null;
+      azureClientSecret: string | null;
+      azureRedirectUri: string | null;
+      ldapEnabled: boolean;
+      ldapUrl: string | null;
+      ldapBaseDn: string | null;
+      ldapBindDn: string | null;
+      ldapBindPassword: string | null;
+      ldapSearchFilter: string | null;
+    } | null
+  ) {
+    return {
+      azureEnabled: config?.azureEnabled ?? false,
+      azureTenantId: config?.azureTenantId ?? "",
+      azureClientId: config?.azureClientId ?? "",
+      azureClientSecretSet: Boolean(config?.azureClientSecret),
+      azureRedirectUri: config?.azureRedirectUri ?? "",
+      ldapEnabled: config?.ldapEnabled ?? false,
+      ldapUrl: config?.ldapUrl ?? "",
+      ldapBaseDn: config?.ldapBaseDn ?? "",
+      ldapBindDn: config?.ldapBindDn ?? "",
+      ldapBindPasswordSet: Boolean(config?.ldapBindPassword),
+      ldapSearchFilter: config?.ldapSearchFilter ?? "(mail={{username}})"
     };
   }
 }

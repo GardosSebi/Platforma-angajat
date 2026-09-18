@@ -59,12 +59,52 @@ export interface AuditLogListItem {
 export interface GdprOverviewResponse {
   policy: {
     retentionYears: number;
-    dsarExportEnabled: false;
-    dsarEraseEnabled: false;
+    dsarExportEnabled: boolean;
+    dsarEraseEnabled: boolean;
   };
   cutoff: string;
   archivedCounts: Array<{ category: string; archived: number }>;
   recentRetentionEvents: AuditLogListItem[];
+}
+
+export interface TenantSsoConfigResponse {
+  azureEnabled: boolean;
+  azureTenantId: string;
+  azureClientId: string;
+  azureClientSecretSet: boolean;
+  azureRedirectUri: string;
+  ldapEnabled: boolean;
+  ldapUrl: string;
+  ldapBaseDn: string;
+  ldapBindDn: string;
+  ldapBindPasswordSet: boolean;
+  ldapSearchFilter: string;
+}
+
+export interface UpsertTenantSsoConfigRequest {
+  azureEnabled?: boolean;
+  azureTenantId?: string | null;
+  azureClientId?: string | null;
+  azureClientSecret?: string | null;
+  azureRedirectUri?: string | null;
+  ldapEnabled?: boolean;
+  ldapUrl?: string | null;
+  ldapBaseDn?: string | null;
+  ldapBindDn?: string | null;
+  ldapBindPassword?: string | null;
+  ldapSearchFilter?: string | null;
+}
+
+export interface DsarEraseRequest {
+  confirmEmail: string;
+  confirmPhrase: string;
+}
+
+export interface DsarEraseResponse {
+  ok: true;
+  employeeId: string;
+  anonymizedAt: string;
+  retainedCategories: string[];
 }
 
 export interface EmployeeStaticPageRow {

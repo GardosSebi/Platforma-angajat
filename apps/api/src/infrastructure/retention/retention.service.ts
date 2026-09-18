@@ -19,8 +19,8 @@ export class RetentionService {
     return {
       retentionYears: years,
       cutoff: cutoff.toISOString(),
-      dsarExportEnabled: false as const,
-      dsarEraseEnabled: false as const
+      dsarExportEnabled: true as const,
+      dsarEraseEnabled: true as const
     };
   }
 
@@ -155,7 +155,7 @@ export class RetentionService {
       this.prisma.surveyResponse.count({ where: { tenantId, retentionArchivedAt: { not: null } } }),
       this.prisma.employeeStaticPage.count({ where: { tenantId, retentionArchivedAt: { not: null } } }),
       this.prisma.auditLog.findMany({
-        where: { tenantId, module: "RETENTION" },
+        where: { tenantId, module: { in: ["RETENTION", "GDPR"] } },
         orderBy: { createdAt: "desc" },
         take: 40
       })
@@ -173,8 +173,8 @@ export class RetentionService {
     return {
       policy: {
         retentionYears: policy.retentionYears,
-        dsarExportEnabled: false as const,
-        dsarEraseEnabled: false as const
+        dsarExportEnabled: true as const,
+        dsarEraseEnabled: true as const
       },
       cutoff: policy.cutoff,
       archivedCounts: [

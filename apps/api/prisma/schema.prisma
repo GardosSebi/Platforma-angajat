@@ -648,6 +648,7 @@ model Employee {
   departmentId             String?
   jobPositionId            String?
   medicalBlockedAdmission  Boolean                @default(false)
+  dsarErasedAt             DateTime?
   bloodGroup               String?
   domicile                 String?
   commuteRoute             String?
@@ -686,6 +687,7 @@ model Employee {
   @@index([tenantId, departmentId])
   @@index([tenantId, absenceStartedAt])
   @@index([tenantId, medicalBlockedAdmission])
+  @@index([tenantId, dsarErasedAt])
 }
 
 model EmployeePlacementHistory {

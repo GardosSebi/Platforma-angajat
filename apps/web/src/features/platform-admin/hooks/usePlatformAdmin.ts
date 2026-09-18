@@ -132,6 +132,44 @@ export function useAuditLogs(params?: PaginationParams & { module?: string }, en
   });
 }
 
+export function useEraseDsar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      employeeId,
+      payload
+    }: {
+      employeeId: string;
+      payload: import("@repo/shared-types").DsarEraseRequest;
+    }) => platformAdminApi.eraseDsar(employeeId, payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["platform-admin", "gdpr-overview"] }),
+        queryClient.invalidateQueries({ queryKey: ["platform-admin", "audit-logs"] }),
+        queryClient.invalidateQueries({ queryKey: ["master-data", "employees"] })
+      ]);
+    }
+  });
+}
+
+export function useSsoConfig() {
+  return useQuery({
+    queryKey: ["platform-admin", "sso-config"],
+    queryFn: () => platformAdminApi.getSsoConfig()
+  });
+}
+
+export function useUpdateSsoConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: import("@repo/shared-types").UpsertTenantSsoConfigRequest) =>
+      platformAdminApi.updateSsoConfig(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["platform-admin", "sso-config"] });
+    }
+  });
+}
+
 export function useGrantItmAccess() {
   const queryClient = useQueryClient();
   return useMutation({

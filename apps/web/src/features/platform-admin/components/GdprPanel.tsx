@@ -1,13 +1,18 @@
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { usePagination } from "../../../shared/hooks/use-pagination";
+import { downloadWithAuth } from "../../../shared/api/http-download";
+import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { mutationErrorMessage } from "../../master-data/master-data-shared";
-import { useAuditLogs, useGdprOverview } from "../hooks/usePlatformAdmin";
+import { platformAdminApi } from "../api/platform-admin.api";
+import { useAuditLogs, useEraseDsar, useGdprOverview } from "../hooks/usePlatformAdmin";
 
 const AUDIT_MODULE_OPTIONS = [
   { value: "", label: "Toate modulele" },
   { value: "RETENTION", label: "Retenție" },
+  { value: "GDPR", label: "GDPR / DSAR" },
+  { value: "AUTH", label: "Autentificare" },
   { value: "COMMUNICATIONS", label: "Comunicări" },
   { value: "SSM", label: "SSM" },
   { value: "SURVEYS", label: "Sondaje" },
@@ -25,8 +30,54 @@ export function GdprPanel() {
     pageSize: pagination.pageSize,
     module: moduleFilter || undefined
   });
+  const eraseDsar = useEraseDsar();
+  const [dsarEmployeeId, setDsarEmployeeId] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [confirmPhrase, setConfirmPhrase] = useState("");
+  const [dsarFeedback, setDsarFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [exportPending, setExportPending] = useState(false);
   const overview = overviewQuery.data;
   const paged = paginationFromResult(logsQuery.data, pagination.page, pagination.pageSize);
+  const exportEnabled = overview?.policy.dsarExportEnabled ?? false;
+  const eraseEnabled = overview?.policy.dsarEraseEnabled ?? false;
+  const dsarBusy = exportPending || eraseDsar.isPending;
+
+  const onExport = async () => {
+    if (!dsarEmployeeId || !exportEnabled) return;
+    setDsarFeedback(null);
+    setExportPending(true);
+    try {
+      await downloadWithAuth(platformAdminApi.dsarExportUrl(dsarEmployeeId), `dsar-${dsarEmployeeId}.zip`);
+      setDsarFeedback({ type: "success", message: "Arhiva DSAR a fost descărcată. Acțiunea este jurnalizată." });
+    } catch (error) {
+      setDsarFeedback({ type: "error", message: mutationErrorMessage(error) });
+    } finally {
+      setExportPending(false);
+    }
+  };
+
+  const onErase = (event: FormEvent) => {
+    event.preventDefault();
+    if (!dsarEmployeeId || !eraseEnabled) return;
+    setDsarFeedback(null);
+    eraseDsar.mutate(
+      {
+        employeeId: dsarEmployeeId,
+        payload: { confirmEmail: confirmEmail.trim(), confirmPhrase: confirmPhrase.trim() }
+      },
+      {
+        onSuccess: (result) => {
+          setConfirmEmail("");
+          setConfirmPhrase("");
+          setDsarFeedback({
+            type: "success",
+            message: `Identitatea a fost anonimizată. Păstrate: ${result.retainedCategories.join(", ")}.`
+          });
+        },
+        onError: (error) => setDsarFeedback({ type: "error", message: mutationErrorMessage(error) })
+      }
+    );
+  };
 
   return (
     <div className="form-stack">
@@ -46,7 +97,15 @@ export function GdprPanel() {
             <ul className="gdpr-policy-list">
               <li>Audit acțiuni și acces la fișiere arhivate: activ</li>
               <li>Retenție istorică: {overview.policy.retentionYears} ani, fără ștergere automată</li>
-              <li>Fluxuri DSAR (export sau ștergere la cererea persoanei vizate): nu sunt disponibile în platformă</li>
+              <li>
+                Export DSAR (Art. 15): {overview.policy.dsarExportEnabled ? "disponibil pentru administratori" : "oprit"}
+              </li>
+              <li>
+                Ștergere/anonimizare DSAR (Art. 17):{" "}
+                {overview.policy.dsarEraseEnabled
+                  ? "disponibilă; evidențele SSM obligatorii legal rămân păstrate"
+                  : "oprită"}
+              </li>
             </ul>
             <div className="gdpr-archived-grid" aria-label="Înregistrări marcate pentru retenție">
               {overview.archivedCounts.map((row) => (
@@ -60,9 +119,77 @@ export function GdprPanel() {
         ) : null}
       </section>
 
+      <section className="card form-stack">
+        <h3 className="card-title">Cerere persoană vizată (DSAR)</h3>
+        <p className="page-lead">
+          Exportul include identitatea, contul, SSM, tichete, sondaje, comunicări și copii de fișiere atașate. Ștergerea
+          anonimizează identitatea și contactul; nu șterge instruiri, medicina muncii, EIP, accidente sau jurnalul de
+          audit (excepție Art. 17(3)(b)).
+        </p>
+        <EmployeeSelect
+          id="dsar-employee"
+          label="Persoana vizată"
+          value={dsarEmployeeId}
+          onChange={(value) => {
+            setDsarEmployeeId(value);
+            setDsarFeedback(null);
+          }}
+          allowEmpty
+          includeInactive
+          emptyLabel="Selectează angajatul"
+          disabled={dsarBusy}
+        />
+        <div className="form-actions">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!dsarEmployeeId || !exportEnabled || dsarBusy}
+            onClick={() => void onExport()}
+          >
+            {exportPending ? "Se pregătește arhiva…" : "Descarcă totul despre mine"}
+          </button>
+        </div>
+        <form className="form-stack" onSubmit={onErase}>
+          <div className="field">
+            <label htmlFor="dsar-email">Confirmă e-mailul persoanei</label>
+            <input
+              id="dsar-email"
+              type="email"
+              autoComplete="off"
+              value={confirmEmail}
+              disabled={dsarBusy}
+              onChange={(event) => setConfirmEmail(event.target.value)}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="dsar-phrase">Confirmare ștergere</label>
+            <input
+              id="dsar-phrase"
+              value={confirmPhrase}
+              disabled={dsarBusy}
+              placeholder="Scrie STERGE"
+              onChange={(event) => setConfirmPhrase(event.target.value)}
+              required
+            />
+            <p className="field-hint">Pentru a continua, scrie exact STERGE. Nu poți anonimiza propriul cont.</p>
+          </div>
+          <div className="form-actions">
+            <button
+              type="submit"
+              className="btn-secondary btn-danger"
+              disabled={!dsarEmployeeId || !eraseEnabled || dsarBusy}
+            >
+              {eraseDsar.isPending ? "Se anonimizează…" : "Șterge-mă (anonimizează identitatea)"}
+            </button>
+          </div>
+        </form>
+        {dsarFeedback ? <p className={`feedback ${dsarFeedback.type}`}>{dsarFeedback.message}</p> : null}
+      </section>
+
       {overview?.recentRetentionEvents.length ? (
         <section className="card">
-          <h3 className="card-title">Jurnal retenție (fișiere vechi)</h3>
+          <h3 className="card-title">Jurnal retenție și DSAR</h3>
           <ul className="gdpr-audit-list">
             {overview.recentRetentionEvents.map((row) => (
               <li key={row.id}>
@@ -82,7 +209,7 @@ export function GdprPanel() {
       <section className="card form-stack">
         <h3 className="card-title">Jurnal audit</h3>
         <p className="field-hint">
-          Acțiuni înregistrate pe tenant. Nu există export sau ștergere a datelor personale la cerere (DSAR).
+          Acțiuni înregistrate pe tenant, inclusiv DSAR_EXPORT, DSAR_ERASE și modificări SSO.
         </p>
         <FieldSelect
           id="audit-module"

@@ -721,14 +721,20 @@ export class MasterDataService {
   }
 
   /** Listă ușoară pentru selectoare (max 100). */
-  async listEmployeeOptions(tenantId: string, search?: string, limit = 100, viewer?: JwtPayload) {
+  async listEmployeeOptions(
+    tenantId: string,
+    search?: string,
+    limit = 100,
+    viewer?: JwtPayload,
+    includeInactive = false
+  ) {
     const take = Math.min(100, Math.max(1, limit));
     const term = search?.trim();
     const scope = await this.worksiteScopeFor(viewer);
     const where = applyWorksiteToEmployeeWhere(
       {
         tenantId,
-        active: true,
+        ...(includeInactive ? {} : { active: true }),
         ...(term
           ? {
               OR: [

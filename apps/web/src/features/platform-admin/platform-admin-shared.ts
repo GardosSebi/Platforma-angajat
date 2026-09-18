@@ -1,7 +1,8 @@
-export type PlatformAdminTab = "users" | "scoped-roles" | "itm-access" | "static-pages" | "gdpr";
+export type PlatformAdminTab = "users" | "sso" | "scoped-roles" | "itm-access" | "static-pages" | "gdpr";
 
 export const PLATFORM_ADMIN_TABS: Array<{ id: PlatformAdminTab; label: string }> = [
   { id: "users", label: "Utilizatori" },
+  { id: "sso", label: "SSO" },
   { id: "scoped-roles", label: "Roluri scoped" },
   { id: "itm-access", label: "Acces ITM" },
   { id: "static-pages", label: "Pagini statice" },

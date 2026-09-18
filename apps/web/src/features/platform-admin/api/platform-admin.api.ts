@@ -1,9 +1,13 @@
 import type {
   AuditLogListItem,
+  DsarEraseRequest,
+  DsarEraseResponse,
   EmployeeStaticPageRow,
   GdprOverviewResponse,
   ItmAccessLogRow,
+  TenantSsoConfigResponse,
   TenantUserSummary,
+  UpsertTenantSsoConfigRequest,
   UsageSummaryResponse,
   UserScopedRoleRow
 } from "@repo/shared-types";
@@ -118,6 +122,24 @@ export const platformAdminApi = {
   },
   gdprOverview() {
     return httpClient<GdprOverviewResponse>("/admin/gdpr/overview");
+  },
+  dsarExportUrl(employeeId: string) {
+    return `/admin/gdpr/dsar/${encodeURIComponent(employeeId)}/export.zip`;
+  },
+  eraseDsar(employeeId: string, payload: DsarEraseRequest) {
+    return httpClient<DsarEraseResponse>(`/admin/gdpr/dsar/${encodeURIComponent(employeeId)}/erase`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  getSsoConfig() {
+    return httpClient<TenantSsoConfigResponse>("/admin/sso-config");
+  },
+  updateSsoConfig(payload: UpsertTenantSsoConfigRequest) {
+    return httpClient<TenantSsoConfigResponse>("/admin/sso-config", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
   },
   listAuditLogs(params?: PaginationParams & { module?: string }) {
     const qs = new URLSearchParams();

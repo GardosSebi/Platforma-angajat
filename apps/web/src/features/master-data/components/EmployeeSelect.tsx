@@ -11,6 +11,7 @@ type Props = {
   allowEmpty?: boolean;
   emptyLabel?: string;
   disabled?: boolean;
+  includeInactive?: boolean;
 };
 
 export function EmployeeSelect({
@@ -21,14 +22,15 @@ export function EmployeeSelect({
   required = false,
   allowEmpty = false,
   emptyLabel = "Selectează angajat",
-  disabled = false
+  disabled = false,
+  includeInactive = false
 }: Props) {
-  const employeesQuery = useEmployeeOptions();
+  const employeesQuery = useEmployeeOptions(undefined, { includeInactive });
   const options = useMemo(
     () =>
       (employeesQuery.data?.items ?? []).map((emp) => ({
         value: emp.id,
-        label: `${emp.fullName} (${emp.email})`
+        label: `${emp.fullName} (${emp.email})${emp.active ? "" : " — inactiv"}`
       })),
     [employeesQuery.data?.items]
   );

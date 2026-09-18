@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GdprPanel } from "../components/GdprPanel";
 import { ItmAccessPanel } from "../components/ItmAccessPanel";
 import { ScopedRolesPanel } from "../components/ScopedRolesPanel";
+import { SsoPanel } from "../components/SsoPanel";
 import { StaticPagesPanel } from "../components/StaticPagesPanel";
 import { UsersPanel } from "../components/UsersPanel";
 import { PLATFORM_ADMIN_TABS, type PlatformAdminTab } from "../platform-admin-shared";
@@ -15,7 +16,8 @@ export function PlatformAdminPage() {
         <div>
           <h1 className="page-title">Administrare platformă</h1>
           <p className="page-lead">
-            Gestionează conturile de utilizator, roluri scoped, acces inspector ITM, paginile statice și retenția GDPR.
+            Gestionează conturile, autentificarea SSO, roluri scoped, acces inspector ITM, paginile statice și
+            cererile GDPR.
           </p>
         </div>
       </header>
@@ -34,6 +36,7 @@ export function PlatformAdminPage() {
       </nav>
 
       {tab === "users" ? <UsersPanel /> : null}
+      {tab === "sso" ? <SsoPanel /> : null}
       {tab === "scoped-roles" ? <ScopedRolesPanel /> : null}
       {tab === "itm-access" ? <ItmAccessPanel /> : null}
       {tab === "static-pages" ? <StaticPagesPanel /> : null}

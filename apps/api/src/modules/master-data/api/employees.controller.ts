@@ -31,7 +31,13 @@ export class EmployeesController {
     @CurrentUser() user: JwtPayload,
     @Query() query: ListEmployeeOptionsDto
   ) {
-    return this.masterData.listEmployeeOptions(tenantId, query.search, query.limit, user);
+    return this.masterData.listEmployeeOptions(
+      tenantId,
+      query.search,
+      query.limit,
+      user,
+      query.includeInactive
+    );
   }
 
   @Get()

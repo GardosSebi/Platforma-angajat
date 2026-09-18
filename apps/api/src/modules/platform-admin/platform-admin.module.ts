@@ -8,6 +8,7 @@ import { AdminScopedRolesController } from "./api/admin-scoped-roles.controller"
 import { AdminStaticPagesController } from "./api/admin-static-pages.controller";
 import { AdminUsageController } from "./api/admin-usage.controller";
 import { AdminGdprController } from "./api/admin-gdpr.controller";
+import { AdminSsoController } from "./api/admin-sso.controller";
 import { EmployeeStaticController } from "./api/employee-static.controller";
 import { PlatformAdminService } from "./platform-admin.service";
 
@@ -19,6 +20,7 @@ import { PlatformAdminService } from "./platform-admin.service";
     AdminStaticPagesController,
     AdminUsageController,
     AdminGdprController,
+    AdminSsoController,
     EmployeeStaticController
   ],
   providers: [PlatformAdminService, PermissionsGuard]

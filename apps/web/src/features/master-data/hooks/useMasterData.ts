@@ -88,10 +88,10 @@ export function useEmployees(params?: ListEmployeesParams, options?: QueryEnable
   });
 }
 
-export function useEmployeeOptions(search?: string, options?: QueryEnabled) {
+export function useEmployeeOptions(search?: string, options?: QueryEnabled & { includeInactive?: boolean }) {
   return useQuery({
-    queryKey: ["master-data", "employees", "options", search ?? ""],
-    queryFn: () => masterDataApi.listEmployeeOptions(search),
+    queryKey: ["master-data", "employees", "options", search ?? "", options?.includeInactive ? "all" : "active"],
+    queryFn: () => masterDataApi.listEmployeeOptions(search, 100, { includeInactive: options?.includeInactive }),
     enabled: options?.enabled ?? true,
     staleTime: 60_000
   });
