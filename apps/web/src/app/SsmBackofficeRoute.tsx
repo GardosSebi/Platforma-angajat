@@ -39,3 +39,7 @@ export function SsmGateRoute() {
     </SsmGuard>
   );
 }
+
+export function ManagerTeamRoute({ children }: { children: ReactNode }) {
+  return <SsmGuard>{children}</SsmGuard>;
+}

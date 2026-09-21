@@ -27,6 +27,7 @@ import type {
   CreateSsmDocumentRequest,
   AddSsmRiskAssessmentVersionRequest,
   SsmComplianceEmployee,
+  ManagerTeamOverview,
   SsmEipDueNotification,
   SsmEipMovementItem,
   SsmEipNormItem,
@@ -322,6 +323,9 @@ export const ssmApi = {
   },
   complianceReport() {
     return httpClient<import("@repo/shared-types/ssm").SsmTrainingComplianceReport>("/ssm/training-suite/compliance");
+  },
+  managerTeam() {
+    return httpClient<ManagerTeamOverview>("/ssm/manager/team");
   },
   employeeDigitalFile(employeeId: string) {
     return httpClient<{

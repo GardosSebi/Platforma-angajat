@@ -141,8 +141,8 @@ export function SurveyFormFiller({
     return null;
   };
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (event?: FormEvent) => {
+    event?.preventDefault();
     setError(null);
     const validationError = validate();
     if (validationError) {
@@ -184,8 +184,9 @@ export function SurveyFormFiller({
     );
   }
 
-  return (
-    <form className="card form-stack survey-fill-form" onSubmit={(e) => void handleSubmit(e)}>
+  const fillerClass = "card form-stack survey-fill-form";
+  const fillerBody = (
+    <>
       {previewMode ? (
         <div className="feedback success" role="status">
           Mod previzualizare — completați ca respondent; nimic nu se salvează.
@@ -481,7 +482,12 @@ export function SurveyFormFiller({
         </p>
       ) : null}
 
-      <button type="submit" className="btn-primary" disabled={pending || Boolean(uploadingQuestionId)}>
+      <button
+        type={previewMode ? "button" : "submit"}
+        className="btn-primary"
+        disabled={pending || Boolean(uploadingQuestionId)}
+        onClick={previewMode ? () => void handleSubmit() : undefined}
+      >
         {pending
           ? previewMode
             ? "Se verifică…"
@@ -492,6 +498,16 @@ export function SurveyFormFiller({
               ? "Finalizează previzualizarea"
               : submitLabel}
       </button>
+    </>
+  );
+
+  if (previewMode) {
+    return <div className={fillerClass}>{fillerBody}</div>;
+  }
+
+  return (
+    <form className={fillerClass} onSubmit={(event) => void handleSubmit(event)}>
+      {fillerBody}
     </form>
   );
 }

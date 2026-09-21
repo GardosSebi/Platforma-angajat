@@ -168,6 +168,7 @@ export function useSignPlan() {
     }) => ssmApi.signPlan(planId, role, signatureData),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "manager", "team"] });
     }
   });
 }
@@ -175,10 +176,11 @@ export function useSignPlan() {
 export function useSignPlansBatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { planIds: string[]; role: "EMPLOYEE" | "RESPONSIBLE"; signatureData: string }) =>
+    mutationFn: (payload: { planIds: string[]; role: "EMPLOYEE" | "MANAGER" | "RESPONSIBLE"; signatureData: string }) =>
       ssmApi.signPlansBatch(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["ssm", "training-suite", "plans"] });
+      await queryClient.invalidateQueries({ queryKey: ["ssm", "manager", "team"] });
     }
   });
 }

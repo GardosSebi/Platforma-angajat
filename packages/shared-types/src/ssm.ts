@@ -1669,3 +1669,58 @@ export interface UpdateSsmDangerousSubstanceRequest {
   notes?: string | null;
   status?: SsmDangerousSubstanceStatus;
 }
+
+export type ManagerTeamTraffic = "GREEN" | "YELLOW" | "RED";
+
+export interface ManagerTeamAlert {
+  kind: "TRAINING" | "MEDICAL" | "EIP" | "ADMISSION";
+  severity: "warning" | "critical";
+  employeeId: string;
+  employeeName: string;
+  message: string;
+}
+
+export interface ManagerTeamPendingApproval {
+  planId: string;
+  employeeId: string;
+  employeeName: string;
+  trainingTypeName: string;
+  dueAt: string;
+  employeeSignedAt: string;
+}
+
+export interface ManagerTeamMember {
+  employeeId: string;
+  fullName: string;
+  email: string;
+  isSelf: boolean;
+  jobPositionName: string | null;
+  departmentName: string | null;
+  worksiteName: string | null;
+  traffic: ManagerTeamTraffic;
+  complianceScore: number;
+  blockedAdmission: boolean;
+  overdueTrainings: number;
+  pendingTrainings: number;
+  medicalBlocked: boolean;
+  medicalNextDueAt: string | null;
+  eipDueSoon: number;
+  issues: string[];
+}
+
+export interface ManagerTeamOverview {
+  scopeLabel: string;
+  departmentName: string | null;
+  worksiteName: string | null;
+  viewerName: string | null;
+  summary: {
+    memberCount: number;
+    compliantPercent: number;
+    blockedAdmissionCount: number;
+    pendingApprovalsCount: number;
+    alertCount: number;
+  };
+  members: ManagerTeamMember[];
+  pendingApprovals: ManagerTeamPendingApproval[];
+  alerts: ManagerTeamAlert[];
+}

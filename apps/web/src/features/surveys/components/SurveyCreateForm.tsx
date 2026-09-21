@@ -1,46 +1,19 @@
-import { FormEvent, useState } from "react";
+import { FormEvent } from "react";
 import type {
-  CreateSurveyRequest,
   SurveyAudienceType,
   SurveyConditionalRule,
   SurveyQuestion,
-  SurveyQuestionOption,
   SurveyQuestionType,
   SurveyType
 } from "@repo/shared-types/surveys";
-import {
-  SURVEY_QUESTION_TYPE_LABELS,
-  SURVEY_QUESTION_TYPES,
-  SURVEY_TYPE_LABELS,
-  SURVEY_TYPES,
-  surveyQuestionNeedsOptions,
-  surveyQuestionNeedsRange
-} from "@repo/shared-types/surveys";
+import { SURVEY_TYPE_LABELS, SURVEY_TYPES } from "@repo/shared-types/surveys";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { AUDIENCE_LABELS, AUDIENCE_TYPES } from "../surveys-shared";
-import { SurveyFormFiller } from "./SurveyFormFiller";
+import type { QuestionFormState, SurveyFormState } from "../survey-question-factory";
+import { SurveyVisualCanvas } from "./SurveyVisualCanvas";
 
-export type SurveyFormState = Omit<CreateSurveyRequest, "questionSchema" | "conditionalLogic" | "targetEmployeeIds" | "translations"> & {
-  targetEmployeeIdsCsv: string;
-  opensAtInput: string;
-  closesAtInput: string;
-  responseLimitInput: string;
-  translationRoTitle: string;
-  translationEnTitle: string;
-};
-
-export type QuestionFormState = {
-  id: string;
-  type: SurveyQuestionType;
-  title: string;
-  titleEn: string;
-  required: boolean;
-  options: SurveyQuestionOption[];
-  min: number;
-  max: number;
-  multiTextCount: number;
-};
+export type { QuestionFormState, SurveyFormState };
 
 const CONDITIONAL_OPERATORS: Array<{ value: SurveyConditionalRule["operator"]; label: string }> = [
   { value: "EQUALS", label: "Egal cu" },
@@ -57,7 +30,6 @@ type Props = {
   surveyForm: SurveyFormState;
   questionForm: QuestionFormState;
   questions: SurveyQuestion[];
-  questionTitlesEn: Record<string, string>;
   conditionalLogic: SurveyConditionalRule[];
   audienceOptions: AudienceOption[];
   canSave: boolean;
@@ -68,10 +40,10 @@ type Props = {
   onQuestionTitleEnChange: (questionId: string, titleEn: string) => void;
   editingQuestionId: string | null;
   onAudienceRefChange: (value: string) => void;
-  onAddQuestion: () => void;
-  onEditQuestion: (id: string) => void;
+  onInsertQuestion: (type: SurveyQuestionType, index?: number) => void;
+  onReorderQuestions: (fromIndex: number, toIndex: number) => void;
+  onSelectQuestion: (id: string) => void;
   onRemoveQuestion: (id: string) => void;
-  onMoveQuestion: (id: string, direction: "up" | "down") => void;
   onCancelQuestionEdit: () => void;
   onUpdateOption: (index: number, label: string) => void;
   onUpdateOptionImageUrl: (index: number, imageUrl: string) => void;
@@ -106,7 +78,6 @@ export function SurveyCreateForm({
   surveyForm,
   questionForm,
   questions,
-  questionTitlesEn,
   conditionalLogic,
   audienceOptions,
   canSave,
@@ -117,10 +88,10 @@ export function SurveyCreateForm({
   onQuestionChange,
   onQuestionTitleEnChange,
   onAudienceRefChange,
-  onAddQuestion,
-  onEditQuestion,
+  onInsertQuestion,
+  onReorderQuestions,
+  onSelectQuestion,
   onRemoveQuestion,
-  onMoveQuestion,
   onCancelQuestionEdit,
   onUpdateOption,
   onUpdateOptionImageUrl,
@@ -130,11 +101,7 @@ export function SurveyCreateForm({
   onSubmit,
   onCancel
 }: Props) {
-  const needsOptions = surveyQuestionNeedsOptions(questionForm.type);
-  const needsRange = surveyQuestionNeedsRange(questionForm.type);
   const isEdit = mode === "edit";
-  const isEditingQuestion = Boolean(editingQuestionId);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const questionChoices = questions.map((question) => ({
     value: question.id,
     label: `${question.id} — ${question.title}`
@@ -147,14 +114,13 @@ export function SurveyCreateForm({
   };
 
   return (
-    <>
-    <form className="card form-stack comms-panel survey-create-form" onSubmit={onSubmit}>
+    <form className="card form-stack comms-panel survey-create-form survey-create-form--visual" onSubmit={onSubmit}>
       <div className="comms-compose-head">
         <div>
           <h2 className="card-title">{isEdit ? "Editează sondaj" : "Sondaj nou"}</h2>
           <p className="comms-toolbar-hint">
-            Editor formular cu toate tipurile de întrebări (radio, checkbox, dropdown, da/nu, scală, clasament, text,
-            fișier, imagini). Nu este canvas drag-and-drop.
+            Editor vizual drag-and-drop: trage tipurile din paletă pe canvas, reordonează întrebările și vezi
+            previzualizarea live.
           </p>
         </div>
         <button type="button" className="btn-secondary" onClick={onCancel}>
@@ -275,193 +241,36 @@ export function SurveyCreateForm({
       </fieldset>
 
       <fieldset className="comms-fieldset survey-section">
-        <legend>2. Întrebări ({questions.length} adăugate)</legend>
-        <p className="field-hint">
-          Alege tipul, completează textul și opțiunile, apoi adaugă întrebarea în listă. Poți edita, muta sau șterge
-          oricând.
-        </p>
-        <div className="comms-form-row">
-          <FieldSelect
-            id="question-type"
-            label="Tip întrebare"
-            value={questionForm.type}
-            onChange={(type) => onQuestionChange({ type: type as SurveyQuestionType })}
-            options={SURVEY_QUESTION_TYPES.map((type) => ({
-              value: type,
-              label: SURVEY_QUESTION_TYPE_LABELS[type]
-            }))}
-          />
-          <div className="field">
-            <label htmlFor="question-title">Întrebare</label>
-            <input
-              id="question-title"
-              value={questionForm.title}
-              onChange={(event) => onQuestionChange({ title: event.target.value })}
-              placeholder="Scrie întrebarea..."
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="question-title-en">Traducere EN (opțional)</label>
-            <input
-              id="question-title-en"
-              value={questionForm.titleEn}
-              onChange={(event) => onQuestionChange({ titleEn: event.target.value })}
-              placeholder="Question title in English..."
-            />
-          </div>
-        </div>
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={questionForm.required}
-            onChange={(event) => onQuestionChange({ required: event.target.checked })}
-          />
-          <span>Întrebare obligatorie</span>
-        </label>
-        {needsRange ? (
-          <div className="comms-form-row">
-            <div className="field">
-              <label htmlFor="question-min">{questionForm.type === "RATING_NPS" ? "Minim NPS" : "Minim"}</label>
-              <input
-                id="question-min"
-                type="number"
-                value={questionForm.min}
-                onChange={(event) => onQuestionChange({ min: Number(event.target.value) })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="question-max">{questionForm.type === "RATING_NPS" ? "Maxim NPS" : "Maxim"}</label>
-              <input
-                id="question-max"
-                type="number"
-                value={questionForm.max}
-                onChange={(event) => onQuestionChange({ max: Number(event.target.value) })}
-              />
-            </div>
-          </div>
-        ) : null}
-        {questionForm.type === "MULTI_TEXT" ? (
-          <div className="field">
-            <label htmlFor="question-multi-text-count">Număr casete text</label>
-            <input
-              id="question-multi-text-count"
-              type="number"
-              min={1}
-              max={20}
-              value={questionForm.multiTextCount}
-              onChange={(event) =>
-                onQuestionChange({ multiTextCount: Math.max(1, Number(event.target.value) || 1) })
-              }
-            />
-          </div>
-        ) : null}
-        {needsOptions ? (
-          <div className="field">
-            <span className="field-label">Opțiuni de răspuns</span>
-            <div className="survey-option-list">
-              {questionForm.options.map((option, index) => (
-                <div className="survey-option-row" key={`option-${index}`}>
-                  <div className="survey-option-fields">
-                    <input
-                      aria-label={`Opțiunea ${index + 1}`}
-                      value={option.label}
-                      onChange={(event) => onUpdateOption(index, event.target.value)}
-                      placeholder={`Opțiunea ${index + 1}`}
-                    />
-                    {questionForm.type === "IMAGE_SELECT" ? (
-                      <input
-                        aria-label={`URL imagine opțiunea ${index + 1}`}
-                        value={option.imageUrl ?? ""}
-                        onChange={(event) => onUpdateOptionImageUrl(index, event.target.value)}
-                        placeholder="URL imagine"
-                      />
-                    ) : null}
-                  </div>
-                  <button type="button" className="btn-secondary btn-sm" onClick={() => onRemoveOption(index)}>
-                    Șterge
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button type="button" className="btn-secondary survey-add-option" onClick={onAddOption}>
-              + Opțiune
-            </button>
-          </div>
-        ) : null}
-        <div className="comms-inline-actions">
-          <button type="button" className="btn-secondary survey-add-question" onClick={onAddQuestion}>
-            {isEditingQuestion ? "Actualizează întrebarea" : "Adaugă întrebarea la listă"}
-          </button>
-          {isEditingQuestion ? (
-            <button type="button" className="btn-text" onClick={onCancelQuestionEdit}>
-              Anulează editarea
-            </button>
-          ) : null}
-        </div>
-        {questions.length > 0 ? (
-          <ul className="survey-question-preview">
-            {questions.map((question, index) => (
-              <li key={question.id} className={editingQuestionId === question.id ? "selected" : undefined}>
-                <strong>
-                  {index + 1}. {question.title}
-                  {question.required ? " *" : ""}
-                </strong>
-                <span>
-                  {SURVEY_QUESTION_TYPE_LABELS[question.type]}
-                  {question.options?.length ? ` · ${question.options.length} opțiuni` : ""}
-                </span>
-                <div className="survey-question-actions">
-                  <button type="button" className="btn-secondary btn-sm" onClick={() => onEditQuestion(question.id)}>
-                    Editează
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-sm"
-                    disabled={index === 0}
-                    onClick={() => onMoveQuestion(question.id, "up")}
-                  >
-                    Sus
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-sm"
-                    disabled={index === questions.length - 1}
-                    onClick={() => onMoveQuestion(question.id, "down")}
-                  >
-                    Jos
-                  </button>
-                  <button type="button" className="btn-secondary btn-sm" onClick={() => onRemoveQuestion(question.id)}>
-                    Șterge
-                  </button>
-                </div>
-                <div className="field" style={{ marginTop: "0.35rem" }}>
-                  <label htmlFor={`q-en-${question.id}`}>EN</label>
-                  <input
-                    id={`q-en-${question.id}`}
-                    value={questionTitlesEn[question.id] ?? ""}
-                    onChange={(event) => onQuestionTitleEnChange(question.id, event.target.value)}
-                    placeholder="Traducere EN opțională"
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="field-hint">Poți salva direct cu întrebarea completată sau adaugă mai multe întrebări.</p>
-        )}
-        {questions.length > 0 ? (
-          <div className="survey-editor-preview">
-            <button type="button" className="btn-secondary btn-sm" onClick={() => setPreviewOpen((open) => !open)}>
-              {previewOpen ? "Ascunde previzualizarea" : "Previzualizează formularul"}
-            </button>
-          </div>
-        ) : null}
+        <legend>2. Editor vizual</legend>
+        <SurveyVisualCanvas
+          surveyTitle={surveyForm.title}
+          surveyDescription={surveyForm.description}
+          questions={questions}
+          questionForm={questionForm}
+          editingQuestionId={editingQuestionId}
+          conditionalLogic={conditionalLogic}
+          onInsertQuestion={onInsertQuestion}
+          onReorderQuestions={onReorderQuestions}
+          onSelectQuestion={onSelectQuestion}
+          onRemoveQuestion={onRemoveQuestion}
+          onCancelQuestionEdit={onCancelQuestionEdit}
+          onQuestionChange={(patch) => {
+            onQuestionChange(patch);
+            if (patch.titleEn !== undefined && editingQuestionId) {
+              onQuestionTitleEnChange(editingQuestionId, patch.titleEn);
+            }
+          }}
+          onUpdateOption={onUpdateOption}
+          onUpdateOptionImageUrl={onUpdateOptionImageUrl}
+          onAddOption={onAddOption}
+          onRemoveOption={onRemoveOption}
+        />
       </fieldset>
 
       <fieldset className="comms-fieldset survey-section">
         <legend>3. Logică condițională</legend>
         <p className="field-hint">
-          Afișează o întrebare doar când răspunsul la alta îndeplinește o condiție. Adaugă întâi întrebările în listă.
+          Afișează o întrebare doar când răspunsul la alta îndeplinește o condiție. Adaugă întâi întrebările pe canvas.
         </p>
         {conditionalLogic.length === 0 ? (
           <p className="field-hint">Nicio regulă încă.</p>
@@ -624,18 +433,5 @@ export function SurveyCreateForm({
         </div>
       ) : null}
     </form>
-    {previewOpen && questions.length > 0 ? (
-      <div className="survey-editor-preview-pane">
-        <SurveyFormFiller
-          title={surveyForm.title.trim() || "Sondaj fără titlu"}
-          description={surveyForm.description}
-          questions={questions}
-          conditionalLogic={conditionalLogic}
-          onSubmit={async () => undefined}
-          previewMode
-        />
-      </div>
-    ) : null}
-    </>
   );
 }

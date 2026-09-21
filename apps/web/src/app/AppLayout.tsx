@@ -60,6 +60,7 @@ function buildNavGroups(
 
   const operations: SidebarNavGroup["items"] = [];
   if (hasBackoffice) {
+    operations.push({ to: "/echipa", label: t("nav.team"), icon: NavIcons.dossier(), end: true });
     operations.push({ to: "/ssm", label: t("nav.ssm"), icon: NavIcons.ssm(), end: true });
     operations.push({ to: "/ssm/poarta", label: t("nav.gate"), icon: NavIcons.gate() });
     operations.push({ to: "/itm", label: t("nav.itm"), icon: NavIcons.itm() });
@@ -105,6 +106,7 @@ export function AppLayout() {
     const titleByRoute: Record<string, string> = {
       portal: t("nav.portal"),
       ssm: location.pathname.startsWith("/ssm/poarta") ? t("nav.gate") : t("nav.ssm"),
+      echipa: t("nav.team"),
       "master-data": t("nav.masterData"),
       "platform-admin": t("nav.admin"),
       chatbot: t("nav.communications"),

@@ -10,6 +10,13 @@ export function canAccessTenantAdmin(session: SessionData | null): boolean {
   return roles.includes("SSM_ADMIN");
 }
 
+/** Manager de departament (fără rol de administrator SSM). */
+export function isDepartmentManagerUser(session: SessionData | null): boolean {
+  const roles = session?.roles;
+  if (!roles?.length) return false;
+  if (roles.includes("SSM_ADMIN")) return false;
+  return roles.includes("DEPARTMENT_MANAGER");
+}
 /** Acces la panoul SSM administrativ (nu portal angajat). */
 export function hasSsmBackofficeAccess(session: SessionData | null): boolean {
   const roles = session?.roles;
@@ -43,6 +50,7 @@ export function getAppHomePath(session: SessionData | null): string {
   if (!session) return "/login";
   if (isEmployeePortalUser(session)) return "/portal";
   if (isItmInspectorUser(session)) return "/itm";
+  if (isDepartmentManagerUser(session)) return "/echipa";
   if (hasSsmBackofficeAccess(session)) return "/ssm";
   if (canAccessEmployeePortal(session)) return "/portal";
   return "/informatii";

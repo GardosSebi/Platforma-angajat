@@ -5930,6 +5930,10 @@ button.ssm-doc-item:hover {
   max-width: 52rem;
 }
 
+.surveys-page .survey-create-form--visual {
+  max-width: none;
+}
+
 .survey-question-preview {
   margin: 0.75rem 0 0;
   padding: 0;
@@ -6752,4 +6756,235 @@ button.ssm-doc-item:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* —— Editor vizual sondaje —— */
+.survey-visual-builder {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1.2fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.survey-palette,
+.survey-canvas,
+.survey-live-preview {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.85rem;
+  min-height: 16rem;
+}
+
+.survey-palette,
+.survey-live-preview {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 8rem);
+  overflow: auto;
+}
+
+.survey-palette h3,
+.survey-canvas-head h3,
+.survey-live-preview h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.survey-palette-group {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.survey-palette-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.survey-palette-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px dashed var(--color-border);
+  background: var(--color-surface);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.8125rem;
+  cursor: grab;
+}
+
+.survey-palette-item:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+.survey-canvas-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.survey-canvas-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--color-muted);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+}
+
+.survey-drop-slot {
+  height: 10px;
+  margin: 0.15rem 0;
+  border-radius: 6px;
+}
+
+.survey-drop-slot.active {
+  height: 18px;
+  background: var(--color-primary-muted);
+  outline: 2px dashed var(--color-primary);
+}
+
+.survey-q-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  padding: 0.7rem;
+}
+
+.survey-q-card.selected {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.survey-q-card.dragging {
+  opacity: 0.55;
+}
+
+.survey-q-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: flex-start;
+}
+
+.survey-q-drag {
+  cursor: grab;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 1rem;
+  padding: 0.15rem 0.25rem;
+}
+
+.survey-q-select {
+  flex: 1 1 12rem;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.survey-q-select span {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.survey-q-card-preview,
+.survey-q-card-editor {
+  margin-top: 0.65rem;
+}
+
+.survey-mini-options,
+.survey-mini-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.survey-mini-scale span {
+  display: inline-flex;
+  min-width: 1.6rem;
+  justify-content: center;
+  padding: 0.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.survey-live-preview .survey-fill-form {
+  box-shadow: none;
+  border: 0;
+  padding: 0;
+}
+
+/* —— Echipa mea (manager) —— */
+.manager-team-alerts ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.manager-team-alerts li.critical {
+  color: var(--color-danger);
+}
+
+.manager-team-sign {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-top: 1rem;
+}
+
+.badge-traffic {
+  display: inline-flex;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-traffic.traffic-green {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.badge-traffic.traffic-yellow {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.badge-traffic.traffic-red {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.manager-team-details td {
+  background: var(--color-bg);
+}
+
+.manager-team-page .data-table tbody tr {
+  cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .survey-visual-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .survey-palette,
+  .survey-live-preview {
+    position: static;
+    max-height: none;
+  }
+}
+
 
