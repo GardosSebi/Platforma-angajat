@@ -1318,6 +1318,16 @@ export interface ItmWorksiteOption {
   name: string;
 }
 
+export interface ItmEmployeeOption {
+  id: string;
+  fullName: string;
+  email: string;
+  jobPositionName?: string | null;
+  departmentName?: string | null;
+  worksiteName?: string | null;
+  worksiteId?: string | null;
+}
+
 export interface ItmAccessLogItem {
   id: string;
   userId: string;

@@ -49,6 +49,46 @@ export class SurveysController {
     return this.surveys.listAvailableForUser(tenantId, user.sub, user.email);
   }
 
+  @Post("option-images")
+  @RequirePermissions(Permission.SURVEYS_EDIT)
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: { fileSize: 8 * 1024 * 1024 }
+    })
+  )
+  uploadOptionImage(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    if (!file?.buffer) {
+      throw new BadRequestException("Missing multipart field 'file'");
+    }
+    return this.surveys.saveOptionImage(tenantId, user.sub, {
+      originalName: file.originalname,
+      buffer: file.buffer,
+      mimeType: file.mimetype
+    });
+  }
+
+  @Get("option-images")
+  @RequireAnyPermissions(Permission.SURVEYS_VIEW, Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
+  @Header("Cache-Control", "private, max-age=300")
+  async streamOptionImage(
+    @TenantId() tenantId: string,
+    @Query("path") path?: string
+  ) {
+    if (!path?.trim()) {
+      throw new BadRequestException("Query param 'path' is required");
+    }
+    const { stream, mimeType, fileName } = await this.surveys.streamOptionImage(tenantId, path);
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: `inline; filename="${fileName.replace(/"/g, "")}"`
+    });
+  }
+
   @Get(":id/for-respond")
   @RequireAnyPermissions(Permission.SURVEYS_RESPOND, Permission.SURVEYS_EDIT)
   forRespond(@TenantId() tenantId: string, @CurrentUser() user: JwtPayload, @Param("id") id: string) {
@@ -174,6 +214,19 @@ export class SurveysController {
 @Controller("surveys/public")
 export class PublicSurveysController {
   constructor(private readonly surveys: SurveysService) {}
+
+  @Get(":token/option-image")
+  @Header("Cache-Control", "private, max-age=300")
+  async streamPublicOptionImage(@Param("token") token: string, @Query("path") path?: string) {
+    if (!path?.trim()) {
+      throw new BadRequestException("Query param 'path' is required");
+    }
+    const { stream, mimeType, fileName } = await this.surveys.streamPublicOptionImage(token, path);
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: `inline; filename="${fileName.replace(/"/g, "")}"`
+    });
+  }
 
   @Get(":token")
   getPublicSurvey(@Param("token") token: string) {

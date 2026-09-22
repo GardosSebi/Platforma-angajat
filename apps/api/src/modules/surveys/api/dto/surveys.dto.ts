@@ -57,7 +57,7 @@ export class SurveyQuestionOptionDto {
   label!: string;
   @IsOptional()
   @IsString()
-  @MaxLength(600)
+  @MaxLength(2000)
   imageUrl?: string;
 }
 

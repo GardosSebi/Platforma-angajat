@@ -5,6 +5,7 @@ import type {
   SurveyQuestion
 } from "@repo/shared-types/surveys";
 import { SURVEY_QUESTION_TYPE_LABELS } from "@repo/shared-types/surveys";
+import { SurveyOptionImage } from "./SurveyOptionImage";
 import { SurveyThankYou } from "./SurveyThankYou";
 
 function equalsAnswer(answer: SurveyAnswerValue, value: SurveyAnswerValue): boolean {
@@ -79,6 +80,8 @@ export interface SurveyFormFillerProps {
   thanksFooter?: ReactNode;
   /** Fill as respondent without persisting (shows local thank-you after validate). */
   previewMode?: boolean;
+  /** Public survey token for uploaded option images. */
+  publicToken?: string;
   localeToggle?: {
     available: string[];
     value: string;
@@ -96,6 +99,7 @@ export function SurveyFormFiller({
   submitLabel = "Trimite răspunsurile",
   thanksFooter,
   previewMode = false,
+  publicToken,
   localeToggle
 }: SurveyFormFillerProps) {
   const [answers, setAnswers] = useState<Record<string, SurveyAnswerValue>>({});
@@ -466,7 +470,13 @@ export function SurveyFormFiller({
                       checked={answers[q.id] === opt.value}
                       onChange={() => setAnswer(q.id, opt.value)}
                     />
-                    {opt.imageUrl ? <img src={opt.imageUrl} alt={opt.label} /> : null}
+                    {opt.imageUrl ? (
+                      <SurveyOptionImage
+                        imageUrl={opt.imageUrl}
+                        alt={opt.label}
+                        publicToken={publicToken}
+                      />
+                    ) : null}
                     <span>{opt.label}</span>
                   </label>
                 ))}

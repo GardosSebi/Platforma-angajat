@@ -74,6 +74,12 @@ export interface SurveyQuestionOption {
   imageUrl?: string;
 }
 
+/** True when imageUrl is a stored upload path, not an external http(s) URL. */
+export function isSurveyUploadedImage(imageUrl?: string | null): boolean {
+  if (!imageUrl?.trim()) return false;
+  return !/^https?:\/\//i.test(imageUrl.trim());
+}
+
 export interface SurveyQuestion {
   id: string;
   type: SurveyQuestionType;

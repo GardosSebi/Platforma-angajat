@@ -83,6 +83,7 @@ export function PublicSurveyPage() {
             const uploaded = await uploadPublicAnswerFile(token, file);
             return uploaded.answerValue;
           }}
+          publicToken={token}
         />
       </div>
     </div>

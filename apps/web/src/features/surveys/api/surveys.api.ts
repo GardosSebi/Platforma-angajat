@@ -33,6 +33,15 @@ export interface SurveyAnswerFileUploadResponse {
   answerValue: string;
 }
 
+export interface SurveyOptionImageUploadResponse {
+  fileId: string;
+  path: string;
+  imageUrl: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
 export const surveysApi = {
   overview() {
     return httpClient<SurveysOverviewResponse>("/surveys/overview");
@@ -109,6 +118,17 @@ export const surveysApi = {
       method: "POST",
       body
     });
+  },
+  uploadOptionImage(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    return httpClient<SurveyOptionImageUploadResponse>("/surveys/option-images", {
+      method: "POST",
+      body
+    });
+  },
+  optionImageStreamPath(path: string) {
+    return `/surveys/option-images?path=${encodeURIComponent(path)}`;
   }
 };
 
@@ -130,6 +150,18 @@ export async function submitPublicSurveyResponse(token: string, payload: SubmitS
     throw await httpErrorFromResponse(response);
   }
   return response.json() as Promise<{ responseId: string }>;
+}
+
+export function publicOptionImagePath(token: string, path: string) {
+  return `/surveys/public/${encodeURIComponent(token)}/option-image?path=${encodeURIComponent(path)}`;
+}
+
+export async function fetchPublicOptionImage(token: string, path: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}${publicOptionImagePath(token, path)}`);
+  if (!response.ok) {
+    throw await httpErrorFromResponse(response);
+  }
+  return response.blob();
 }
 
 export async function uploadPublicAnswerFile(token: string, file: File): Promise<SurveyAnswerFileUploadResponse> {

@@ -7,7 +7,9 @@ const RESOURCE_LABELS: Record<string, string> = {
   SsmDocument: "Document SSM",
   ItmControlFolder: "Dosar control",
   ItmControlPackage: "Pachet control ZIP",
-  ItmInspectionVisit: "Vizită control"
+  ItmInspectionVisit: "Vizită control",
+  EmployeeDossier: "Dosar digital angajat",
+  SsmReport: "Raport SSM"
 };
 
 @Injectable()
@@ -114,6 +116,8 @@ export class ItmAccessService {
         resourceTitle = titleByDocId.get(row.resourceId) ?? metaTitle;
       } else if (row.resourceType === "ItmInspectionVisit" && row.resourceId) {
         resourceTitle = visitTitleById.get(row.resourceId) ?? metaTitle;
+      } else if (row.resourceType === "EmployeeDossier") {
+        resourceTitle = metaTitle ?? row.resourceId;
       } else if (row.resourceType === "ItmControlFolder" || row.resourceType === "ItmControlPackage") {
         resourceTitle =
           row.resourceId === "all" ? "Toate punctele de lucru" : (row.resourceId ?? metaTitle);

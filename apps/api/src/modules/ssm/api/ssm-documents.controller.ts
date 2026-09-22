@@ -204,9 +204,15 @@ export class SsmDocumentsController {
   async downloadActiveFile(
     @TenantId() tenantId: string,
     @CurrentUser() user: JwtPayload,
-    @Param("id") id: string
+    @Param("id") id: string,
+    @Query("purpose") purpose?: string
   ) {
-    const { stream, mimeType, fileName } = await this.documentsService.streamActiveVersion(tenantId, id, user);
+    const { stream, mimeType, fileName } = await this.documentsService.streamActiveVersion(
+      tenantId,
+      id,
+      user,
+      purpose
+    );
     return new StreamableFile(stream, {
       type: mimeType,
       disposition: `inline; filename="${encodeURIComponent(fileName)}"`

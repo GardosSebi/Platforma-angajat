@@ -42,6 +42,41 @@ export class SsmItmController {
     return this.portal.listWorksites(tenantId);
   }
 
+  @Get("employees")
+  @RequirePermissions(Permission.SSM_TRAINING_VIEW)
+  employees(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query("q") q?: string,
+    @Query("worksiteId") worksiteId?: string
+  ) {
+    return this.portal.listEmployees(tenantId, user, q, worksiteId);
+  }
+
+  @Get("employees/:employeeId/dossier")
+  @RequirePermissions(Permission.SSM_TRAINING_VIEW)
+  employeeDossier(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("employeeId") employeeId: string
+  ) {
+    return this.portal.employeeDossier(tenantId, user, employeeId);
+  }
+
+  @Get("employees/:employeeId/dossier.zip")
+  @RequirePermissions(Permission.SSM_TRAINING_VIEW)
+  @Header("Content-Type", "application/zip")
+  async employeeDossierZip(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param("employeeId") employeeId: string
+  ) {
+    const buffer = await this.portal.exportEmployeeDossierZip(tenantId, user, employeeId);
+    return new StreamableFile(buffer, {
+      disposition: `attachment; filename="dosar-itm-${employeeId}.zip"`
+    });
+  }
+
   @Get("control")
   @RequirePermissions(Permission.SSM_DOCUMENT_VIEW)
   control(

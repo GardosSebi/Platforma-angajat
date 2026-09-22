@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SurveyQuestion, SurveyQuestionType } from "@repo/shared-types/surveys";
 import {
   SURVEY_QUESTION_TYPE_LABELS,
@@ -6,7 +7,9 @@ import {
   surveyQuestionNeedsRange
 } from "@repo/shared-types/surveys";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
+import { surveysApi } from "../api/surveys.api";
 import type { QuestionFormState } from "../survey-question-factory";
+import { SurveyOptionImage } from "./SurveyOptionImage";
 
 type Props = {
   questionForm: QuestionFormState;
@@ -27,6 +30,22 @@ export function SurveyQuestionEditor({
 }: Props) {
   const needsOptions = surveyQuestionNeedsOptions(questionForm.type);
   const needsRange = surveyQuestionNeedsRange(questionForm.type);
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const uploadOptionImage = async (index: number, file: File | undefined) => {
+    if (!file) return;
+    setUploadError(null);
+    setUploadingIndex(index);
+    try {
+      const uploaded = await surveysApi.uploadOptionImage(file);
+      onUpdateOptionImageUrl(index, uploaded.path);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Încărcarea imaginii a eșuat.");
+    } finally {
+      setUploadingIndex(null);
+    }
+  };
 
   return (
     <div className="survey-q-editor">
@@ -123,12 +142,42 @@ export function SurveyQuestionEditor({
                     placeholder={`Opțiunea ${index + 1}`}
                   />
                   {questionForm.type === "IMAGE_SELECT" ? (
-                    <input
-                      aria-label={`URL imagine opțiunea ${index + 1}`}
-                      value={option.imageUrl ?? ""}
-                      onChange={(event) => onUpdateOptionImageUrl(index, event.target.value)}
-                      placeholder="URL imagine"
-                    />
+                    <div className="survey-option-image-editor">
+                      <SurveyOptionImage
+                        imageUrl={option.imageUrl}
+                        alt={option.label || `Opțiunea ${index + 1}`}
+                        className="survey-option-image-thumb"
+                      />
+                      <label className="btn-secondary btn-sm survey-option-upload">
+                        {uploadingIndex === index ? "Se încarcă…" : option.imageUrl ? "Schimbă imaginea" : "Încarcă imagine"}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          hidden
+                          disabled={uploadingIndex !== null}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            void uploadOptionImage(index, file);
+                          }}
+                        />
+                      </label>
+                      {option.imageUrl ? (
+                        <button
+                          type="button"
+                          className="btn-text btn-sm"
+                          onClick={() => onUpdateOptionImageUrl(index, "")}
+                        >
+                          Scoate imaginea
+                        </button>
+                      ) : null}
+                      <input
+                        aria-label={`URL imagine opțiunea ${index + 1}`}
+                        value={option.imageUrl ?? ""}
+                        onChange={(event) => onUpdateOptionImageUrl(index, event.target.value)}
+                        placeholder="sau lipește un URL"
+                      />
+                    </div>
                   ) : null}
                 </div>
                 <button type="button" className="btn-secondary btn-sm" onClick={() => onRemoveOption(index)}>
@@ -140,6 +189,10 @@ export function SurveyQuestionEditor({
           <button type="button" className="btn-secondary survey-add-option" onClick={onAddOption}>
             + Opțiune
           </button>
+          {questionForm.type === "IMAGE_SELECT" ? (
+            <p className="field-hint">Încarcă JPEG, PNG, GIF sau WebP (max. 8 MB) pentru fiecare variantă.</p>
+          ) : null}
+          {uploadError ? <p className="feedback error">{uploadError}</p> : null}
         </div>
       ) : null}
     </div>
@@ -180,6 +233,20 @@ export function SurveyQuestionMiniPreview({ question }: { question: SurveyQuesti
   }
   if (question.type === "FILE_UPLOAD") {
     return <button type="button" className="btn-secondary btn-sm" disabled>Încarcă fișier</button>;
+  }
+  if (question.type === "IMAGE_SELECT" && options.length) {
+    return (
+      <div className="survey-mini-images">
+        {options.slice(0, 4).map((option) => (
+          <span key={option.value} className="survey-mini-image">
+            {option.imageUrl ? (
+              <SurveyOptionImage imageUrl={option.imageUrl} alt={option.label} className="survey-option-image-thumb" />
+            ) : null}
+            <span>{option.label}</span>
+          </span>
+        ))}
+      </div>
+    );
   }
   if (options.length) {
     const inputType = question.type === "MULTIPLE_CHOICE" ? "checkbox" : "radio";

@@ -859,6 +859,48 @@ export const ssmApi = {
   listItmWorksites() {
     return httpClient<{ items: import("@repo/shared-types/ssm").ItmWorksiteOption[] }>("/ssm/itm/worksites");
   },
+  listItmEmployees(search?: string, worksiteId?: string) {
+    const params = new URLSearchParams();
+    if (search?.trim()) params.set("q", search.trim());
+    if (worksiteId) params.set("worksiteId", worksiteId);
+    const q = params.toString();
+    return httpClient<{ items: import("@repo/shared-types/ssm").ItmEmployeeOption[] }>(
+      `/ssm/itm/employees${q ? `?${q}` : ""}`
+    );
+  },
+  getItmEmployeeDossier(employeeId: string) {
+    return httpClient<{
+      trainings: Array<{
+        id: string;
+        type: string;
+        dueAt: string;
+        completedAt?: string | null;
+        status: string;
+        score?: number | null;
+      }>;
+      documents: Array<{ id: string; title: string; type: string; fileName?: string }>;
+      medicalControls?: Array<{
+        id: string;
+        controlType: string;
+        scheduledAt: string;
+        result?: string | null;
+        hasAptitudeSheet?: boolean;
+        blockedAdmission?: boolean;
+      }>;
+      employee?: {
+        id: string;
+        fullName: string;
+        medicalBlockedAdmission?: boolean;
+      };
+    }>(`/ssm/itm/employees/${encodeURIComponent(employeeId)}/dossier`);
+  },
+  getItmEmployeeDossierZipUrl(employeeId: string) {
+    return `/ssm/itm/employees/${encodeURIComponent(employeeId)}/dossier.zip`;
+  },
+  getItmDocumentFileUrl(documentId: string, purpose?: "preview" | "download") {
+    const q = purpose ? `?purpose=${purpose}` : "";
+    return `/ssm/documents/${documentId}/file${q}`;
+  },
   getItmControl(worksiteId?: string) {
     const q = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
     return httpClient<SsmDocumentControlFoldersResponse>(`/ssm/itm/control${q}`);

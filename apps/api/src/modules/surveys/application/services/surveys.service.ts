@@ -124,6 +124,88 @@ export class SurveysService {
     return this.saveAnswerFile(survey.tenantId, survey.id, file);
   }
 
+  async saveOptionImage(
+    tenantId: string,
+    actorId: string,
+    file: { originalName: string; buffer: Buffer; mimeType?: string }
+  ) {
+    if (!file.buffer?.length) {
+      throw new BadRequestException("Missing file content");
+    }
+    const mime = (file.mimeType ?? "").toLowerCase();
+    if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(mime)) {
+      throw new BadRequestException("Încarcă o imagine JPEG, PNG, GIF sau WebP.");
+    }
+    const saved = await this.files.saveUploadedFile({
+      tenantId,
+      originalName: file.originalName,
+      buffer: file.buffer,
+      mimeType: file.mimeType
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SURVEYS",
+      action: "OPTION_IMAGE_UPLOADED",
+      entityType: "SurveyOptionImage",
+      entityId: saved.id,
+      payload: { path: saved.relativePath, size: saved.size, fileName: file.originalName }
+    });
+    return {
+      fileId: saved.id,
+      path: saved.relativePath,
+      imageUrl: saved.relativePath,
+      fileName: file.originalName,
+      mimeType: file.mimeType ?? "image/jpeg",
+      size: saved.size
+    };
+  }
+
+  async streamOptionImage(tenantId: string, relativePath: string) {
+    return this.openOptionImage(tenantId, relativePath);
+  }
+
+  async streamPublicOptionImage(token: string, relativePath: string) {
+    const survey = await this.assertPublicSurvey(token);
+    const path = relativePath.trim();
+    if (!this.surveyUsesOptionImage(survey.questionSchema, path)) {
+      throw new NotFoundException("Imaginea nu aparține acestui sondaj.");
+    }
+    return this.openOptionImage(survey.tenantId, path);
+  }
+
+  private surveyUsesOptionImage(schema: Prisma.JsonValue, relativePath: string): boolean {
+    if (!Array.isArray(schema)) return false;
+    for (const question of schema) {
+      if (!question || typeof question !== "object" || Array.isArray(question)) continue;
+      const options = (question as { options?: unknown }).options;
+      if (!Array.isArray(options)) continue;
+      for (const option of options) {
+        if (!option || typeof option !== "object" || Array.isArray(option)) continue;
+        const imageUrl = (option as { imageUrl?: unknown }).imageUrl;
+        if (typeof imageUrl === "string" && imageUrl.trim() === relativePath) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private async openOptionImage(tenantId: string, relativePath: string) {
+    const opened = await this.files.openTenantFile(tenantId, relativePath);
+    const lower = opened.fileName.toLowerCase();
+    let mimeType = "application/octet-stream";
+    if (lower.endsWith(".png")) mimeType = "image/png";
+    else if (lower.endsWith(".gif")) mimeType = "image/gif";
+    else if (lower.endsWith(".webp")) mimeType = "image/webp";
+    else if (/\.jpe?g$/.test(lower)) mimeType = "image/jpeg";
+    return {
+      stream: opened.stream,
+      mimeType,
+      fileName: opened.fileName
+    };
+  }
+
   async overview(tenantId: string) {
     const [surveys, responses] = await Promise.all([
       this.prisma.survey.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" }, take: 5 }),

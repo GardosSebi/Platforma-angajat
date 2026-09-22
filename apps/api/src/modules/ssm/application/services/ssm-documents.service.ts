@@ -772,17 +772,24 @@ export class SsmDocumentsService {
     return document;
   }
 
-  async streamActiveVersion(tenantId: string, documentId: string, viewer: JwtPayload) {
+  async streamActiveVersion(tenantId: string, documentId: string, viewer: JwtPayload, purpose?: string) {
     await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
     const document = await this.assertDocumentReadable(tenantId, documentId, viewer);
     const policies = await this.loadTypePolicies(tenantId);
     assertDocumentTypeAccess(viewer, document.type, "view", policies);
     const version = document.activeVersion!;
     if (viewer.roles?.includes(SystemRole.ITM_INSPECTOR)) {
-      await this.itmAccess.logAccess(tenantId, viewer.sub, "DOWNLOAD", "SsmDocument", documentId, {
-        title: document.title,
-        fileName: version.fileName
-      });
+      await this.itmAccess.logAccess(
+        tenantId,
+        viewer.sub,
+        purpose === "preview" ? "VIEW" : "DOWNLOAD",
+        "SsmDocument",
+        documentId,
+        {
+          title: document.title,
+          fileName: version.fileName
+        }
+      );
     }
     return {
       stream: createReadStream(version.storagePath),

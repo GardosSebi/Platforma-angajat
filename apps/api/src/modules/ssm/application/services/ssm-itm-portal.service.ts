@@ -7,6 +7,8 @@ import { SystemRole } from "../../../../common/prisma-enums";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { ItmAccessService } from "./itm-access.service";
+import { SsmOverviewService } from "./ssm-overview.service";
+import { SsmTrainingSuiteService } from "./ssm-training-suite.service";
 import { CloseItmInspectionVisitDto, CreateItmInspectionVisitDto } from "../../api/dto/itm-inspection.dto";
 
 @Injectable()
@@ -14,7 +16,9 @@ export class SsmItmPortalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly itmAccess: ItmAccessService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly trainingSuite: SsmTrainingSuiteService,
+    private readonly overview: SsmOverviewService
   ) {}
 
   async listWorksites(tenantId: string) {
@@ -24,6 +28,78 @@ export class SsmItmPortalService {
       orderBy: { name: "asc" }
     });
     return { items: rows };
+  }
+
+  async listEmployees(tenantId: string, viewer: JwtPayload, search?: string, worksiteId?: string) {
+    await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
+    const q = search?.trim();
+    const rows = await this.prisma.employee.findMany({
+      where: {
+        tenantId,
+        active: true,
+        ...(worksiteId ? { worksiteId } : {}),
+        ...(q
+          ? {
+              OR: [
+                { fullName: { contains: q, mode: "insensitive" } },
+                { email: { contains: q, mode: "insensitive" } }
+              ]
+            }
+          : {})
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        worksiteId: true,
+        jobPosition: { select: { name: true } },
+        department: { select: { name: true } },
+        worksite: { select: { name: true } }
+      },
+      orderBy: { fullName: "asc" },
+      take: 80
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        fullName: row.fullName,
+        email: row.email,
+        jobPositionName: row.jobPosition?.name ?? null,
+        departmentName: row.department?.name ?? null,
+        worksiteName: row.worksite?.name ?? null,
+        worksiteId: row.worksiteId
+      }))
+    };
+  }
+
+  async employeeDossier(tenantId: string, viewer: JwtPayload, employeeId: string) {
+    await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
+    const dossier = await this.trainingSuite.digitalFile(tenantId, employeeId, viewer);
+    await this.itmAccess.logAccess(tenantId, viewer.sub, "VIEW", "EmployeeDossier", employeeId, {
+      title: dossier.employee?.fullName
+    });
+    return dossier;
+  }
+
+  async exportEmployeeDossierZip(tenantId: string, viewer: JwtPayload, employeeId: string) {
+    await this.itmAccess.assertItmInspectorAccess(tenantId, viewer.sub, viewer.roles ?? []);
+    const buffer = await this.trainingSuite.exportDigitalFileZip(tenantId, employeeId, viewer);
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, tenantId },
+      select: { fullName: true }
+    });
+    await this.itmAccess.logAccess(tenantId, viewer.sub, "EXPORT", "EmployeeDossier", employeeId, {
+      title: employee?.fullName
+    });
+    await this.auditLog.write({
+      tenantId,
+      actorId: viewer.sub,
+      module: "SSM",
+      action: "ITM_EMPLOYEE_DOSSIER_EXPORTED",
+      entityType: "EmployeeDossier",
+      entityId: employeeId
+    });
+    return buffer;
   }
 
   private async loadControlDocuments(tenantId: string, worksiteId?: string) {
@@ -257,6 +333,25 @@ export class SsmItmPortalService {
       take: 200
     });
     zip.file("accidente.json", JSON.stringify(accidents, null, 2));
+
+    try {
+      const dashboard = await this.overview.complianceDashboard(tenantId, { worksiteId });
+      zip.file(
+        "conformitate.json",
+        JSON.stringify(
+          {
+            kpi: dashboard.kpi,
+            breakdown: dashboard.breakdown,
+            topNonconformities: dashboard.topNonconformities,
+            overdueEmployees: dashboard.overdueEmployees.slice(0, 200)
+          },
+          null,
+          2
+        )
+      );
+    } catch {
+      warnings.push("Nu s-a putut include snapshot-ul de conformitate.");
+    }
 
     if (warnings.length) {
       zip.file("warnings.txt", warnings.map((line) => `- ${line}`).join("\n"));
