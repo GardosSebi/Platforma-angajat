@@ -37,6 +37,7 @@ export enum SsmGateVisitStatus {
 export enum SsmGateVisitorKind {
   VISITOR = "VISITOR",
   DETACHED = "DETACHED",
+  DELEGATED = "DELEGATED",
   TEMPORARY = "TEMPORARY",
   EXTERNAL = "EXTERNAL"
 }

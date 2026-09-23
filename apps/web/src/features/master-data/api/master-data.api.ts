@@ -42,6 +42,7 @@ export interface EmployeeItem {
   email: string;
   fullName: string;
   cnp?: string | null;
+  employmentType?: "OWN" | "DETACHED" | "DELEGATED" | "TEMPORARY" | "EXTERNAL";
   worksiteId?: string | null;
   departmentId?: string | null;
   jobPositionId?: string | null;
@@ -134,6 +135,7 @@ export interface CreateEmployeePayload {
   email: string;
   fullName: string;
   cnp?: string;
+  employmentType?: "OWN" | "DETACHED" | "DELEGATED" | "TEMPORARY" | "EXTERNAL";
   worksiteId?: string;
   departmentId?: string;
   jobPositionId?: string;
@@ -168,6 +170,7 @@ export interface UpdateEmployeePayload {
   email?: string;
   fullName?: string;
   cnp?: string;
+  employmentType?: "OWN" | "DETACHED" | "DELEGATED" | "TEMPORARY" | "EXTERNAL";
   worksiteId?: string;
   departmentId?: string;
   jobPositionId?: string;

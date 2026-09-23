@@ -30,6 +30,7 @@ export interface CreateTenantUserPayload {
   departmentId?: string;
   jobPositionId?: string;
   hireDate?: string;
+  employmentType?: "OWN" | "DETACHED" | "DELEGATED" | "TEMPORARY" | "EXTERNAL";
 }
 
 export interface CreateScopedRolePayload {

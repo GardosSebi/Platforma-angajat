@@ -19,6 +19,7 @@ import { resolveSsmViewerScope, ssmEmployeeWhere } from "../../api/ssm-viewer-sc
 const KIND_FROM_EMPLOYMENT: Record<EmployeeEmploymentType, SsmGateVisitorKind> = {
   OWN: SsmGateVisitorKind.VISITOR,
   DETACHED: SsmGateVisitorKind.DETACHED,
+  DELEGATED: SsmGateVisitorKind.DELEGATED,
   TEMPORARY: SsmGateVisitorKind.TEMPORARY,
   EXTERNAL: SsmGateVisitorKind.EXTERNAL
 };
@@ -333,6 +334,8 @@ function visitorKindLabel(kind: SsmGateVisitorKind): string {
   switch (kind) {
     case SsmGateVisitorKind.DETACHED:
       return "Detașat";
+    case SsmGateVisitorKind.DELEGATED:
+      return "Delegat";
     case SsmGateVisitorKind.TEMPORARY:
       return "Temporar";
     case SsmGateVisitorKind.EXTERNAL:

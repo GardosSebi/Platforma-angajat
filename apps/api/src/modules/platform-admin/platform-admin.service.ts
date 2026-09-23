@@ -106,6 +106,7 @@ export class PlatformAdminService {
           departmentId: dto.departmentId,
           jobPositionId: dto.jobPositionId,
           hireDate: dto.hireDate,
+          employmentType: dto.employmentType,
           active: true
         },
         actorUserId

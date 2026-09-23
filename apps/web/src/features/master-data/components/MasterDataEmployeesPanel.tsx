@@ -25,12 +25,15 @@ import {
 } from "../hooks/useMasterData";
 import {
   ACTIVE_STATUS_CARD_OPTIONS,
+  EMPLOYMENT_TYPE_OPTIONS,
   MASTER_DATA_ADD_LABELS,
   PLACEMENT_CHANGE_REASONS,
   activeLabel,
   activeTone,
+  employmentTypeLabel,
   formatDate,
-  mutationErrorMessage
+  mutationErrorMessage,
+  type EmploymentType
 } from "../master-data-shared";
 import { MasterDataCreateModal } from "./MasterDataCreateModal";
 
@@ -38,6 +41,7 @@ const EMPTY_FORM: CreateEmployeePayload = {
   email: "",
   fullName: "",
   cnp: "",
+  employmentType: "OWN",
   worksiteId: "",
   departmentId: "",
   jobPositionId: "",
@@ -117,6 +121,7 @@ export function MasterDataEmployeesPanel() {
       email: item.email,
       fullName: item.fullName,
       cnp: item.cnp ?? "",
+      employmentType: item.employmentType ?? "OWN",
       worksiteId: item.worksiteId ?? "",
       departmentId: item.departmentId ?? "",
       jobPositionId: item.jobPositionId ?? "",
@@ -146,6 +151,7 @@ export function MasterDataEmployeesPanel() {
         fullName: form.fullName.trim(),
         roles: [createRole],
         cnp: form.cnp?.trim() || undefined,
+        employmentType: form.employmentType ?? "OWN",
         worksiteId: form.worksiteId || undefined,
         departmentId: form.departmentId || undefined,
         jobPositionId: form.jobPositionId || undefined,
@@ -177,6 +183,7 @@ export function MasterDataEmployeesPanel() {
           email: editForm.email?.trim(),
           fullName: editForm.fullName?.trim(),
           cnp: editForm.cnp?.trim() || undefined,
+          employmentType: editForm.employmentType ?? "OWN",
           worksiteId: editForm.worksiteId || undefined,
           departmentId: editForm.departmentId || undefined,
           jobPositionId: editForm.jobPositionId || undefined,
@@ -328,6 +335,7 @@ export function MasterDataEmployeesPanel() {
               <tr>
                 <th>Nume</th>
                 <th>E-mail</th>
+                <th>Tip angajare</th>
                 <th>Funcție</th>
                 <th>Departament</th>
                 <th>Punct de lucru</th>
@@ -339,14 +347,14 @@ export function MasterDataEmployeesPanel() {
             <tbody>
               {query.isLoading ? (
                 <tr>
-                  <td colSpan={8} className="text-muted">
+                  <td colSpan={9} className="text-muted">
                     Se încarcă...
                   </td>
                 </tr>
               ) : null}
               {!query.isLoading && paged.items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="comms-empty-cell">
+                  <td colSpan={9} className="comms-empty-cell">
                     <p>Nu am găsit angajați pentru filtrele selectate.</p>
                   </td>
                 </tr>
@@ -355,6 +363,7 @@ export function MasterDataEmployeesPanel() {
                 <tr key={item.id}>
                   <td className="comms-title-cell">{item.fullName}</td>
                   <td>{item.email}</td>
+                  <td>{employmentTypeLabel(item.employmentType)}</td>
                   <td>{item.jobPosition ? `${item.jobPosition.code} — ${item.jobPosition.name}` : "—"}</td>
                   <td>{orgLabel(item.department)}</td>
                   <td>{orgLabel(item.worksite)}</td>
@@ -432,6 +441,16 @@ export function MasterDataEmployeesPanel() {
                 />
               </div>
             </div>
+            <FieldSelect
+              id="md-emp-create-employment-type"
+              label="Tip angajare"
+              hint="Detașații, delegații și personalul temporar primesc instruirea introductiv-generală la creare."
+              value={form.employmentType ?? "OWN"}
+              onChange={(employmentType) =>
+                setForm((p) => ({ ...p, employmentType: employmentType as EmploymentType }))
+              }
+              options={EMPLOYMENT_TYPE_OPTIONS}
+            />
             <FieldSelect
               id="md-emp-create-worksite"
               label="Punct de lucru"
@@ -560,6 +579,16 @@ export function MasterDataEmployeesPanel() {
                 onChange={(e) => setEditForm((p) => ({ ...p, cnp: e.target.value }))}
               />
             </div>
+            <FieldSelect
+              id="md-emp-edit-employment-type"
+              label="Tip angajare"
+              hint="Dacă treci angajatul la detașat, delegat sau temporar și nu are deja instruirea introductiv-generală, aceasta se alocă automat."
+              value={editForm.employmentType ?? "OWN"}
+              onChange={(employmentType) =>
+                setEditForm((p) => ({ ...p, employmentType: employmentType as EmploymentType }))
+              }
+              options={EMPLOYMENT_TYPE_OPTIONS}
+            />
             <OptionCardRadioGroup
               name="md-emp-edit-status"
               legend="Status"

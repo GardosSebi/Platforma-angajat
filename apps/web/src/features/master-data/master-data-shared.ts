@@ -73,6 +73,28 @@ export function formatDate(value?: string | null): string {
   return d.toLocaleDateString("ro-RO");
 }
 
+export const EMPLOYMENT_TYPES = ["OWN", "DETACHED", "DELEGATED", "TEMPORARY", "EXTERNAL"] as const;
+
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
+
+export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  OWN: "Propriu",
+  DETACHED: "Detașat",
+  DELEGATED: "Delegat",
+  TEMPORARY: "Temporar",
+  EXTERNAL: "Extern"
+};
+
+export const EMPLOYMENT_TYPE_OPTIONS = EMPLOYMENT_TYPES.map((value) => ({
+  value,
+  label: EMPLOYMENT_TYPE_LABELS[value]
+}));
+
+export function employmentTypeLabel(value?: string | null): string {
+  if (!value) return EMPLOYMENT_TYPE_LABELS.OWN;
+  return EMPLOYMENT_TYPE_LABELS[value as EmploymentType] ?? value;
+}
+
 export const PLACEMENT_CHANGE_REASONS = [
   "Transfer",
   "Schimbare funcție",

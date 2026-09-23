@@ -8,6 +8,7 @@ import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { useEmployeeOptions, useWorksitesLookup } from "../../master-data/hooks/useMasterData";
+import { employmentTypeLabel } from "../../master-data/master-data-shared";
 import { ssmApi } from "../api/ssm.api";
 import { useAdmissionBlocks, useBriefGateVisit, useCreateGateVisit, useGateVisits, useSignGateVisit } from "../hooks/useSsmGate";
 
@@ -17,12 +18,14 @@ type WizardStep = 1 | 2 | 3;
 const VISITOR_KINDS: Array<{ value: SsmGateVisitorKind; label: string }> = [
   { value: "VISITOR", label: "Vizitator" },
   { value: "DETACHED", label: "Detașat" },
+  { value: "DELEGATED", label: "Delegat" },
   { value: "TEMPORARY", label: "Temporar" },
   { value: "EXTERNAL", label: "Extern" }
 ];
 
 const KIND_FROM_EMPLOYMENT: Record<string, SsmGateVisitorKind> = {
   DETACHED: "DETACHED",
+  DELEGATED: "DELEGATED",
   TEMPORARY: "TEMPORARY",
   EXTERNAL: "EXTERNAL",
   OWN: "VISITOR"
@@ -286,7 +289,7 @@ export function SsmGateManager() {
                 {nonOwnEmployees.length ? (
                   <FieldSelect
                     id="gate-pick-employee"
-                    label="Adaugă din evidență (detașați / temporari / externi)"
+                    label="Adaugă din evidență (detașați / delegați / temporari / externi)"
                     value=""
                     onChange={(employeeId) => {
                       const emp = nonOwnEmployees.find((item) => item.id === employeeId);
@@ -310,7 +313,7 @@ export function SsmGateManager() {
                     options={mapToOptions(
                       nonOwnEmployees,
                       (item) => item.id,
-                      (item) => `${item.fullName} · ${item.employmentType}`
+                      (item) => `${item.fullName} · ${employmentTypeLabel(item.employmentType)}`
                     )}
                   />
                 ) : null}
@@ -516,7 +519,7 @@ export function SsmGateManager() {
                   <div>
                     <strong>{item.fullName}</strong>
                     <span className="field-hint">
-                      {[item.jobPositionName, item.departmentName, item.worksiteName, item.employmentType]
+                      {[item.jobPositionName, item.departmentName, item.worksiteName, employmentTypeLabel(item.employmentType)]
                         .filter(Boolean)
                         .join(" · ")}
                     </span>

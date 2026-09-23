@@ -48,7 +48,7 @@ Structură organizațională per tenant: **puncte de lucru**, **departamente**, 
 - `GET/PATCH /api/v1/master-data/employees`, `PATCH .../placement`
 - `GET/POST /api/v1/master-data/groups`, `POST/DELETE .../groups/:groupId/members/:employeeId`
 - `GET/POST /api/v1/master-data/ssm-responsibles`
-- `POST /api/v1/master-data/import/employees` – body JSON `{ "csv": "..." }` (header: `email,fullName` + opțional `cnp,worksiteCode,departmentCode,jobCode,hireDate,leaveDate,active`)
+- `POST /api/v1/master-data/import/employees` – body JSON `{ "csv": "..." }` (header: `email,fullName` + opțional `cnp,worksiteCode,departmentCode,jobCode,hireDate,leaveDate,active,employmentType` — valori: `propriu`, `detasat`, `delegat`, `temporar`, `extern`)
 
 Permisiuni: `master-data:read`, `master-data:write`, `master-data:import`. CNP stocat criptat (AES); afișare clară doar cu `master-data:write`.
 

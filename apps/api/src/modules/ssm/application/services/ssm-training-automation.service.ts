@@ -14,6 +14,29 @@ export type SsmTrainingCategoryCode =
 const ABSENCE_SUPPLEMENTARY_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Proprii, detașați, delegați și personal temporar. Externii nu primesc introductiv-generală. */
+function requiresIntroductoryTraining(employmentType: EmployeeEmploymentType): boolean {
+  return (
+    employmentType === EmployeeEmploymentType.OWN ||
+    employmentType === EmployeeEmploymentType.DETACHED ||
+    employmentType === EmployeeEmploymentType.DELEGATED ||
+    employmentType === EmployeeEmploymentType.TEMPORARY
+  );
+}
+
+function introductoryReason(employmentType: EmployeeEmploymentType): string {
+  switch (employmentType) {
+    case EmployeeEmploymentType.DETACHED:
+      return "Flux automat la angajare: instruire introductiv-generală pentru personal detașat";
+    case EmployeeEmploymentType.DELEGATED:
+      return "Flux automat la angajare: instruire introductiv-generală pentru personal delegat";
+    case EmployeeEmploymentType.TEMPORARY:
+      return "Flux automat la angajare: instruire introductiv-generală pentru personal temporar";
+    default:
+      return "Flux automat la angajare nouă";
+  }
+}
+
 @Injectable()
 export class SsmTrainingAutomationService {
   constructor(
@@ -127,23 +150,41 @@ export class SsmTrainingAutomationService {
     return plan;
   }
 
+  /** Alocă introductiv-generală dacă tipul o cere și angajatul nu are deja o fișă de acest tip. */
+  async ensureIntroductoryTraining(
+    tenantId: string,
+    actorUserId: string,
+    employeeId: string,
+    employmentType: EmployeeEmploymentType
+  ) {
+    if (!requiresIntroductoryTraining(employmentType)) return null;
+    const trainingType = await this.ensureTrainingType(tenantId, "INTRODUCTORY_GENERAL");
+    const existing = await this.prisma.ssmTrainingPlan.findFirst({
+      where: { tenantId, employeeId, trainingTypeId: trainingType.id }
+    });
+    if (existing) return existing;
+    return this.autoAssignTrainingPlan(
+      tenantId,
+      actorUserId,
+      employeeId,
+      "INTRODUCTORY_GENERAL",
+      introductoryReason(employmentType)
+    );
+  }
+
   async assignOnHire(
     tenantId: string,
     actorUserId: string,
     employeeId: string,
     employmentType: EmployeeEmploymentType = EmployeeEmploymentType.OWN
   ) {
+    await this.ensureIntroductoryTraining(tenantId, actorUserId, employeeId, employmentType);
     const categories: SsmTrainingCategoryCode[] = ["WORKPLACE", "EMERGENCY_PSI"];
-    if (employmentType !== EmployeeEmploymentType.EXTERNAL) {
-      categories.unshift("INTRODUCTORY_GENERAL");
-    }
     for (const category of categories) {
       const reason =
-        category === "INTRODUCTORY_GENERAL"
-          ? "Flux automat la angajare nouă"
-          : category === "WORKPLACE"
-            ? "Flux automat admitere la locul de muncă"
-            : "Flux automat instruire PSI la angajare";
+        category === "WORKPLACE"
+          ? "Flux automat admitere la locul de muncă"
+          : "Flux automat instruire PSI la angajare";
       await this.autoAssignTrainingPlan(tenantId, actorUserId, employeeId, category, reason);
     }
   }

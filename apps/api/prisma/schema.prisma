@@ -310,6 +310,7 @@ enum EmployeeStaticAudienceType {
 enum EmployeeEmploymentType {
   OWN
   DETACHED
+  DELEGATED
   TEMPORARY
   EXTERNAL
 }
@@ -324,6 +325,7 @@ enum SsmGateVisitStatus {
 enum SsmGateVisitorKind {
   VISITOR
   DETACHED
+  DELEGATED
   TEMPORARY
   EXTERNAL
 }

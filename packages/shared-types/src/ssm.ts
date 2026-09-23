@@ -1214,7 +1214,7 @@ export interface CreateSsmEvacuationDrillRequest {
 }
 
 export type SsmGateVisitStatus = "REGISTERED" | "BRIEFING" | "SIGNED" | "CANCELLED";
-export type SsmGateVisitorKind = "VISITOR" | "DETACHED" | "TEMPORARY" | "EXTERNAL";
+export type SsmGateVisitorKind = "VISITOR" | "DETACHED" | "DELEGATED" | "TEMPORARY" | "EXTERNAL";
 export type SsmEipOrderStatus = "NEEDED" | "ORDERED" | "PARTIAL" | "RECEIVED" | "CANCELLED";
 export type SsmMedicalAppointmentStatus = "REQUESTED" | "SCHEDULED" | "CANCELLED";
 export type ItmInspectionVisitStatus = "OPEN" | "CLOSED";

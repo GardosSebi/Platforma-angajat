@@ -11,11 +11,17 @@ const CSV_COLUMNS = [
   { name: "jobCode", required: false, hint: "Cod post" },
   { name: "hireDate", required: false, hint: "YYYY-MM-DD" },
   { name: "leaveDate", required: false, hint: "YYYY-MM-DD" },
-  { name: "active", required: false, hint: "true / false" }
+  { name: "active", required: false, hint: "true / false" },
+  {
+    name: "employmentType",
+    required: false,
+    hint: "propriu, detasat, delegat, temporar, extern"
+  }
 ] as const;
 
-const CSV_TEMPLATE = `email,fullName,cnp,worksiteCode,departmentCode,jobCode,hireDate,leaveDate,active
-ion.popescu@firma.local,Ion Popescu,,HQ,ADMIN,MGR,2024-01-15,,true`;
+const CSV_TEMPLATE = `email,fullName,cnp,worksiteCode,departmentCode,jobCode,hireDate,leaveDate,active,employmentType
+ion.popescu@firma.local,Ion Popescu,,HQ,ADMIN,MGR,2024-01-15,,true,propriu
+maria.ionescu@firma.local,Maria Ionescu,,HQ,ADMIN,MGR,2024-03-01,,true,delegat`;
 
 export function MasterDataImportPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);

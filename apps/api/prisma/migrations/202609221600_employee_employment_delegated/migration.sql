@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "EmployeeEmploymentType" ADD VALUE IF NOT EXISTS 'DELEGATED';
+
+-- AlterEnum
+ALTER TYPE "SsmGateVisitorKind" ADD VALUE IF NOT EXISTS 'DELEGATED';

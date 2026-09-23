@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsEmail,
+  IsEnum,
   IsIn,
   IsNotEmpty,
   IsOptional,
@@ -10,6 +11,7 @@ import {
   MaxLength,
   MinLength
 } from "class-validator";
+import { EmployeeEmploymentType } from "@prisma/client";
 import { SystemRole } from "../../../../common/prisma-enums";
 
 const ROLES = Object.values(SystemRole);
@@ -55,4 +57,8 @@ export class CreateTenantUserDto {
 
   @IsOptional()
   hireDate?: string;
+
+  @IsOptional()
+  @IsEnum(EmployeeEmploymentType)
+  employmentType?: EmployeeEmploymentType;
 }

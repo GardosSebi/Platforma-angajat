@@ -76,6 +76,27 @@ function parseCsvRow(line: string): string[] {
   return out;
 }
 
+function parseEmploymentType(value: string | undefined): EmployeeEmploymentType {
+  const key = (value ?? "OWN")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  const aliases: Record<string, EmployeeEmploymentType> = {
+    OWN: EmployeeEmploymentType.OWN,
+    PROPRIU: EmployeeEmploymentType.OWN,
+    DETACHED: EmployeeEmploymentType.DETACHED,
+    DETASAT: EmployeeEmploymentType.DETACHED,
+    DELEGATED: EmployeeEmploymentType.DELEGATED,
+    DELEGAT: EmployeeEmploymentType.DELEGATED,
+    TEMPORARY: EmployeeEmploymentType.TEMPORARY,
+    TEMPORAR: EmployeeEmploymentType.TEMPORARY,
+    EXTERNAL: EmployeeEmploymentType.EXTERNAL,
+    EXTERN: EmployeeEmploymentType.EXTERNAL
+  };
+  return aliases[key] ?? EmployeeEmploymentType.OWN;
+}
+
 function parseBool(value: string | undefined, defaultVal = true): boolean {
   if (value === undefined || value === "") return defaultVal;
   const v = value.toLowerCase();
@@ -909,6 +930,14 @@ export class MasterDataService {
     if (absenceCleared) {
       await this.medicalService.scheduleOnResume(tenantId, actorUserId, updated.id);
     }
+    if (dto.employmentType !== undefined && dto.employmentType !== existing.employmentType) {
+      await this.trainingAutomation.ensureIntroductoryTraining(
+        tenantId,
+        actorUserId,
+        updated.id,
+        dto.employmentType
+      );
+    }
 
     return updated;
   }
@@ -1263,13 +1292,9 @@ export class MasterDataService {
         const leaveDate =
           colLeave >= 0 && cells[colLeave] ? parseOptionalDate(cells[colLeave]) : undefined;
         const active = colActive >= 0 ? parseBool(cells[colActive], true) : true;
-        const employmentTypeRaw =
-          colEmploymentType >= 0 ? cells[colEmploymentType]?.toUpperCase() : "OWN";
-        const employmentType = (
-          ["OWN", "DETACHED", "TEMPORARY", "EXTERNAL"].includes(employmentTypeRaw)
-            ? employmentTypeRaw
-            : "OWN"
-        ) as EmployeeEmploymentType;
+        const employmentType = parseEmploymentType(
+          colEmploymentType >= 0 ? cells[colEmploymentType] : undefined
+        );
         const absenceStartedAt =
           colAbsence >= 0 && cells[colAbsence] ? parseOptionalDate(cells[colAbsence]) : undefined;
 
