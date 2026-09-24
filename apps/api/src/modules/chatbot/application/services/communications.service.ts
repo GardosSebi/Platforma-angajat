@@ -579,7 +579,7 @@ export class CommunicationsService {
     file: { originalName: string; buffer: Buffer; mimeType?: string }
   ) {
     if (!file.buffer?.length) {
-      throw new BadRequestException("Missing file content");
+      throw new BadRequestException("Conținutul fișierului lipsește.");
     }
     const allowed = /^(image\/|video\/|application\/pdf|application\/vnd\.|application\/msword|application\/octet-stream|text\/)/i;
     if (file.mimeType && !allowed.test(file.mimeType)) {
@@ -849,7 +849,7 @@ export class CommunicationsService {
     }
     const current = await this.prisma.communicationTemplate.findFirst({ where: { id, tenantId } });
     if (!current) {
-      throw new NotFoundException("Template not found for tenant.");
+      throw new NotFoundException("Șablonul nu a fost găsit pentru tenantul curent.");
     }
     const audienceType = dto.audienceType ?? current.audienceType;
     const audienceRefId = dto.audienceRefId !== undefined ? clean(dto.audienceRefId) : current.audienceRefId;
@@ -886,7 +886,7 @@ export class CommunicationsService {
     }
     const current = await this.prisma.communicationTemplate.findFirst({ where: { id, tenantId } });
     if (!current) {
-      throw new NotFoundException("Template not found for tenant.");
+      throw new NotFoundException("Șablonul nu a fost găsit pentru tenantul curent.");
     }
     await this.prisma.communicationTemplate.delete({ where: { id } });
     await this.auditLog.write({

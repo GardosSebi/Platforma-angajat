@@ -27,7 +27,7 @@ type MeasureSnapshot = {
 function parseDate(value: string): Date {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return d;
 }
@@ -72,19 +72,19 @@ export class SsmPppService {
     departmentId?: string
   ) {
     if (targetType === SsmRiskTargetType.JOB_POSITION) {
-      if (!jobPositionId) throw new BadRequestException("jobPositionId is required.");
+      if (!jobPositionId) throw new BadRequestException("jobPositionId este obligatoriu.");
       const row = await this.prisma.jobPosition.findFirst({ where: { id: jobPositionId, tenantId } });
       if (!row) throw new BadRequestException("jobPositionId nevalid.");
       return;
     }
     if (targetType === SsmRiskTargetType.WORKSITE) {
-      if (!worksiteId) throw new BadRequestException("worksiteId is required.");
+      if (!worksiteId) throw new BadRequestException("worksiteId este obligatoriu.");
       const row = await this.prisma.worksite.findFirst({ where: { id: worksiteId, tenantId } });
       if (!row) throw new BadRequestException("worksiteId nevalid.");
       return;
     }
     if (targetType === SsmRiskTargetType.DEPARTMENT) {
-      if (!departmentId) throw new BadRequestException("departmentId is required.");
+      if (!departmentId) throw new BadRequestException("departmentId este obligatoriu.");
       const row = await this.prisma.department.findFirst({ where: { id: departmentId, tenantId } });
       if (!row) throw new BadRequestException("departmentId nevalid.");
     }
@@ -301,7 +301,7 @@ export class SsmPppService {
     });
     if (!plan) throw new NotFoundException("Plan PPP negăsit.");
     if (plan.status === SsmPreventionPlanStatus.ARCHIVED) {
-      throw new BadRequestException("Cannot version an archived PPP plan.");
+      throw new BadRequestException("Un plan PPP arhivat nu poate fi versionat.");
     }
 
     const measures = (dto.measures ?? [])

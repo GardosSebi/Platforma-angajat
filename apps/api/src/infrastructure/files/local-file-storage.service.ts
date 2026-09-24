@@ -45,7 +45,7 @@ export class LocalFileStorageService {
     try {
       await pipeline(Readable.from(params.buffer), createWriteStream(absolutePath));
     } catch {
-      throw new InternalServerErrorException("Failed to persist file");
+      throw new InternalServerErrorException("Fișierul nu a putut fi salvat.");
     }
 
     return { id, relativePath, size: params.buffer.length };

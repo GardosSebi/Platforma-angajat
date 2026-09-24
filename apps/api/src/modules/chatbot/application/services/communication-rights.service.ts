@@ -282,7 +282,7 @@ export class CommunicationRightsService {
 
     if (input.scopeType === CommunicationPublishScope.LEGAL_ENTITY) {
       if (!input.legalEntityId?.trim()) {
-        throw new BadRequestException("Compania (legal entity) este obligatorie pentru acest scop.");
+        throw new BadRequestException("Entitatea juridică este obligatorie pentru acest scop.");
       }
       const entity = await this.prisma.legalEntity.findFirst({
         where: { id: input.legalEntityId, tenantId }

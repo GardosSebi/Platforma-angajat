@@ -64,7 +64,7 @@ const ALLOWED_MATERIAL_MIME_PREFIXES = [
 function parseDate(value: string): Date {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return d;
 }
@@ -275,7 +275,7 @@ export class SsmTrainingSuiteService {
     const legalMinimum = LEGAL_MIN_HOURS_BY_CATEGORY[category];
     if (legalMinimum && (dto.legalMinDurationHours ?? legalMinimum) < legalMinimum) {
       throw new BadRequestException(
-        `${category} requires at least ${legalMinimum} legal hours.`
+        `${category} necesită cel puțin ${legalMinimum} ore legale.`
       );
     }
     const created = await (this.prisma as PrismaWithTrainingTypeExtended).ssmTrainingType.create({
@@ -318,13 +318,13 @@ export class SsmTrainingSuiteService {
       where: { id: typeId, tenantId }
     });
     if (!existing) {
-      throw new NotFoundException("Training type not found.");
+      throw new NotFoundException("Tipul de instruire nu a fost găsit.");
     }
     const category = (dto.category ?? existing.category) as SsmTrainingCategoryCode;
     const legalMinimum = LEGAL_MIN_HOURS_BY_CATEGORY[category];
     const nextHours = dto.legalMinDurationHours ?? existing.legalMinDurationHours ?? legalMinimum;
     if (legalMinimum && (nextHours ?? legalMinimum) < legalMinimum) {
-      throw new BadRequestException(`${category} requires at least ${legalMinimum} legal hours.`);
+      throw new BadRequestException(`${category} necesită cel puțin ${legalMinimum} ore legale.`);
     }
     const updated = await (this.prisma as PrismaWithTrainingTypeExtended).ssmTrainingType.update({
       where: { id: typeId },
@@ -365,19 +365,19 @@ export class SsmTrainingSuiteService {
       where: { id: dto.employeeId, tenantId, active: true }
     });
     if (!employee) {
-      throw new NotFoundException("Employee not found for tenant.");
+      throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
     }
     const type = await this.prisma.ssmTrainingType.findFirst({
       where: { id: dto.trainingTypeId, tenantId, active: true }
     });
     if (!type) {
-      throw new NotFoundException("Training type not found for tenant.");
+      throw new NotFoundException("Tipul de instruire nu a fost găsit pentru tenantul curent.");
     }
 
     const scheduledAt = parseDate(dto.scheduledAt);
     const dueAt = parseDate(dto.dueAt);
     if (scheduledAt > dueAt) {
-      throw new BadRequestException("scheduledAt must be before dueAt.");
+      throw new BadRequestException("Data programată trebuie să fie înainte de data scadentă.");
     }
 
     const trainer = await this.resolveTrainer(tenantId, dto);
@@ -448,7 +448,7 @@ export class SsmTrainingSuiteService {
       }
     });
     if (!group) {
-      throw new NotFoundException("Training group not found for tenant.");
+      throw new NotFoundException("Grupul de instruire nu a fost găsit pentru tenantul curent.");
     }
 
     const employeeIds = [
@@ -500,7 +500,7 @@ export class SsmTrainingSuiteService {
       select: { id: true }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     const trainer = await this.resolveTrainer(tenantId, dto);
     const updated = await this.prisma.ssmTrainingPlan.update({
@@ -573,17 +573,17 @@ export class SsmTrainingSuiteService {
 
   private assertMaterialUpload(file?: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException("Material file is required.");
+      throw new BadRequestException("Fișierul materialului este obligatoriu.");
     }
     if (file.size > MAX_MATERIAL_BYTES) {
-      throw new BadRequestException("File too large. Max 120MB.");
+      throw new BadRequestException("Fișierul este prea mare. Maxim 120MB.");
     }
     const extension = extname(file.originalname).toLowerCase();
     if (!ALLOWED_MATERIAL_EXTENSIONS.has(extension)) {
-      throw new BadRequestException("Only Word, PDF, or video uploads are allowed.");
+      throw new BadRequestException("Sunt permise doar fișiere Word, PDF sau video.");
     }
     if (!ALLOWED_MATERIAL_MIME_PREFIXES.some((prefix) => file.mimetype.startsWith(prefix))) {
-      throw new BadRequestException("Unsupported file format.");
+      throw new BadRequestException("Formatul fișierului nu este acceptat.");
     }
   }
 
@@ -601,7 +601,7 @@ export class SsmTrainingSuiteService {
       where: { id: trainingPlanId, tenantId }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     const safeName = sanitizeFilename(upload.originalname);
     const fileName = `${Date.now()}-${safeName}`;
@@ -701,7 +701,7 @@ export class SsmTrainingSuiteService {
       where: { id: trainingPlanId, tenantId }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     if (!this.planHasMaterial(plan)) {
       throw new BadRequestException("Nu există material de parcurs pentru această instruire.");
@@ -756,7 +756,7 @@ export class SsmTrainingSuiteService {
       }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     this.assertTrainingPlanActiveForWorkflow(plan);
     if (!this.planHasMaterial(plan)) {
@@ -822,7 +822,7 @@ export class SsmTrainingSuiteService {
       }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     this.assertTrainingPlanActiveForWorkflow(plan);
     this.assertMaterialReady(plan);
@@ -887,7 +887,7 @@ export class SsmTrainingSuiteService {
       }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     this.assertTrainingPlanActiveForWorkflow(plan);
     this.assertMaterialReady(plan);
@@ -1030,7 +1030,7 @@ export class SsmTrainingSuiteService {
       }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     const passedAttempt = plan.attempts.find((attempt) => attempt.passed === true);
     if (!passedAttempt) {
@@ -1129,7 +1129,7 @@ export class SsmTrainingSuiteService {
   async signPlansBatch(tenantId: string, actorId: string, dto: SignPlansBatchDto, viewer: JwtPayload) {
     const uniquePlanIds = Array.from(new Set(dto.planIds));
     if (!uniquePlanIds.length) {
-      throw new BadRequestException("planIds is empty.");
+      throw new BadRequestException("Lista planIds este goală.");
     }
     let signedCount = 0;
     for (const planId of uniquePlanIds) {
@@ -1501,7 +1501,7 @@ export class SsmTrainingSuiteService {
       }
     });
     if (!employee) {
-      throw new NotFoundException("Employee not found.");
+      throw new NotFoundException("Angajatul nu a fost găsit.");
     }
 
     const trainings = await this.prisma.ssmTrainingPlan.findMany({
@@ -1641,7 +1641,7 @@ export class SsmTrainingSuiteService {
       }
     });
     if (!employee) {
-      throw new NotFoundException("Employee not found.");
+      throw new NotFoundException("Angajatul nu a fost găsit.");
     }
 
     const documents = await this.listApprovedDocumentsForEmployee(tenantId, employee);
@@ -1762,7 +1762,7 @@ export class SsmTrainingSuiteService {
       })
     ]);
     if (!employee) {
-      throw new NotFoundException("Employee not found.");
+      throw new NotFoundException("Angajatul nu a fost găsit.");
     }
 
     const cnp = decryptStoredCnp((payload) => this.encryption.decrypt(payload), employee.cnp);
@@ -1821,7 +1821,7 @@ export class SsmTrainingSuiteService {
       select: { employeeId: true }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     return this.renderEmployeeAnexa11Pdf(tenantId, plan.employeeId);
   }
@@ -1843,7 +1843,7 @@ export class SsmTrainingSuiteService {
       select: { employeeId: true }
     });
     if (!plan) {
-      throw new NotFoundException("Training plan not found.");
+      throw new NotFoundException("Planul de instruire nu a fost găsit.");
     }
     await assertSsmEmployeeAccess(this.prisma, tenantId, plan.employeeId, scope);
   }

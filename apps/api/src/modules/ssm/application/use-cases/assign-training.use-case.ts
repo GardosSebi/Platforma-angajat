@@ -34,13 +34,13 @@ export class AssignTrainingUseCase {
       where: { id: command.employeeId, tenantId, active: true }
     });
     if (!employee) {
-      throw new BadRequestException("Employee not found for tenant.");
+      throw new BadRequestException("Angajatul nu a fost găsit pentru tenantul curent.");
     }
 
     const now = new Date();
     const dueAt = command.dueDate instanceof Date ? command.dueDate : new Date(command.dueDate);
     if (Number.isNaN(dueAt.getTime())) {
-      throw new BadRequestException("Invalid dueDate.");
+      throw new BadRequestException("Data scadentă este nevalidă.");
     }
 
     const plan = await this.trainingSuite.createTrainingPlan(tenantId, command.assignedBy, {

@@ -21,7 +21,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   validate(payload: JwtPayload): JwtPayload {
     if (!payload.tenantId) {
-      throw new UnauthorizedException("Tenant is missing in JWT");
+      throw new UnauthorizedException("Tenantul lipsește din JWT.");
     }
     return {
       ...payload,

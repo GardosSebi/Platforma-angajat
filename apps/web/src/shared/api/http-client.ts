@@ -25,11 +25,10 @@ export async function httpClient<T>(path: string, init: RequestInit = {}): Promi
       }
     });
   } catch {
-    const hint =
-      import.meta.env.DEV
-        ? " Start Nest on port 3000: pnpm --filter @apps/api dev (or pnpm dev). Test: http://localhost:3000/api/v1/health/live"
-        : " Check that the backend is running and VITE_API_URL is correct.";
-    throw new Error(`Cannot reach the API (${base}).${hint}`);
+    const hint = import.meta.env.DEV
+      ? " Pornește API-ul pe portul 3000: pnpm --filter @apps/api dev (sau pnpm dev)."
+      : " Verifică dacă serverul rulează și dacă adresa API este corectă.";
+    throw new Error(`API-ul nu poate fi contactat (${base}).${hint}`);
   }
 
   if (!response.ok) {

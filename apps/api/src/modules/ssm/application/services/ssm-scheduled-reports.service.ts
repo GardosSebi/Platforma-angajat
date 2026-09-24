@@ -166,12 +166,12 @@ export class SsmScheduledReportsService {
     if (!input.recipients?.length) throw new BadRequestException("Cel puțin un destinatar este obligatoriu.");
     if (input.cadence === SsmReportCadence.WEEKLY) {
       if (input.dayOfWeek == null || input.dayOfWeek < 0 || input.dayOfWeek > 6) {
-        throw new BadRequestException("dayOfWeek trebuie să fie 0–6 pentru cadence WEEKLY.");
+        throw new BadRequestException("Pentru raportul săptămânal, ziua săptămânii trebuie să fie între 0 (duminică) și 6 (sâmbătă).");
       }
     }
     if (input.cadence === SsmReportCadence.MONTHLY) {
       if (input.dayOfMonth == null || input.dayOfMonth < 1 || input.dayOfMonth > 28) {
-        throw new BadRequestException("dayOfMonth trebuie să fie 1–28 pentru cadence MONTHLY.");
+        throw new BadRequestException("Pentru raportul lunar, ziua lunii trebuie să fie între 1 și 28.");
       }
     }
   }

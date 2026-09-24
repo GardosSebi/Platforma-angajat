@@ -19,12 +19,12 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request & { user?: JwtPayload }>();
     const user = request.user;
     if (!user?.roles?.length) {
-      throw new ForbiddenException("Missing roles");
+      throw new ForbiddenException("Rolurile lipsesc.");
     }
 
     if (requiredAny && requiredAny.length > 0) {
       if (!hasAnyPermission(user.roles, requiredAny)) {
-        throw new ForbiddenException("Insufficient permissions");
+        throw new ForbiddenException("Permisiuni insuficiente.");
       }
       return true;
     }
@@ -38,7 +38,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     if (!hasAllPermissions(user.roles, required)) {
-      throw new ForbiddenException("Insufficient permissions");
+      throw new ForbiddenException("Permisiuni insuficiente.");
     }
     return true;
   }

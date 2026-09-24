@@ -38,7 +38,7 @@ function dedupe(values?: string[]): string[] {
 function parseDate(value: string): Date {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return date;
 }
@@ -56,7 +56,7 @@ function formatCell(value: unknown): string {
 
 function excelBuffer(rows: Record<string, unknown>[]): Buffer {
   const headers = rows[0] ? Object.keys(rows[0]) : ["message"];
-  const data = rows.length ? rows : [{ message: "No responses" }];
+  const data = rows.length ? rows : [{ message: "Niciun răspuns" }];
   const lines = [headers.join("\t"), ...data.map((row) => headers.map((header) => formatCell(row[header])).join("\t"))];
   return Buffer.from(lines.join("\n"), "utf8");
 }
@@ -99,7 +99,7 @@ export class SurveysService {
   ) {
     await this.assertSurvey(tenantId, surveyId);
     if (!file.buffer?.length) {
-      throw new BadRequestException("Missing file content");
+      throw new BadRequestException("Conținutul fișierului lipsește.");
     }
     const saved = await this.files.saveUploadedFile({
       tenantId,
@@ -130,7 +130,7 @@ export class SurveysService {
     file: { originalName: string; buffer: Buffer; mimeType?: string }
   ) {
     if (!file.buffer?.length) {
-      throw new BadRequestException("Missing file content");
+      throw new BadRequestException("Conținutul fișierului lipsește.");
     }
     const mime = (file.mimeType ?? "").toLowerCase();
     if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(mime)) {
@@ -482,7 +482,7 @@ export class SurveysService {
   async privateLink(tenantId: string, id: string) {
     const survey = await this.assertSurvey(tenantId, id);
     if (!survey.privateLinkEnabled) {
-      throw new BadRequestException("Private link is disabled for this survey.");
+      throw new BadRequestException("Linkul privat este dezactivat pentru acest sondaj.");
     }
     return { url: `/surveys/respond/${survey.id}`, surveyId: survey.id };
   }
@@ -491,7 +491,7 @@ export class SurveysService {
     const survey = await this.assertSurvey(tenantId, id);
     const expiresAt = parseDate(dto.expiresAt);
     if (expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException("Public link expiration must be in the future.");
+      throw new BadRequestException("Expirarea linkului public trebuie să fie în viitor.");
     }
     const token = survey.publicToken ?? randomBytes(24).toString("hex");
     const updated = await this.prisma.survey.update({
@@ -573,7 +573,7 @@ export class SurveysService {
     const survey = await this.assertPublicSurvey(token);
     this.assertCanRespond(survey);
     if (survey.publicResponseLimit && survey.publicResponseCount >= survey.publicResponseLimit) {
-      throw new BadRequestException("Public response limit reached.");
+      throw new BadRequestException("Limita de răspunsuri publice a fost atinsă.");
     }
     const response = await this.prisma.$transaction(async (tx) => {
       const created = await tx.surveyResponse.create({
@@ -643,22 +643,22 @@ export class SurveysService {
 
   private async assertSurvey(tenantId: string, id: string) {
     const survey = await this.prisma.survey.findFirst({ where: { tenantId, id } });
-    if (!survey) throw new NotFoundException("Survey not found for tenant.");
+    if (!survey) throw new NotFoundException("Sondajul nu a fost găsit pentru tenantul curent.");
     return survey;
   }
 
   private async assertPublicSurvey(token: string) {
     const survey = await this.prisma.survey.findUnique({ where: { publicToken: token } });
-    if (!survey || !survey.publicEnabled) throw new NotFoundException("Public survey link not found.");
+    if (!survey || !survey.publicEnabled) throw new NotFoundException("Linkul public al sondajului nu a fost găsit.");
     if (survey.publicExpiresAt && survey.publicExpiresAt.getTime() < Date.now()) {
-      throw new BadRequestException("Public survey link expired.");
+      throw new BadRequestException("Linkul public al sondajului a expirat.");
     }
     return survey;
   }
 
   private assertCanRespond(survey: Survey) {
     if (survey.status !== SurveyStatus.ACTIVE) {
-      throw new BadRequestException("Survey is not active.");
+      throw new BadRequestException("Sondajul nu este activ.");
     }
     const now = Date.now();
     if (survey.opensAt && survey.opensAt.getTime() > now) {
@@ -689,28 +689,28 @@ export class SurveysService {
   private async assertEmployee(tenantId: string, employeeId?: string) {
     if (!employeeId) return;
     const employee = await this.prisma.employee.findFirst({ where: { tenantId, id: employeeId, active: true } });
-    if (!employee) throw new NotFoundException("Employee not found for tenant.");
+    if (!employee) throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
   }
 
   private async assertAudience(tenantId: string, audienceType: SurveyAudienceType, audienceRefId?: string | null, targetEmployeeIds?: string[]) {
     if (audienceType === SurveyAudienceType.ALL) return;
     if (audienceType === SurveyAudienceType.CUSTOM) {
       const ids = dedupe(targetEmployeeIds);
-      if (!ids.length) throw new BadRequestException("Custom audience requires targetEmployeeIds.");
+      if (!ids.length) throw new BadRequestException("Audiența personalizată necesită lista de angajați.");
       const count = await this.prisma.employee.count({ where: { tenantId, active: true, id: { in: ids } } });
-      if (count !== ids.length) throw new NotFoundException("One or more target employees were not found for tenant.");
+      if (count !== ids.length) throw new NotFoundException("Unul sau mai mulți angajați selectați nu au fost găsiți pentru tenantul curent.");
       return;
     }
     if (!audienceRefId?.trim()) {
-      throw new BadRequestException(`${audienceType} audience requires audienceRefId.`);
+      throw new BadRequestException(`Audiența ${audienceType} necesită audienceRefId.`);
     }
   }
 
   private assertQuestions(questions: SurveyQuestionDto[]) {
-    if (!questions.length) throw new BadRequestException("Survey requires at least one question.");
+    if (!questions.length) throw new BadRequestException("Sondajul trebuie să aibă cel puțin o întrebare.");
     const ids = new Set<string>();
     for (const question of questions) {
-      if (ids.has(question.id)) throw new BadRequestException(`Duplicate question id: ${question.id}`);
+      if (ids.has(question.id)) throw new BadRequestException(`Identificator de întrebare duplicat: ${question.id}`);
       ids.add(question.id);
       if (
         (question.type === "SINGLE_CHOICE" ||
@@ -721,7 +721,7 @@ export class SurveysService {
           question.type === "IMAGE_SELECT") &&
         !question.options?.length
       ) {
-        throw new BadRequestException(`${question.type} question requires options.`);
+        throw new BadRequestException(`Întrebarea de tip ${question.type} necesită opțiuni.`);
       }
     }
   }

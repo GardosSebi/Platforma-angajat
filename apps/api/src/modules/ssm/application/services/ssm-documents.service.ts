@@ -52,7 +52,7 @@ function parseOptionalDate(value?: string): Date | undefined {
   }
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid date value: ${value}`);
+    throw new BadRequestException(`Valoare de dată nevalidă: ${value}`);
   }
   return d;
 }
@@ -199,17 +199,17 @@ export class SsmDocumentsService {
 
   private assertUpload(file?: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException("Document file is required.");
+      throw new BadRequestException("Fișierul documentului este obligatoriu.");
     }
     if (file.size > MAX_FILE_BYTES) {
-      throw new BadRequestException("File too large. Max 120MB.");
+      throw new BadRequestException("Fișierul este prea mare. Maxim 120MB.");
     }
     const extension = extname(file.originalname).toLowerCase();
     if (!ALLOWED_EXTENSIONS.has(extension)) {
-      throw new BadRequestException("Only Word, PDF, or video uploads are allowed.");
+      throw new BadRequestException("Sunt permise doar fișiere Word, PDF sau video.");
     }
     if (!ALLOWED_MIME_PREFIXES.some((prefix) => file.mimetype.startsWith(prefix))) {
-      throw new BadRequestException("Unsupported file format.");
+      throw new BadRequestException("Formatul fișierului nu este acceptat.");
     }
   }
 
@@ -245,7 +245,7 @@ export class SsmDocumentsService {
     const periodStart = parseOptionalDate(dto.periodStart);
     const periodEnd = parseOptionalDate(dto.periodEnd);
     if (periodStart && periodEnd && periodStart > periodEnd) {
-      throw new BadRequestException("periodStart must be before periodEnd.");
+      throw new BadRequestException("Începutul perioadei trebuie să fie înainte de sfârșitul perioadei.");
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -331,14 +331,14 @@ export class SsmDocumentsService {
       where: { id: documentId, tenantId }
     });
     if (!document) {
-      throw new NotFoundException("Document not found.");
+      throw new NotFoundException("Documentul nu a fost găsit.");
     }
     if (viewer) {
       const policies = await this.loadTypePolicies(tenantId);
       assertDocumentTypeAccess(viewer, document.type, "edit", policies);
     }
     if (document.status === SsmDocumentStatus.ARCHIVED) {
-      throw new BadRequestException("Cannot upload a new version for archived document.");
+      throw new BadRequestException("Nu se poate încărca o versiune nouă pentru un document arhivat.");
     }
 
     const lastVersion = await this.prisma.ssmDocumentVersion.findFirst({
@@ -388,7 +388,7 @@ export class SsmDocumentsService {
       where: { id: versionId, tenantId, documentId }
     });
     if (!version) {
-      throw new NotFoundException("Version not found for this document.");
+      throw new NotFoundException("Versiunea nu a fost găsită pentru acest document.");
     }
 
     await this.prisma.ssmDocument.update({
@@ -419,10 +419,10 @@ export class SsmDocumentsService {
       where: { id: documentId, tenantId }
     });
     if (!document) {
-      throw new NotFoundException("Document not found.");
+      throw new NotFoundException("Documentul nu a fost găsit.");
     }
     if (document.status === SsmDocumentStatus.ARCHIVED) {
-      throw new BadRequestException("Cannot approve an archived document.");
+      throw new BadRequestException("Un document arhivat nu poate fi aprobat.");
     }
     if (document.status === SsmDocumentStatus.APPROVED) {
       return {
@@ -486,7 +486,7 @@ export class SsmDocumentsService {
       }
     });
     if (!updated.count) {
-      throw new NotFoundException("Active document not found.");
+      throw new NotFoundException("Documentul activ nu a fost găsit.");
     }
 
     await this.auditLog.write({
@@ -741,7 +741,7 @@ export class SsmDocumentsService {
       include: { activeVersion: true }
     });
     if (!document?.activeVersion?.storagePath) {
-      throw new NotFoundException("Document not found.");
+      throw new NotFoundException("Documentul nu a fost găsit.");
     }
 
     const ctx = await this.employeeRowForViewer(tenantId, viewer);
@@ -809,7 +809,7 @@ export class SsmDocumentsService {
       where: { id: documentId, tenantId }
     });
     if (!document) {
-      throw new NotFoundException("Document not found.");
+      throw new NotFoundException("Documentul nu a fost găsit.");
     }
     const policies = await this.loadTypePolicies(tenantId);
     assertDocumentTypeAccess(viewer, document.type, "view", policies);
@@ -837,7 +837,7 @@ export class SsmDocumentsService {
       where: { id: versionId, tenantId, documentId }
     });
     if (!version) {
-      throw new NotFoundException("Version not found.");
+      throw new NotFoundException("Versiunea nu a fost găsită.");
     }
     try {
       await access(version.storagePath, constants.R_OK);
@@ -861,7 +861,7 @@ export class SsmDocumentsService {
       }
     });
     if (!document) {
-      throw new NotFoundException("Document not found.");
+      throw new NotFoundException("Documentul nu a fost găsit.");
     }
 
     const policies = await this.loadTypePolicies(tenantId);

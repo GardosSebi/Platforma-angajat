@@ -39,7 +39,7 @@ const CATEGORY_DEFAULTS: Record<
 function parseDate(value: string, fieldName: string): Date {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid ${fieldName}`);
+    throw new BadRequestException(`${fieldName} nevalid.`);
   }
   return d;
 }
@@ -74,14 +74,14 @@ export class SsmMedicalService {
       return;
     }
     if (file.size > MEDICAL_MAX_FILE_BYTES) {
-      throw new BadRequestException("Aptitude sheet file too large. Max 25MB.");
+      throw new BadRequestException("Fișa de aptitudini este prea mare. Maxim 25MB.");
     }
     const extension = extname(file.originalname).toLowerCase();
     if (!MEDICAL_ALLOWED_EXTENSIONS.has(extension)) {
-      throw new BadRequestException("Only PDF/JPG/PNG aptitude sheets are allowed.");
+      throw new BadRequestException("Sunt permise doar fișe de aptitudini PDF, JPG sau PNG.");
     }
     if (!MEDICAL_ALLOWED_MIME_PREFIXES.some((prefix) => file.mimetype.startsWith(prefix))) {
-      throw new BadRequestException("Unsupported aptitude sheet format.");
+      throw new BadRequestException("Formatul fișei de aptitudini nu este acceptat.");
     }
   }
 
@@ -128,7 +128,7 @@ export class SsmMedicalService {
       }
     });
     if (!position) {
-      throw new NotFoundException("Job position not found for tenant.");
+      throw new NotFoundException("Postul nu a fost găsit pentru tenantul curent.");
     }
 
     const created = await this.prisma.ssmMedicalControlType.create({
@@ -296,7 +296,7 @@ export class SsmMedicalService {
       }
     });
     if (!employee) {
-      throw new NotFoundException("Employee not found for tenant.");
+      throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
     }
 
     const controlType = await this.prisma.ssmMedicalControlType.findFirst({
@@ -307,7 +307,7 @@ export class SsmMedicalService {
       }
     });
     if (!controlType) {
-      throw new NotFoundException("Medical control type not found for tenant.");
+      throw new NotFoundException("Tipul de control medical nu a fost găsit pentru tenantul curent.");
     }
 
     const scheduledAt = parseDate(dto.scheduledAt, "scheduledAt");
@@ -315,7 +315,7 @@ export class SsmMedicalService {
     const validityUntil = dto.validityUntil ? parseDate(dto.validityUntil, "validityUntil") : undefined;
 
     if (performedAt && performedAt < scheduledAt) {
-      throw new BadRequestException("performedAt must be after scheduledAt.");
+      throw new BadRequestException("Data efectuării trebuie să fie după data programată.");
     }
 
     const baseDate = validityUntil ?? performedAt ?? scheduledAt;
@@ -413,7 +413,7 @@ export class SsmMedicalService {
       include: { controlType: true }
     });
     if (!existing) {
-      throw new NotFoundException("Medical control not found.");
+      throw new NotFoundException("Controlul medical nu a fost găsit.");
     }
 
     const performedAt = dto.performedAt
@@ -424,7 +424,7 @@ export class SsmMedicalService {
     const result = dto.result !== undefined ? dto.result : existing.result;
 
     if (performedAt && performedAt < existing.scheduledAt) {
-      throw new BadRequestException("performedAt must be after scheduledAt.");
+      throw new BadRequestException("Data efectuării trebuie să fie după data programată.");
     }
 
     const baseDate = (validityUntil ?? performedAt ?? existing.scheduledAt) as Date;
@@ -534,10 +534,10 @@ export class SsmMedicalService {
       where: { id: controlId, tenantId }
     });
     if (!control) {
-      throw new NotFoundException("Medical control not found.");
+      throw new NotFoundException("Controlul medical nu a fost găsit.");
     }
     if (!control.aptitudeSheetPath) {
-      throw new NotFoundException("Aptitude sheet not attached.");
+      throw new NotFoundException("Fișa de aptitudini nu este atașată.");
     }
 
     const stream = createReadStream(control.aptitudeSheetPath);

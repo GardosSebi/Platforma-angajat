@@ -65,7 +65,7 @@ export class CommunicationsController {
     @UploadedFile() file: Express.Multer.File
   ) {
     if (!file?.buffer) {
-      throw new BadRequestException("Missing multipart field 'file'");
+      throw new BadRequestException("Lipsește câmpul multipart „file”.");
     }
     return this.communications.uploadMedia(tenantId, user.sub, {
       originalName: file.originalname,
@@ -82,7 +82,7 @@ export class CommunicationsController {
     @Query("path") path?: string
   ) {
     if (!path?.trim()) {
-      throw new BadRequestException("Query param 'path' is required");
+      throw new BadRequestException("Parametrul de query „path” este obligatoriu.");
     }
     const { stream, mimeType, fileName } = await this.communications.streamMedia(tenantId, path, user.sub);
     return new StreamableFile(stream, {

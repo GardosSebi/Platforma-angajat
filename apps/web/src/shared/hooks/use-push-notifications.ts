@@ -49,7 +49,7 @@ export function usePushNotifications() {
         }
         setErrorMessage(error.message);
       } else {
-        setErrorMessage("Unknown error");
+        setErrorMessage("A apărut o eroare neașteptată.");
       }
       setStatus("error");
     }

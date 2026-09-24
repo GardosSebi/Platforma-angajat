@@ -37,7 +37,7 @@ export async function subscribeToPush(vapidPublicKey: string): Promise<PushSubsc
   const p256dh = subscription.getKey("p256dh");
   const auth = subscription.getKey("auth");
   if (!p256dh || !auth) {
-    throw new Error("Push subscription keys are missing.");
+    throw new Error("Cheile de abonare la notificări lipsesc.");
   }
 
   return {

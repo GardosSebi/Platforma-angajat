@@ -141,7 +141,7 @@ export async function assertSsmEmployeeAccess(
 
 export function assertSsmTrainingCatalogManagement(viewer: JwtPayload | undefined): asserts viewer is JwtPayload {
   if (!viewer?.roles?.length) {
-    throw new ForbiddenException("Missing user context");
+    throw new ForbiddenException("Contextul utilizatorului lipsește.");
   }
   if (!hasSsmElevatedRole(viewer.roles)) {
     throw new ForbiddenException(

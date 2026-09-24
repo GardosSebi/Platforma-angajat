@@ -11,7 +11,7 @@ export class TenantGuard implements CanActivate {
     const tokenTenant = request.user?.tenantId;
 
     if (!tenantId || !tokenTenant || tenantId !== tokenTenant) {
-      throw new UnauthorizedException("Tenant mismatch");
+      throw new UnauthorizedException("Tenantul nu corespunde.");
     }
     return true;
   }

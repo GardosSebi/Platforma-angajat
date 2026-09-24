@@ -56,16 +56,16 @@ export class AuthService {
     });
 
     if (!user || !user.active) {
-      throw new UnauthorizedException("Invalid credentials");
+      throw new UnauthorizedException("Date de autentificare nevalide.");
     }
 
     if (user.authProvider !== "LOCAL" && user.authProvider !== "LDAP") {
-      throw new UnauthorizedException("This account uses SSO. Sign in with Azure AD or LDAP.");
+      throw new UnauthorizedException("Acest cont folosește SSO. Autentifică-te cu Azure AD sau LDAP.");
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
-      throw new UnauthorizedException("Invalid credentials");
+      throw new UnauthorizedException("Date de autentificare nevalide.");
     }
 
     return this.issueSession(user as UserRow);
@@ -184,7 +184,7 @@ export class AuthService {
   async loginWithLdap(tenantId: string, username: string, password: string) {
     const config = await this.prisma.tenantSsoConfig.findUnique({ where: { tenantId } });
     if (!config?.ldapEnabled || !config.ldapUrl || !config.ldapBaseDn) {
-      throw new UnauthorizedException("LDAP is not enabled for this tenant.");
+      throw new UnauthorizedException("LDAP nu este activat pentru acest tenant.");
     }
 
     const filter = (config.ldapSearchFilter || "(mail={{username}})").replace(
@@ -204,7 +204,7 @@ export class AuthService {
       });
       const entry = search.searchEntries[0];
       if (!entry?.dn) {
-        throw new UnauthorizedException("Invalid LDAP credentials");
+        throw new UnauthorizedException("Date de autentificare LDAP nevalide.");
       }
       const userDn = String(entry.dn);
       await client.bind(userDn, password);
@@ -222,7 +222,7 @@ export class AuthService {
       return this.issueSession(user);
     } catch (error) {
       this.logger.warn(`LDAP login failed for tenant ${tenantId}: ${error instanceof Error ? error.message : String(error)}`);
-      throw new UnauthorizedException("Invalid LDAP credentials");
+      throw new UnauthorizedException("Date de autentificare LDAP nevalide.");
     } finally {
       try {
         await client.unbind();
@@ -235,7 +235,7 @@ export class AuthService {
   async loginWithAzureCode(tenantId: string, code: string) {
     const config = await this.prisma.tenantSsoConfig.findUnique({ where: { tenantId } });
     if (!config?.azureEnabled || !config.azureClientId || !config.azureTenantId || !config.azureClientSecret) {
-      throw new UnauthorizedException("Azure AD is not enabled for this tenant.");
+      throw new UnauthorizedException("Azure AD nu este activat pentru acest tenant.");
     }
 
     const redirectUri = config.azureRedirectUri || this.defaultAzureRedirect();
@@ -256,14 +256,14 @@ export class AuthService {
     });
     if (!tokenRes.ok) {
       this.logger.warn(`Azure token exchange failed: ${await tokenRes.text()}`);
-      throw new UnauthorizedException("Azure AD authentication failed");
+      throw new UnauthorizedException("Autentificarea Azure AD a eșuat.");
     }
     const tokens = (await tokenRes.json()) as { access_token?: string; id_token?: string };
     const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", {
       headers: { Authorization: `Bearer ${tokens.access_token}` }
     });
     if (!profileRes.ok) {
-      throw new UnauthorizedException("Could not load Azure AD profile");
+      throw new UnauthorizedException("Profilul Azure AD nu a putut fi încărcat.");
     }
     const profile = (await profileRes.json()) as {
       id?: string;
@@ -272,7 +272,7 @@ export class AuthService {
       displayName?: string;
     };
     const email = (profile.mail || profile.userPrincipalName || "").toLowerCase();
-    if (!email) throw new UnauthorizedException("Azure AD profile has no email");
+    if (!email) throw new UnauthorizedException("Profilul Azure AD nu are adresă de e-mail.");
 
     const user = await this.upsertExternalUser(
       tenantId,
@@ -326,7 +326,7 @@ export class AuthService {
   }
 
   private async issueSession(user: UserRow) {
-    if (!user.active) throw new UnauthorizedException("Invalid credentials");
+    if (!user.active) throw new UnauthorizedException("Date de autentificare nevalide.");
 
     const payload: JwtPayload = {
       sub: user.id,

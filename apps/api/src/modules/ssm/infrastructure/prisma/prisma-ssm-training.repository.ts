@@ -15,7 +15,7 @@ export class PrismaSsmTrainingRepository implements SsmTrainingRepository {
       select: { id: true }
     });
     if (!employee) {
-      throw new NotFoundException("Employee not found for this tenant (check ID and sign in with the same tenant).");
+      throw new NotFoundException("Angajatul nu a fost găsit pentru acest tenant. Verifică identificatorul și autentifică-te pe același tenant.");
     }
 
     const created = await this.prisma.ssmTrainingAssignment.create({

@@ -51,12 +51,12 @@ export async function httpErrorFromResponse(response: Response): Promise<HttpErr
 
   const fallback =
     response.status === 401
-      ? "Not signed in or session expired. Sign in with tenant e01 and try again."
+      ? "Nu ești autentificat sau sesiunea a expirat. Autentifică-te din nou."
       : response.status === 403
-        ? "You do not have permission for this action."
+        ? "Nu ai permisiune pentru această acțiune."
         : response.status === 404
-          ? "API route not found. Restart the API (pnpm --filter @apps/api dev) and open http://localhost:3000/api/v1/health/live in the browser."
-          : `Request failed (${response.status}).`;
+          ? "Resursa nu a fost găsită."
+          : `Cererea a eșuat (${response.status}).`;
 
   const message = fromNest ?? fromText ?? fallback;
 

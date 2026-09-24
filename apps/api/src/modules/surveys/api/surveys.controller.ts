@@ -63,7 +63,7 @@ export class SurveysController {
     @UploadedFile() file: Express.Multer.File
   ) {
     if (!file?.buffer) {
-      throw new BadRequestException("Missing multipart field 'file'");
+      throw new BadRequestException("Lipsește câmpul multipart „file”.");
     }
     return this.surveys.saveOptionImage(tenantId, user.sub, {
       originalName: file.originalname,
@@ -80,7 +80,7 @@ export class SurveysController {
     @Query("path") path?: string
   ) {
     if (!path?.trim()) {
-      throw new BadRequestException("Query param 'path' is required");
+      throw new BadRequestException("Parametrul de query „path” este obligatoriu.");
     }
     const { stream, mimeType, fileName } = await this.surveys.streamOptionImage(tenantId, path);
     return new StreamableFile(stream, {
@@ -156,7 +156,7 @@ export class SurveysController {
     @UploadedFile() file: Express.Multer.File
   ) {
     if (!file?.buffer) {
-      throw new BadRequestException("Missing multipart field 'file'");
+      throw new BadRequestException("Lipsește câmpul multipart „file”.");
     }
     return this.surveys.saveAnswerFile(tenantId, id, {
       originalName: file.originalname,
@@ -219,7 +219,7 @@ export class PublicSurveysController {
   @Header("Cache-Control", "private, max-age=300")
   async streamPublicOptionImage(@Param("token") token: string, @Query("path") path?: string) {
     if (!path?.trim()) {
-      throw new BadRequestException("Query param 'path' is required");
+      throw new BadRequestException("Parametrul de query „path” este obligatoriu.");
     }
     const { stream, mimeType, fileName } = await this.surveys.streamPublicOptionImage(token, path);
     return new StreamableFile(stream, {
@@ -251,7 +251,7 @@ export class PublicSurveysController {
   )
   uploadPublicAnswerFile(@Param("token") token: string, @UploadedFile() file: Express.Multer.File) {
     if (!file?.buffer) {
-      throw new BadRequestException("Missing multipart field 'file'");
+      throw new BadRequestException("Lipsește câmpul multipart „file”.");
     }
     return this.surveys.savePublicAnswerFile(token, {
       originalName: file.originalname,

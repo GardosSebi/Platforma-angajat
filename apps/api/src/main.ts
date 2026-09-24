@@ -20,18 +20,24 @@ async function bootstrap() {
     origin: true,
     allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id", "x-worksite-id"]
   });
+  const { validationExceptionFactory } = await import("./common/validation-messages");
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true
+      forbidNonWhitelisted: true,
+      exceptionFactory: validationExceptionFactory
     })
   );
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port);
   Logger.log(`API http://localhost:${port}/api/v1 (e.g. POST /api/v1/auth/login)`, "Bootstrap");
   Logger.log(`JWT access token TTL: ${JWT_EXPIRES_IN_LABEL} (${JWT_EXPIRES_IN_SECONDS}s)`, "Bootstrap");
-  Logger.log(`Cron jobs: ${process.env.CRON_ENABLED === "true" ? "enabled" : "disabled (set CRON_ENABLED=true)"}`, "Bootstrap");
+  const { isCronEnabled } = await import("./infrastructure/scheduler/scheduler.constants");
+  Logger.log(
+    `Cron jobs: ${isCronEnabled() ? "enabled" : "disabled (CRON_ENABLED=false)"}`,
+    "Bootstrap"
+  );
 }
 
 void bootstrap();

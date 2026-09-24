@@ -27,7 +27,7 @@ type PsiDocKind = "INSTRUCTIONS" | "EVACUATION_PLAN" | "INTERVENTION" | "OTHER";
 function parseDate(value: string): Date {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return d;
 }
@@ -103,7 +103,7 @@ export class SsmPsiService {
     const worksite = await this.prisma.worksite.findFirst({
       where: { id: worksiteId, tenantId, active: true }
     });
-    if (!worksite) throw new NotFoundException("Worksite not found for tenant.");
+    if (!worksite) throw new NotFoundException("Punctul de lucru nu a fost găsit pentru tenantul curent.");
     return worksite;
   }
 
@@ -218,7 +218,7 @@ export class SsmPsiService {
 
   async updateEquipment(tenantId: string, actorId: string, equipmentId: string, dto: UpdateSsmPsiEquipmentDto) {
     const existing = await this.prisma.ssmPsiEquipment.findFirst({ where: { id: equipmentId, tenantId } });
-    if (!existing) throw new NotFoundException("PSI equipment not found.");
+    if (!existing) throw new NotFoundException("Echipamentul PSI nu a fost găsit.");
 
     const updated = await this.prisma.ssmPsiEquipment.update({
       where: { id: equipmentId },
@@ -254,7 +254,7 @@ export class SsmPsiService {
 
   async listVerifications(tenantId: string, equipmentId: string) {
     const equipment = await this.prisma.ssmPsiEquipment.findFirst({ where: { id: equipmentId, tenantId } });
-    if (!equipment) throw new NotFoundException("PSI equipment not found.");
+    if (!equipment) throw new NotFoundException("Echipamentul PSI nu a fost găsit.");
 
     const rows = await this.prisma.ssmPsiEquipmentVerification.findMany({
       where: { tenantId, equipmentId },
@@ -279,7 +279,7 @@ export class SsmPsiService {
     const equipment = await this.prisma.ssmPsiEquipment.findFirst({
       where: { id: dto.equipmentId, tenantId, status: SsmPsiEquipmentStatus.ACTIVE }
     });
-    if (!equipment) throw new NotFoundException("Active PSI equipment not found.");
+    if (!equipment) throw new NotFoundException("Echipamentul PSI activ nu a fost găsit.");
 
     const performedAt = parseDate(dto.performedAt);
     const nextDueAt = parseOptionalDate(dto.nextDueAt) ?? addDays(performedAt, equipment.verificationIntervalDays);
@@ -562,7 +562,7 @@ export class SsmPsiService {
     await this.assertWorksite(tenantId, dto.worksiteId);
     if (dto.employeeId) {
       const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, tenantId, active: true } });
-      if (!employee) throw new NotFoundException("Employee not found for tenant.");
+      if (!employee) throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
     }
     let trainingTypeName: string | null = null;
     let trainingTypeCategory: string | null = null;
@@ -570,7 +570,7 @@ export class SsmPsiService {
       const trainingType = await this.prisma.ssmTrainingType.findFirst({
         where: { id: dto.trainingTypeId, tenantId, active: true }
       });
-      if (!trainingType) throw new NotFoundException("Training type not found for tenant.");
+      if (!trainingType) throw new NotFoundException("Tipul de instruire nu a fost găsit pentru tenantul curent.");
       trainingTypeName = trainingType.name;
       trainingTypeCategory = trainingType.category;
     }
@@ -656,7 +656,7 @@ export class SsmPsiService {
     await this.assertWorksite(tenantId, dto.worksiteId);
     if (dto.employeeId) {
       const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, tenantId, active: true } });
-      if (!employee) throw new NotFoundException("Employee not found for tenant.");
+      if (!employee) throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
     }
     const created = await this.prisma.ssmPsiResponsible.create({
       data: {

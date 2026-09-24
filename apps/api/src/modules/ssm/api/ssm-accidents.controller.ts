@@ -125,7 +125,7 @@ export class SsmAccidentsController {
     @UploadedFile() file?: Express.Multer.File
   ) {
     if (!file) {
-      throw new BadRequestException("File is required.");
+      throw new BadRequestException("Fișierul este obligatoriu.");
     }
     return this.accidents.uploadAttachment(tenantId, user.sub, caseId, dto.kind, file, dto.notes);
   }

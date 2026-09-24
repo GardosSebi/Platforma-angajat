@@ -17,14 +17,14 @@ export class AdminUsageController {
   summary(@TenantId() tenantId: string, @Query("from") fromRaw?: string, @Query("to") toRaw?: string) {
     const to = toRaw ? new Date(toRaw) : new Date();
     if (Number.isNaN(to.getTime())) {
-      throw new BadRequestException("Invalid `to` date");
+      throw new BadRequestException("Dată `to` nevalidă.");
     }
     const from = fromRaw ? new Date(fromRaw) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
     if (Number.isNaN(from.getTime())) {
-      throw new BadRequestException("Invalid `from` date");
+      throw new BadRequestException("Dată `from` nevalidă.");
     }
     if (from > to) {
-      throw new BadRequestException("`from` must be before or equal to `to`");
+      throw new BadRequestException("`from` trebuie să fie înainte sau egal cu `to`");
     }
     return this.platformAdmin.getUsageSummary(tenantId, from, to);
   }

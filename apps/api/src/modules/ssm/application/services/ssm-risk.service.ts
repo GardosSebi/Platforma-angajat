@@ -21,7 +21,7 @@ function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return d;
 }
@@ -42,20 +42,20 @@ export class SsmRiskService {
 
   private async validateTarget(tenantId: string, dto: CreateSsmRiskAssessmentDto) {
     if (dto.targetType === SsmRiskTargetType.JOB_POSITION) {
-      if (!dto.jobPositionId) throw new BadRequestException("jobPositionId is required.");
+      if (!dto.jobPositionId) throw new BadRequestException("jobPositionId este obligatoriu.");
       const job = await this.prisma.jobPosition.findFirst({ where: { id: dto.jobPositionId, tenantId } });
-      if (!job) throw new NotFoundException("Job position not found for tenant.");
+      if (!job) throw new NotFoundException("Postul nu a fost găsit pentru tenantul curent.");
       return { jobPositionId: dto.jobPositionId, worksiteId: null, departmentId: null };
     }
     if (dto.targetType === SsmRiskTargetType.WORKSITE) {
-      if (!dto.worksiteId) throw new BadRequestException("worksiteId is required.");
+      if (!dto.worksiteId) throw new BadRequestException("worksiteId este obligatoriu.");
       const worksite = await this.prisma.worksite.findFirst({ where: { id: dto.worksiteId, tenantId } });
-      if (!worksite) throw new NotFoundException("Worksite not found for tenant.");
+      if (!worksite) throw new NotFoundException("Punctul de lucru nu a fost găsit pentru tenantul curent.");
       return { jobPositionId: null, worksiteId: dto.worksiteId, departmentId: null };
     }
-    if (!dto.departmentId) throw new BadRequestException("departmentId is required.");
+    if (!dto.departmentId) throw new BadRequestException("departmentId este obligatoriu.");
     const department = await this.prisma.department.findFirst({ where: { id: dto.departmentId, tenantId } });
-    if (!department) throw new NotFoundException("Department not found for tenant.");
+    if (!department) throw new NotFoundException("Departamentul nu a fost găsit pentru tenantul curent.");
     return { jobPositionId: null, worksiteId: null, departmentId: dto.departmentId };
   }
 
@@ -203,9 +203,9 @@ export class SsmRiskService {
     const assessment = await this.prisma.ssmRiskAssessment.findFirst({
       where: { id: assessmentId, tenantId }
     });
-    if (!assessment) throw new NotFoundException("Risk assessment not found.");
+    if (!assessment) throw new NotFoundException("Evaluarea de risc nu a fost găsită.");
     if (assessment.status === SsmRiskAssessmentStatus.ARCHIVED) {
-      throw new BadRequestException("Cannot version an archived risk assessment.");
+      throw new BadRequestException("O evaluare de risc arhivată nu poate fi versionată.");
     }
 
     const lastVersion = await this.prisma.ssmRiskAssessmentVersion.findFirst({
@@ -249,17 +249,17 @@ export class SsmRiskService {
       where: { id: assessmentId, tenantId },
       include: { activeVersion: true }
     });
-    if (!assessment) throw new NotFoundException("Risk assessment not found.");
+    if (!assessment) throw new NotFoundException("Evaluarea de risc nu a fost găsită.");
     if (assessment.status === SsmRiskAssessmentStatus.ARCHIVED) {
-      throw new BadRequestException("Cannot create PPP from an archived risk assessment.");
+      throw new BadRequestException("Nu se poate crea un plan PPP dintr-o evaluare de risc arhivată.");
     }
     if (!assessment.activeVersion) {
-      throw new BadRequestException("Risk assessment has no active version.");
+      throw new BadRequestException("Evaluarea de risc nu are o versiune activă.");
     }
 
     const measures = asMeasureList(assessment.activeVersion.measures);
     if (measures.length === 0) {
-      throw new BadRequestException("Active version has no prevention measures to sync.");
+      throw new BadRequestException("Versiunea activă nu are măsuri de prevenire de sincronizat.");
     }
 
     const plan = await this.prisma.$transaction(async (tx) =>
@@ -294,7 +294,7 @@ export class SsmRiskService {
       where: { id: assessmentId, tenantId, status: SsmRiskAssessmentStatus.ACTIVE },
       data: { status: SsmRiskAssessmentStatus.ARCHIVED }
     });
-    if (!updated.count) throw new NotFoundException("Active risk assessment not found.");
+    if (!updated.count) throw new NotFoundException("Evaluarea de risc activă nu a fost găsită.");
 
     await this.auditLog.write({
       tenantId,
@@ -361,7 +361,7 @@ export class SsmRiskService {
         activeVersion: true
       }
     });
-    if (!assessment) throw new NotFoundException("Risk assessment not found.");
+    if (!assessment) throw new NotFoundException("Evaluarea de risc nu a fost găsită.");
     return {
       assessmentId: assessment.id,
       title: assessment.title,
@@ -389,7 +389,7 @@ export class SsmRiskService {
         worksite: { include: { legalEntity: true } }
       }
     });
-    if (!employee) throw new NotFoundException("Employee not found.");
+    if (!employee) throw new NotFoundException("Angajatul nu a fost găsit.");
 
     const assessment = employee.jobPositionId
       ? await this.prisma.ssmRiskAssessment.findFirst({

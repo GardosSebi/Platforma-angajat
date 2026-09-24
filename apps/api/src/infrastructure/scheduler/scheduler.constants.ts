@@ -1,7 +1,10 @@
 export const SYSTEM_CRON_ACTOR = "system-cron";
 
+/** Pornit implicit. Oprește cu CRON_ENABLED=false. */
 export function isCronEnabled(): boolean {
-  return process.env.CRON_ENABLED === "true";
+  const raw = process.env.CRON_ENABLED?.trim().toLowerCase();
+  if (!raw) return true;
+  return raw !== "false" && raw !== "0" && raw !== "no" && raw !== "off";
 }
 
 export function dataRetentionYears(): number {

@@ -16,7 +16,7 @@ export class HealthController {
       await this.prisma.$queryRaw`SELECT 1`;
       return { status: "ok", database: "up", ts: new Date().toISOString() };
     } catch {
-      throw new ServiceUnavailableException("Database unavailable");
+      throw new ServiceUnavailableException("Baza de date nu este disponibilă.");
     }
   }
 }

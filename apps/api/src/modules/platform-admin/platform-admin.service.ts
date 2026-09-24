@@ -133,7 +133,7 @@ export class PlatformAdminService {
       where: { id: userId, tenantId }
     });
     if (!user) {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException("Utilizatorul nu a fost găsit.");
     }
     if (dto.roles?.includes(SystemRole.SSM_ADMIN) && !actorRoles.includes(SystemRole.SSM_ADMIN as string)) {
       throw new ForbiddenException("Doar un administrator SSM poate atribui rolul SSM_ADMIN.");
@@ -159,7 +159,7 @@ export class PlatformAdminService {
   async listScopedRoles(tenantId: string, userId: string) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId }, select: { id: true } });
     if (!user) {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException("Utilizatorul nu a fost găsit.");
     }
     return this.prisma.userScopedRole.findMany({
       where: { tenantId, userId },
@@ -175,18 +175,18 @@ export class PlatformAdminService {
     const userId = dto.userId;
     const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId }, select: { id: true } });
     if (!user) {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException("Utilizatorul nu a fost găsit.");
     }
     if (dto.scope === RoleAssignmentScope.WORKSITE) {
       if (!dto.worksiteId) {
-        throw new BadRequestException("worksiteId is required for WORKSITE scope");
+        throw new BadRequestException("worksiteId este obligatoriu pentru scopul WORKSITE.");
       }
       const ws = await this.prisma.worksite.findFirst({
         where: { id: dto.worksiteId, tenantId },
         select: { id: true }
       });
       if (!ws) {
-        throw new BadRequestException("Worksite not found in tenant");
+        throw new BadRequestException("Punctul de lucru nu a fost găsit în tenant.");
       }
       return this.prisma.userScopedRole.create({
         data: {
@@ -205,14 +205,14 @@ export class PlatformAdminService {
       });
     }
     if (!dto.employeeGroupId) {
-      throw new BadRequestException("employeeGroupId is required for EMPLOYEE_GROUP scope");
+      throw new BadRequestException("employeeGroupId este obligatoriu pentru scopul EMPLOYEE_GROUP.");
     }
     const group = await this.prisma.employeeGroup.findFirst({
       where: { id: dto.employeeGroupId, tenantId },
       select: { id: true }
     });
     if (!group) {
-      throw new BadRequestException("Employee group not found in tenant");
+      throw new BadRequestException("Grupul de angajați nu a fost găsit în tenant.");
     }
     return this.prisma.userScopedRole.create({
       data: {
@@ -236,7 +236,7 @@ export class PlatformAdminService {
       where: { id: assignmentId, tenantId }
     });
     if (!row) {
-      throw new NotFoundException("Assignment not found");
+      throw new NotFoundException("Atribuirea nu a fost găsită.");
     }
     await this.prisma.userScopedRole.delete({ where: { id: assignmentId } });
     return { ok: true };
@@ -249,12 +249,12 @@ export class PlatformAdminService {
   ) {
     if (audienceType === EmployeeStaticAudienceType.ALL) {
       if (audienceRefId) {
-        throw new BadRequestException("audienceRefId must be empty for ALL audience");
+        throw new BadRequestException("audienceRefId trebuie să fie gol pentru audiența ALL.");
       }
       return;
     }
     if (!audienceRefId) {
-      throw new BadRequestException("audienceRefId is required for targeted audience");
+      throw new BadRequestException("audienceRefId este obligatoriu pentru o audiență țintită.");
     }
     if (audienceType === EmployeeStaticAudienceType.WORKSITE) {
       const ws = await this.prisma.worksite.findFirst({
@@ -262,7 +262,7 @@ export class PlatformAdminService {
         select: { id: true }
       });
       if (!ws) {
-        throw new BadRequestException("audienceRefId worksite not found");
+        throw new BadRequestException("Punctul de lucru din audienceRefId nu a fost găsit.");
       }
     } else {
       const g = await this.prisma.employeeGroup.findFirst({
@@ -270,7 +270,7 @@ export class PlatformAdminService {
         select: { id: true }
       });
       if (!g) {
-        throw new BadRequestException("audienceRefId group not found");
+        throw new BadRequestException("Grupul din audienceRefId nu a fost găsit.");
       }
     }
   }
@@ -299,7 +299,7 @@ export class PlatformAdminService {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        throw new ConflictException("Slug already exists for this tenant");
+        throw new ConflictException("Slug-ul există deja pentru acest tenant.");
       }
       throw e;
     }
@@ -325,7 +325,7 @@ export class PlatformAdminService {
       where: { id: pageId, tenantId }
     });
     if (!existing) {
-      throw new NotFoundException("Page not found");
+      throw new NotFoundException("Pagina nu a fost găsită.");
     }
     const audienceType = dto.audienceType ?? existing.audienceType;
     const audienceRefId =
@@ -352,7 +352,7 @@ export class PlatformAdminService {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        throw new ConflictException("Slug already exists for this tenant");
+        throw new ConflictException("Slug-ul există deja pentru acest tenant.");
       }
       throw e;
     }
@@ -363,7 +363,7 @@ export class PlatformAdminService {
       where: { id: pageId, tenantId }
     });
     if (!existing) {
-      throw new NotFoundException("Page not found");
+      throw new NotFoundException("Pagina nu a fost găsită.");
     }
     await this.prisma.employeeStaticPage.delete({ where: { id: pageId } });
     return { ok: true };
@@ -418,7 +418,7 @@ export class PlatformAdminService {
       where: { tenantId, slug, published: true }
     });
     if (!page) {
-      throw new NotFoundException("Page not found");
+      throw new NotFoundException("Pagina nu a fost găsită.");
     }
     const visible =
       page.audienceType === EmployeeStaticAudienceType.ALL ||
@@ -429,7 +429,7 @@ export class PlatformAdminService {
         !!page.audienceRefId &&
         groupIds.includes(page.audienceRefId));
     if (!visible) {
-      throw new NotFoundException("Page not found");
+      throw new NotFoundException("Pagina nu a fost găsită.");
     }
     return page;
   }

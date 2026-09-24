@@ -46,7 +46,7 @@ function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return date;
 }
@@ -366,7 +366,7 @@ export class TicketingService {
 
   private async assertTicket(tenantId: string, id: string) {
     const ticket = await this.prisma.helpdeskTicket.findFirst({ where: { tenantId, id } });
-    if (!ticket) throw new NotFoundException("Ticket not found for tenant.");
+    if (!ticket) throw new NotFoundException("Tichetul nu a fost găsit pentru tenantul curent.");
     return ticket;
   }
 
@@ -377,14 +377,14 @@ export class TicketingService {
   ) {
     if (!employeeId) return;
     const employee = await this.prisma.employee.findFirst({ where: { tenantId, id: employeeId, active: true } });
-    if (!employee) throw new NotFoundException("Reporter employee not found for tenant.");
+    if (!employee) throw new NotFoundException("Angajatul raportor nu a fost găsit pentru tenantul curent.");
     await assertEmployeeInWorksiteScope(this.prisma, tenantId, employeeId, scope);
   }
 
   private async assertSurveyResponse(tenantId: string, surveyResponseId?: string) {
     if (!surveyResponseId) return;
     const response = await this.prisma.surveyResponse.findFirst({ where: { tenantId, id: surveyResponseId } });
-    if (!response) throw new NotFoundException("Survey response not found for tenant.");
+    if (!response) throw new NotFoundException("Răspunsul la sondaj nu a fost găsit pentru tenantul curent.");
   }
 
   private async commentCount(tenantId: string, ticketId: string) {

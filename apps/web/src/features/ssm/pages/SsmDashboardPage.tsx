@@ -17,6 +17,16 @@ import { SsmGateManager } from "../components/SsmGateManager";
 import { SsmCssmManager } from "../components/SsmCssmManager";
 import { SsmSubstancesManager } from "../components/SsmSubstancesManager";
 
+const SSM_GROUPS: Array<{ id: string; title: string; sections: SsmSectionId[] }> = [
+  { id: "compliance", title: "Conformitate", sections: ["compliance", "reports"] },
+  { id: "training", title: "Instruire", sections: ["training", "quick"] },
+  { id: "documents", title: "Documente", sections: ["documents", "substances", "risk", "ppp"] },
+  { id: "people", title: "Personal", sections: ["medical", "eip", "accidents"] },
+  { id: "emergency", title: "Urgențe", sections: ["psi", "cssm", "gate"] }
+];
+
+const DEFAULT_SECTION: SsmSectionId = "compliance";
+
 const SSM_SECTIONS: Array<{
   id: SsmSectionId;
   title: string;
@@ -120,13 +130,37 @@ export function SsmDashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
   const [activeSection, setActiveSection] = useState<SsmSectionId>(() =>
-    SSM_SECTIONS.some((s) => s.id === sectionParam) ? (sectionParam as SsmSectionId) : "quick"
+    SSM_SECTIONS.some((s) => s.id === sectionParam) ? (sectionParam as SsmSectionId) : DEFAULT_SECTION
   );
 
   const visibleSections = useMemo(
     () => SSM_SECTIONS.filter((s) => canAccessSsmSection(session?.roles, s.id)),
     [session?.roles]
   );
+
+  const visibleGroups = useMemo(
+    () =>
+      SSM_GROUPS.map((group) => ({
+        ...group,
+        sections: group.sections.filter((id) => visibleSections.some((section) => section.id === id))
+      })).filter((group) => group.sections.length > 0),
+    [visibleSections]
+  );
+
+  const activeGroupId =
+    visibleGroups.find((group) => group.sections.includes(activeSection))?.id ?? visibleGroups[0]?.id;
+
+  const sectionsInGroup = useMemo(() => {
+    const group = visibleGroups.find((item) => item.id === activeGroupId);
+    return visibleSections.filter((section) => group?.sections.includes(section.id));
+  }, [visibleGroups, activeGroupId, visibleSections]);
+
+  const openSection = (sectionId: SsmSectionId) => {
+    setActiveSection(sectionId);
+    const params = new URLSearchParams(searchParams);
+    params.set("section", sectionId);
+    setSearchParams(params, { replace: true });
+  };
 
   useEffect(() => {
     if (!session?.roles?.length) return;
@@ -135,7 +169,10 @@ export function SsmDashboardPage() {
       return;
     }
     if (!visibleSections.some((s) => s.id === activeSection)) {
-      setActiveSection(visibleSections[0]?.id ?? "documents");
+      const fallback = visibleSections.some((s) => s.id === DEFAULT_SECTION)
+        ? DEFAULT_SECTION
+        : (visibleSections[0]?.id ?? DEFAULT_SECTION);
+      setActiveSection(fallback);
     }
   }, [session?.roles, visibleSections, activeSection, sectionParam]);
 
@@ -183,34 +220,43 @@ export function SsmDashboardPage() {
       <h1 className="page-title">SSM</h1>
       {!session ? (
         <div className="callout-warn" role="status">
-          You are not signed in. SSM actions need a JWT and tenant.{" "}
-          <Link to="/login">Sign in</Link> (use tenant <code>e01</code> after running the API seed).
+          Nu ești autentificat. Acțiunile SSM necesită o sesiune activă. <Link to="/login">Autentifică-te</Link>.
         </div>
       ) : null}
 
       <section className="ssm-overview-card" aria-label="Navigare SSM">
         <div className="ssm-overview-header">
-          <h2 className="card-title">Module SSM</h2>
-          <p className="field-hint">Sunt afișate doar modulele permise de rolul contului tău.</p>
+          <h2 className="card-title">Lucru zilnic SSM</h2>
+          <p className="field-hint">
+            Pornire pe calendar și restanțe. Alege zona, apoi secțiunea. Sunt afișate doar modulele permise de rolul tău.
+          </p>
         </div>
-        <div className="ssm-overview-tabs" role="tablist" aria-label="Secțiuni SSM">
-          {visibleSections.map((section) => (
+        <div className="ssm-nav-groups" role="tablist" aria-label="Zone SSM">
+          {visibleGroups.map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              role="tab"
+              aria-selected={activeGroupId === group.id}
+              className={`ssm-nav-group ${activeGroupId === group.id ? "active" : ""}`}
+              onClick={() => {
+                const first = group.sections[0];
+                if (first) openSection(first);
+              }}
+            >
+              {group.title}
+            </button>
+          ))}
+        </div>
+        <div className="ssm-section-tabs" role="tablist" aria-label="Secțiuni SSM">
+          {sectionsInGroup.map((section) => (
             <button
               key={section.id}
               type="button"
               role="tab"
               aria-selected={activeSection === section.id}
               className={`ssm-overview-tab ${activeSection === section.id ? "active" : ""}`}
-              onClick={() => {
-                setActiveSection(section.id);
-                const params = new URLSearchParams(searchParams);
-                if (section.id === "quick") {
-                  params.delete("section");
-                } else {
-                  params.set("section", section.id);
-                }
-                setSearchParams(params, { replace: true });
-              }}
+              onClick={() => openSection(section.id)}
             >
               <strong>{section.title}</strong>
               <span>{section.caption}</span>

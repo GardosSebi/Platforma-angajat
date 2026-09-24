@@ -6,7 +6,7 @@ const AUDIENCES = Object.values(EmployeeStaticAudienceType);
 export class CreateStaticPageDto {
   @IsString()
   @MaxLength(120)
-  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: "slug must be lowercase kebab-case" })
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: "Slug-ul trebuie să conțină doar litere mici, cifre și cratime." })
   slug!: string;
 
   @IsString()
@@ -55,7 +55,7 @@ export class UpdateStaticPageDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
-  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: "slug must be lowercase kebab-case" })
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: "Slug-ul trebuie să conțină doar litere mici, cifre și cratime." })
   slug?: string;
 
   @IsOptional()

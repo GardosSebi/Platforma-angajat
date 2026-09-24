@@ -41,7 +41,7 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
     } catch {
       // ignore parse failure
     }
-    throw new Error(`Download failed (${response.status}). ${details}`.trim());
+    throw new Error(`Descărcarea a eșuat (${response.status}). ${details}`.trim());
   }
 
   return response;

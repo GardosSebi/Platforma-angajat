@@ -26,7 +26,7 @@ function parseOptionalDate(value?: string): Date | undefined {
   if (!value?.trim()) return undefined;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return d;
 }
@@ -116,11 +116,11 @@ export class SsmEipService {
     const job = await this.prisma.jobPosition.findFirst({
       where: { id: dto.jobPositionId, tenantId, active: true }
     });
-    if (!job) throw new NotFoundException("Invalid jobPositionId for tenant.");
+    if (!job) throw new NotFoundException("jobPositionId nevalid pentru acest tenant.");
     const type = await this.prisma.ssmEipType.findFirst({
       where: { id: dto.eipTypeId, tenantId, active: true }
     });
-    if (!type) throw new NotFoundException("Invalid eipTypeId for tenant.");
+    if (!type) throw new NotFoundException("eipTypeId nevalid pentru acest tenant.");
 
     const norm = await this.prisma.ssmEipNorm.upsert({
       where: {
@@ -278,7 +278,7 @@ export class SsmEipService {
         worksite: { select: { id: true, name: true } }
       }
     });
-    if (!employee) throw new NotFoundException("Employee not found.");
+    if (!employee) throw new NotFoundException("Angajatul nu a fost găsit.");
 
     const [header, norms, allocated] = await Promise.all([
       this.loadEmployerHeader(tenantId, employee.worksiteId),
@@ -325,20 +325,20 @@ export class SsmEipService {
       const worksite = await this.prisma.worksite.findFirst({
         where: { id: worksiteId, tenantId, active: true }
       });
-      if (!worksite) throw new NotFoundException("Invalid worksiteId for tenant.");
+      if (!worksite) throw new NotFoundException("worksiteId nevalid pentru acest tenant.");
     }
     if (departmentId) {
       const department = await this.prisma.department.findFirst({
         where: { id: departmentId, tenantId, active: true }
       });
-      if (!department) throw new NotFoundException("Invalid departmentId for tenant.");
+      if (!department) throw new NotFoundException("departmentId nevalid pentru acest tenant.");
       if (department.worksiteId && !worksiteId) {
         worksiteId = department.worksiteId;
       }
     }
 
     if (dto.movementType === SsmEipMovementType.INTAKE && !worksiteId && !departmentId) {
-      throw new BadRequestException("INTAKE requires worksiteId and/or departmentId.");
+      throw new BadRequestException("Intrarea în stoc (INTAKE) necesită worksiteId și/sau departmentId.");
     }
 
     return { worksiteId, departmentId, scopeKey: eipStockScopeKey(worksiteId, departmentId) };
@@ -348,22 +348,22 @@ export class SsmEipService {
     const type = await this.prisma.ssmEipType.findFirst({
       where: { id: dto.eipTypeId, tenantId, active: true }
     });
-    if (!type) throw new NotFoundException("EIP type not found.");
+    if (!type) throw new NotFoundException("Tipul de EIP nu a fost găsit.");
 
     let employee: { id: string; worksiteId: string | null; departmentId: string | null } | null = null;
     if (dto.movementType === SsmEipMovementType.INTAKE) {
       if (dto.employeeId?.trim()) {
-        throw new BadRequestException("INTAKE must not include employeeId.");
+        throw new BadRequestException("Intrarea în stoc (INTAKE) nu trebuie să includă employeeId.");
       }
     } else {
       if (!dto.employeeId?.trim()) {
-        throw new BadRequestException("employeeId is required for this movement type.");
+        throw new BadRequestException("employeeId este obligatoriu pentru acest tip de mișcare.");
       }
       const found = await this.prisma.employee.findFirst({
         where: { id: dto.employeeId, tenantId, active: true },
         select: { id: true, worksiteId: true, departmentId: true }
       });
-      if (!found) throw new NotFoundException("Employee not found.");
+      if (!found) throw new NotFoundException("Angajatul nu a fost găsit.");
       employee = found;
     }
 
@@ -403,7 +403,7 @@ export class SsmEipService {
     if (dto.movementType === SsmEipMovementType.RETURN) stockDelta = dto.quantity;
     if (dto.movementType === SsmEipMovementType.SCRAP) stockDelta = -dto.quantity;
     if (stock.quantityOnHand + stockDelta < 0) {
-      throw new BadRequestException("Insufficient stock for this movement at the selected location.");
+      throw new BadRequestException("Stoc insuficient pentru această mișcare la locația selectată.");
     }
 
     const movement = await this.prisma.$transaction(async (tx) => {
@@ -997,12 +997,12 @@ export class SsmEipService {
     const type = await this.prisma.ssmEipType.findFirst({
       where: { id: dto.eipTypeId, tenantId, active: true }
     });
-    if (!type) throw new NotFoundException("EIP type not found.");
+    if (!type) throw new NotFoundException("Tipul de EIP nu a fost găsit.");
     if (dto.worksiteId) {
       const worksite = await this.prisma.worksite.findFirst({
         where: { id: dto.worksiteId, tenantId, active: true }
       });
-      if (!worksite) throw new NotFoundException("Invalid worksiteId for tenant.");
+      if (!worksite) throw new NotFoundException("worksiteId nevalid pentru acest tenant.");
     }
     const orderedQuantity = dto.orderedQuantity ?? 0;
     const status = this.orderStatusFromQuantities(dto.neededQuantity, orderedQuantity, 0);

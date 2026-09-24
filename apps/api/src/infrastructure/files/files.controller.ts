@@ -37,7 +37,7 @@ export class FilesController {
     @UploadedFile() file: Express.Multer.File
   ) {
     if (!file?.buffer) {
-      throw new BadRequestException("Missing multipart field 'file'");
+      throw new BadRequestException("Lipsește câmpul multipart „file”.");
     }
     const saved = await this.storage.saveUploadedFile({
       tenantId,

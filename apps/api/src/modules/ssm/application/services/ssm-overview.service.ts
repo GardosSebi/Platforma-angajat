@@ -85,7 +85,7 @@ function normalizeReportType(type: string): ReportType {
   if ((REPORT_TYPES as readonly string[]).includes(type)) {
     return type as ReportType;
   }
-  throw new BadRequestException(`Unsupported report type: ${type}`);
+  throw new BadRequestException(`Tip de raport neacceptat: ${type}`);
 }
 
 function parseOptionalDate(value?: string, endOfDay = false): Date | undefined {
@@ -95,7 +95,7 @@ function parseOptionalDate(value?: string, endOfDay = false): Date | undefined {
     ? new Date(`${raw}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
     : new Date(raw);
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException(`Invalid date: ${value}`);
+    throw new BadRequestException(`Dată nevalidă: ${value}`);
   }
   return date;
 }
@@ -104,7 +104,7 @@ function normalizeSource(source?: string): CalendarSource | undefined {
   if (!source?.trim()) return undefined;
   const normalized = source.trim().toUpperCase();
   if (!(CALENDAR_SOURCES as readonly string[]).includes(normalized)) {
-    throw new BadRequestException(`Unsupported calendar source: ${source}`);
+    throw new BadRequestException(`Sursă de calendar neacceptată: ${source}`);
   }
   return normalized as CalendarSource;
 }
@@ -119,7 +119,7 @@ async function toExcelBuffer(rows: ReportRow[]): Promise<Buffer> {
   workbook.creator = "Employee Platform SSM";
   const sheet = workbook.addWorksheet("Raport");
   const headers = rows[0] ? Object.keys(rows[0]) : ["message"];
-  const dataRows = rows.length ? rows : [{ message: "No rows" }];
+  const dataRows = rows.length ? rows : [{ message: "Niciun rând" }];
   sheet.addRow(headers);
   for (const row of dataRows) {
     sheet.addRow(headers.map((header) => formatCell(row[header] ?? "")));
@@ -137,7 +137,7 @@ function normalizeDocIssue(value?: string): DocIssueFilter {
   if (!value?.trim()) return undefined;
   const normalized = value.trim();
   if (normalized === "expired" || normalized === "needsReview") return normalized;
-  throw new BadRequestException(`Unsupported docIssue filter: ${value}`);
+  throw new BadRequestException(`Filtru docIssue neacceptat: ${value}`);
 }
 
 function dateInRange(value: Date | null | undefined, from?: Date, to?: Date): boolean {
@@ -155,7 +155,7 @@ function pdfBuffer(title: string, rows: ReportRow[]): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     applyUnicodeFonts(doc);
 
-    const dataRows = rows.length ? rows : [{ message: "No rows" }];
+    const dataRows = rows.length ? rows : [{ message: "Niciun rând" }];
     const headers = Object.keys(dataRows[0] ?? { message: "" });
     const pageHeight = doc.page.height;
     const bottom = pageHeight - 48;
@@ -1338,6 +1338,6 @@ export class SsmOverviewService {
         });
     }
 
-    return [{ message: "No data" }];
+    return [{ message: "Nu există date" }];
   }
 }

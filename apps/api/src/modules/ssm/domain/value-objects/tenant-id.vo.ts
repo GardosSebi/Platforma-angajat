@@ -3,7 +3,7 @@ export class TenantId {
 
   static create(value: string): TenantId {
     if (!value || value.trim().length < 2) {
-      throw new Error("Invalid tenant id");
+      throw new Error("Identificator de tenant nevalid.");
     }
     return new TenantId(value);
   }

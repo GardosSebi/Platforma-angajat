@@ -30,7 +30,7 @@ export class AuthController {
     const fromHeader = Array.isArray(tenantIdHeader) ? tenantIdHeader[0] : tenantIdHeader;
     const tenantId = fromHeader || tenantIdQuery;
     if (!tenantId) {
-      throw new UnauthorizedException("Missing x-tenant-id header");
+      throw new UnauthorizedException("Lipsește antetul x-tenant-id.");
     }
     return tenantId;
   }

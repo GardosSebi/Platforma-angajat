@@ -45,7 +45,7 @@ const ATTACHMENT_MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 function parseDate(value: string): Date {
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) throw new BadRequestException(`Invalid date: ${value}`);
+  if (Number.isNaN(d.getTime())) throw new BadRequestException(`Dată nevalidă: ${value}`);
   return d;
 }
 
@@ -93,19 +93,19 @@ export class SsmAccidentsService {
       const employee = await this.prisma.employee.findFirst({
         where: { id: dto.employeeId, tenantId }
       });
-      if (!employee) throw new NotFoundException("Employee not found for tenant.");
+      if (!employee) throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
     }
     if (dto.worksiteId) {
       const worksite = await this.prisma.worksite.findFirst({ where: { id: dto.worksiteId, tenantId } });
-      if (!worksite) throw new NotFoundException("Worksite not found for tenant.");
+      if (!worksite) throw new NotFoundException("Punctul de lucru nu a fost găsit pentru tenantul curent.");
     }
     if (dto.departmentId) {
       const department = await this.prisma.department.findFirst({ where: { id: dto.departmentId, tenantId } });
-      if (!department) throw new NotFoundException("Department not found for tenant.");
+      if (!department) throw new NotFoundException("Departamentul nu a fost găsit pentru tenantul curent.");
     }
 
     if (dto.type === SsmAccidentType.OCCUPATIONAL_DISEASE && dto.diseaseConfirmed && !dto.diseaseConfirmedAt) {
-      throw new BadRequestException("diseaseConfirmedAt is required when disease is confirmed.");
+      throw new BadRequestException("Data confirmării bolii este obligatorie.");
     }
 
     const occurredAt = parseDate(dto.occurredAt);
@@ -156,9 +156,9 @@ export class SsmAccidentsService {
     const accidentCase = await this.prisma.ssmAccidentCase.findFirst({
       where: { id: dto.accidentCaseId, tenantId }
     });
-    if (!accidentCase) throw new NotFoundException("Accident case not found.");
+    if (!accidentCase) throw new NotFoundException("Cazul de accident nu a fost găsit.");
     if (accidentCase.status === SsmAccidentCaseStatus.CLOSED) {
-      throw new BadRequestException("Cannot add tasks to closed case.");
+      throw new BadRequestException("Nu se pot adăuga sarcini la un caz închis.");
     }
     const task = await this.prisma.ssmAccidentTask.create({
       data: {
@@ -202,7 +202,7 @@ export class SsmAccidentsService {
       where: { id: taskId, tenantId, completedAt: null },
       data: { completedAt: new Date() }
     });
-    if (!updated.count) throw new NotFoundException("Open task not found.");
+    if (!updated.count) throw new NotFoundException("Sarcina deschisă nu a fost găsită.");
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -218,9 +218,9 @@ export class SsmAccidentsService {
     const accidentCase = await this.prisma.ssmAccidentCase.findFirst({
       where: { id: dto.accidentCaseId, tenantId }
     });
-    if (!accidentCase) throw new NotFoundException("Accident case not found.");
+    if (!accidentCase) throw new NotFoundException("Cazul de accident nu a fost găsit.");
     if (accidentCase.status === SsmAccidentCaseStatus.CLOSED) {
-      throw new BadRequestException("Cannot add measures to closed case.");
+      throw new BadRequestException("Nu se pot adăuga măsuri la un caz închis.");
     }
 
     const measure = await this.prisma.ssmAccidentCorrectiveMeasure.create({
@@ -255,7 +255,7 @@ export class SsmAccidentsService {
       where: { id: measureId, tenantId, completedAt: null },
       data: { completedAt: new Date() }
     });
-    if (!updated.count) throw new NotFoundException("Open corrective measure not found.");
+    if (!updated.count) throw new NotFoundException("Măsura corectivă deschisă nu a fost găsită.");
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -272,9 +272,9 @@ export class SsmAccidentsService {
       where: { id: caseId, tenantId },
       include: { tasks: true, correctiveMeasureItems: true }
     });
-    if (!accidentCase) throw new NotFoundException("Case not found.");
+    if (!accidentCase) throw new NotFoundException("Cazul nu a fost găsit.");
     const hasOpenTasks = accidentCase.tasks.some((task) => !task.completedAt);
-    if (hasOpenTasks) throw new BadRequestException("Complete all research tasks before closing case.");
+    if (hasOpenTasks) throw new BadRequestException("Finalizează toate sarcinile de cercetare înainte de închiderea cazului.");
 
     const measuresSummary =
       dto.correctiveMeasures?.trim() ||
@@ -344,7 +344,7 @@ export class SsmAccidentsService {
         tenant: { select: { name: true } }
       }
     });
-    if (!accidentCase) throw new NotFoundException("Case not found.");
+    if (!accidentCase) throw new NotFoundException("Cazul nu a fost găsit.");
 
     const legalEntity =
       accidentCase.worksite?.legalEntity ?? accidentCase.employee?.worksite?.legalEntity ?? null;
@@ -522,7 +522,7 @@ export class SsmAccidentsService {
       where: { id: caseId, tenantId },
       select: { id: true }
     });
-    if (!accidentCase) throw new NotFoundException("Accident case not found.");
+    if (!accidentCase) throw new NotFoundException("Cazul de accident nu a fost găsit.");
 
     const rows = await this.prisma.ssmAccidentAttachment.findMany({
       where: { tenantId, accidentCaseId: caseId },
@@ -551,24 +551,24 @@ export class SsmAccidentsService {
     file: Express.Multer.File,
     notes?: string
   ) {
-    if (!file) throw new BadRequestException("File is required.");
+    if (!file) throw new BadRequestException("Fișierul este obligatoriu.");
     if (file.size > ATTACHMENT_MAX_FILE_BYTES) {
-      throw new BadRequestException("Attachment too large. Max 25MB.");
+      throw new BadRequestException("Atașamentul este prea mare. Maxim 25MB.");
     }
     const extension = extname(file.originalname).toLowerCase();
     if (!ATTACHMENT_ALLOWED_EXTENSIONS.has(extension)) {
-      throw new BadRequestException("Allowed attachments: PDF, JPG/PNG/WEBP, DOC/DOCX.");
+      throw new BadRequestException("Atașamente permise: PDF, JPG/PNG/WEBP, DOC/DOCX.");
     }
     if (!ATTACHMENT_ALLOWED_MIME_PREFIXES.some((prefix) => file.mimetype.startsWith(prefix))) {
-      throw new BadRequestException("Unsupported attachment format.");
+      throw new BadRequestException("Formatul atașamentului nu este acceptat.");
     }
 
     const accidentCase = await this.prisma.ssmAccidentCase.findFirst({
       where: { id: caseId, tenantId }
     });
-    if (!accidentCase) throw new NotFoundException("Accident case not found.");
+    if (!accidentCase) throw new NotFoundException("Cazul de accident nu a fost găsit.");
     if (accidentCase.status === SsmAccidentCaseStatus.CLOSED) {
-      throw new BadRequestException("Cannot add attachments to a closed case.");
+      throw new BadRequestException("Nu se pot adăuga atașamente la un caz închis.");
     }
 
     const safeName = sanitizeFilename(file.originalname);
@@ -624,9 +624,9 @@ export class SsmAccidentsService {
     const attachment = await this.prisma.ssmAccidentAttachment.findFirst({
       where: { id: attachmentId, tenantId, accidentCaseId: caseId }
     });
-    if (!attachment) throw new NotFoundException("Attachment not found.");
+    if (!attachment) throw new NotFoundException("Atașamentul nu a fost găsit.");
     if (attachment.filePurgedAt) {
-      throw new NotFoundException("Attachment file was purged.");
+      throw new NotFoundException("Fișierul atașat a fost eliminat.");
     }
 
     const stream = createReadStream(attachment.storagePath);
@@ -640,7 +640,7 @@ export class SsmAccidentsService {
     const attachment = await this.prisma.ssmAccidentAttachment.findFirst({
       where: { id: attachmentId, tenantId, accidentCaseId: caseId }
     });
-    if (!attachment) throw new NotFoundException("Attachment not found.");
+    if (!attachment) throw new NotFoundException("Atașamentul nu a fost găsit.");
 
     await this.prisma.ssmAccidentAttachment.delete({ where: { id: attachment.id } });
     await this.auditLog.write({
