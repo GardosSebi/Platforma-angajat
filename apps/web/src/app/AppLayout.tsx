@@ -65,10 +65,6 @@ function buildNavGroups(
     operations.push({ to: "/ssm/poarta", label: t("nav.gate"), icon: NavIcons.gate() });
     operations.push({ to: "/itm", label: t("nav.itm"), icon: NavIcons.itm() });
   }
-  if (isAdmin) {
-    operations.push({ to: "/master-data", label: t("nav.masterData"), icon: NavIcons.masterData() });
-    operations.push({ to: "/platform-admin", label: t("nav.admin"), icon: NavIcons.info() });
-  }
   if (operations.length) {
     groups.push({ title: "Operațiuni", items: operations });
   }
@@ -88,6 +84,16 @@ function buildNavGroups(
     title: "Resurse",
     items: [{ to: "/informatii", label: t("nav.info"), icon: NavIcons.info(), end: true }]
   });
+
+  if (isAdmin) {
+    groups.push({
+      title: "Administrare",
+      items: [
+        { to: "/master-data", label: t("nav.masterData"), icon: NavIcons.masterData() },
+        { to: "/platform-admin", label: t("nav.admin"), icon: NavIcons.info() }
+      ]
+    });
+  }
 
   return groups;
 }

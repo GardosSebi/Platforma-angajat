@@ -171,6 +171,38 @@ button {
   padding: 0.75rem 0.65rem 1rem;
 }
 
+.app-sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app-sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-sidebar-nav::-webkit-scrollbar-button {
+  display: none;
+}
+
+.app-sidebar-nav::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.app-sidebar-nav:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.app-sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .app-sidebar-nav {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  }
+}
+
 .app-sidebar-group + .app-sidebar-group {
   margin-top: 1rem;
 }
@@ -6261,7 +6293,7 @@ button.ssm-doc-item:hover {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
   overflow: visible;
@@ -6272,6 +6304,10 @@ button.ssm-doc-item:hover {
   flex: 1 1 10rem;
   min-width: 10rem;
   max-width: 14rem;
+}
+
+.ticket-primary-filters .field label {
+  line-height: 1.25;
 }
 
 .ticket-primary-filters .comms-search-field {
@@ -6298,7 +6334,8 @@ button.ssm-doc-item:hover {
 }
 
 .ticket-filter-reset {
-  align-self: flex-end;
+  /* label height (0.8rem × 1.25) + label margin, so it lines up with the inputs */
+  margin-top: 1.35rem;
 }
 
 .ticket-comments-section {
