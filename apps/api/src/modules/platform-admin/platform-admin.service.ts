@@ -450,7 +450,11 @@ export class PlatformAdminService {
       }),
       this.prisma.employee.findMany({
         where: { tenantId, active: true },
-        include: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          worksiteId: true,
           worksite: { select: { id: true, code: true, name: true } },
           department: { select: { name: true } },
           jobPosition: { select: { name: true } }
@@ -538,17 +542,24 @@ export class PlatformAdminService {
         active: true,
         email: { equals: viewer.email, mode: "insensitive" }
       },
-      include: {
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        medicalBlockedAdmission: true,
         worksite: { select: { id: true, code: true, name: true } },
         department: { select: { id: true, code: true, name: true } },
         jobPosition: { select: { id: true, code: true, name: true } },
         groupMembers: {
           where: { group: { active: true } },
-          include: {
+          select: {
             group: {
-              include: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
                 members: {
-                  include: {
+                  select: {
                     employee: {
                       select: {
                         id: true,
