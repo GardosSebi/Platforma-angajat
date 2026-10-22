@@ -331,6 +331,7 @@ export const ssmApi = {
     return httpClient<{
       trainings: Array<{ id: string; type: string; dueAt: string; status: string; score?: number | null }>;
       documents: Array<{ id: string; title: string; type: string; fileName?: string }>;
+      exposureSheets?: import("@repo/shared-types/ssm").SsmExposureSheetItem[];
       riskExposureSheets?: Array<{ id: string; title: string; fileName?: string; generated?: boolean }>;
       eipDecisionCopies?: Array<{ id: string; title: string; fileName?: string; generated?: boolean }>;
       medicalControls?: Array<{
@@ -1065,5 +1066,133 @@ export const ssmApi = {
   },
   getCssmDecisionUrl(committeeId: string) {
     return `/ssm/cssm/committees/${committeeId}/decision.pdf`;
+  },
+  cssmArchive(legalEntityId?: string) {
+    const query = legalEntityId ? `?legalEntityId=${encodeURIComponent(legalEntityId)}` : "";
+    return httpClient<import("@repo/shared-types/ssm").SsmCssmArchiveResponse>(`/ssm/cssm/archive${query}`);
+  },
+  getCssmArchiveZipUrl(committeeId: string, year?: number) {
+    return `/ssm/cssm/committees/${committeeId}/archive.zip${year ? `?year=${year}` : ""}`;
+  },
+
+  listExposureSheets(params: { employeeId?: string; status?: import("@repo/shared-types/ssm").SsmExposureSheetStatus } = {}) {
+    const query = new URLSearchParams();
+    if (params.employeeId) query.set("employeeId", params.employeeId);
+    if (params.status) query.set("status", params.status);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return httpClient<{ items: import("@repo/shared-types/ssm").SsmExposureSheetItem[] }>(`/ssm/exposure-sheets${suffix}`);
+  },
+  exposureCoverage(params: { jobPositionId?: string; worksiteId?: string } = {}) {
+    const query = new URLSearchParams();
+    if (params.jobPositionId) query.set("jobPositionId", params.jobPositionId);
+    if (params.worksiteId) query.set("worksiteId", params.worksiteId);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return httpClient<import("@repo/shared-types/ssm").SsmExposureCoverageResponse>(
+      `/ssm/exposure-sheets/coverage${suffix}`
+    );
+  },
+  issueExposureSheet(payload: import("@repo/shared-types/ssm").IssueSsmExposureSheetRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmExposureSheetItem>("/ssm/exposure-sheets/issue", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  issueMissingExposureSheets(payload: import("@repo/shared-types/ssm").IssueMissingSsmExposureSheetsRequest) {
+    return httpClient<{ issued: number; noAssessment: number }>("/ssm/exposure-sheets/issue-missing", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  signExposureEmployee(sheetId: string, payload: import("@repo/shared-types/ssm").SignSsmExposureEmployeeRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmExposureSheetItem>(
+      `/ssm/exposure-sheets/${sheetId}/sign-employee`,
+      { method: "PATCH", body: JSON.stringify(payload) }
+    );
+  },
+  signExposureAssessor(sheetId: string, payload: import("@repo/shared-types/ssm").SignSsmExposureAssessorRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmExposureSheetItem>(
+      `/ssm/exposure-sheets/${sheetId}/sign-assessor`,
+      { method: "PATCH", body: JSON.stringify(payload) }
+    );
+  },
+  getSignedExposureSheetPdfUrl(sheetId: string) {
+    return `/ssm/exposure-sheets/${sheetId}/pdf`;
+  },
+
+  listConventions(params: { worksiteId?: string; status?: import("@repo/shared-types/ssm").SsmConventionStatus } = {}) {
+    const query = new URLSearchParams();
+    if (params.worksiteId) query.set("worksiteId", params.worksiteId);
+    if (params.status) query.set("status", params.status);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionsListResponse>(`/ssm/conventions${suffix}`);
+  },
+  createConvention(payload: import("@repo/shared-types/ssm").CreateSsmConventionRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>("/ssm/conventions", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateConvention(conventionId: string, payload: import("@repo/shared-types/ssm").UpdateSsmConventionRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>(`/ssm/conventions/${conventionId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  deleteConvention(conventionId: string) {
+    return httpClient<{ deleted: boolean }>(`/ssm/conventions/${conventionId}`, { method: "DELETE" });
+  },
+  addConventionParty(conventionId: string, payload: import("@repo/shared-types/ssm").CreateSsmConventionPartyRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>(`/ssm/conventions/${conventionId}/parties`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  updateConventionParty(
+    conventionId: string,
+    partyId: string,
+    payload: import("@repo/shared-types/ssm").UpdateSsmConventionPartyRequest
+  ) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>(
+      `/ssm/conventions/${conventionId}/parties/${partyId}`,
+      { method: "PATCH", body: JSON.stringify(payload) }
+    );
+  },
+  removeConventionParty(conventionId: string, partyId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>(
+      `/ssm/conventions/${conventionId}/parties/${partyId}`,
+      { method: "DELETE" }
+    );
+  },
+  signConventionParty(
+    conventionId: string,
+    partyId: string,
+    payload: import("@repo/shared-types/ssm").SignSsmConventionPartyRequest
+  ) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>(
+      `/ssm/conventions/${conventionId}/parties/${partyId}/sign`,
+      { method: "PATCH", body: JSON.stringify(payload) }
+    );
+  },
+  activateConvention(conventionId: string) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>(`/ssm/conventions/${conventionId}/activate`, {
+      method: "POST"
+    });
+  },
+  terminateConvention(conventionId: string, payload: import("@repo/shared-types/ssm").TerminateSsmConventionRequest) {
+    return httpClient<import("@repo/shared-types/ssm").SsmConventionItem>(`/ssm/conventions/${conventionId}/terminate`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  getConventionPdfUrl(conventionId: string) {
+    return `/ssm/conventions/${conventionId}/pdf`;
+  },
+
+  isuReadiness(worksiteId?: string) {
+    const query = worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : "";
+    return httpClient<import("@repo/shared-types/ssm").SsmIsuReadinessResponse>(`/ssm/isu/readiness${query}`);
+  },
+  getIsuControlPackageUrl(worksiteId?: string) {
+    return `/ssm/isu/control-package.zip${worksiteId ? `?worksiteId=${encodeURIComponent(worksiteId)}` : ""}`;
   }
 };

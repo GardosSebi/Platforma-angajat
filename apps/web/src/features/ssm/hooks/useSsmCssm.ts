@@ -32,6 +32,14 @@ export function useCssmCommittee(committeeId?: string) {
   });
 }
 
+export function useCssmArchive(legalEntityId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ["ssm", "cssm", "archive", legalEntityId ?? "all"],
+    queryFn: () => ssmApi.cssmArchive(legalEntityId),
+    enabled
+  });
+}
+
 export function useCreateCssmCommittee() {
   const queryClient = useQueryClient();
   return useMutation({

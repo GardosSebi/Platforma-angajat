@@ -3,6 +3,7 @@ import { EmployeeEmploymentType } from "@prisma/client";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
 import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
+import { SsmExposureSheetService } from "./ssm-exposure-sheet.service";
 
 export type SsmTrainingCategoryCode =
   | "INTRODUCTORY_GENERAL"
@@ -42,7 +43,8 @@ export class SsmTrainingAutomationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly exposureSheets: SsmExposureSheetService
   ) {}
 
   async ensureTrainingType(tenantId: string, category: SsmTrainingCategoryCode) {
@@ -187,6 +189,7 @@ export class SsmTrainingAutomationService {
           : "Flux automat instruire PSI la angajare";
       await this.autoAssignTrainingPlan(tenantId, actorUserId, employeeId, category, reason);
     }
+    await this.exposureSheets.onHire(tenantId, actorUserId, employeeId);
   }
 
   async assignOnPlacementChange(tenantId: string, actorUserId: string, employeeId: string) {
@@ -197,6 +200,7 @@ export class SsmTrainingAutomationService {
       "SUPPLEMENTARY",
       "Flux automat la schimbare loc de muncă/funcție"
     );
+    await this.exposureSheets.onPlacementChange(tenantId, actorUserId, employeeId);
   }
 
   async assignOnAccidentClosed(tenantId: string, actorUserId: string, employeeId: string) {

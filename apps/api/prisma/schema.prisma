@@ -379,6 +379,26 @@ enum EmployeeMaritalStatus {
   CONSENSUAL
 }
 
+enum SsmExposureSheetStatus {
+  PENDING_SIGNATURE
+  SIGNED
+  SUPERSEDED
+}
+
+enum SsmExposureSheetTrigger {
+  HIRE
+  JOB_CHANGE
+  RISK_UPDATE
+  MANUAL
+}
+
+enum SsmConventionStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -462,6 +482,9 @@ model Tenant {
   ssmMedicalReminderDispatches SsmMedicalReminderDispatch[]
   ssmDangerousSubstances       SsmDangerousSubstance[]
   ssmCssmMinutes              SsmCssmMinutes[]
+  ssmExposureSheets           SsmExposureSheet[]
+  ssmConventions              SsmConvention[]
+  ssmConventionParties        SsmConventionParty[]
 }
 
 model User {
@@ -532,6 +555,7 @@ model LegalEntity {
   communicationPublishRights CommunicationPublishRight[]
   communicationChatChannels  CommunicationChatChannel[]
   ssmCssmCommittees           SsmCssmCommittee[]
+  ssmConventions              SsmConvention[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, cui])
@@ -572,6 +596,7 @@ model Worksite {
   itmInspectionVisits        ItmInspectionVisit[]
   ssmEipOrders               SsmEipOrder[]
   ssmDangerousSubstances     SsmDangerousSubstance[]
+  ssmConventions             SsmConvention[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -677,6 +702,7 @@ model Employee {
   ssmPsiResponsibles     SsmPsiResponsible[]
   ssmGateVisitAttendees  SsmGateVisitAttendee[]
   ssmMedicalAppointmentRequests SsmMedicalAppointmentRequest[]
+  ssmExposureSheets      SsmExposureSheet[]
   communicationAnnouncementReads CommunicationAnnouncementRead[]
   communicationAnnouncementReactions CommunicationAnnouncementReaction[]
   communicationAnnouncementAnswers CommunicationAnnouncementAnswer[]
@@ -2233,6 +2259,8 @@ model SsmCssmCommittee {
   constitutedAt   DateTime?
   active          Boolean   @default(true)
   notes           String?
+  meetingIntervalMonths Int @default(3)
+  cadenceReminderSentAt DateTime?
   createdBy       String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -2284,6 +2312,9 @@ model SsmCssmMeeting {
   convenedBy  String?
   heldAt      DateTime?
   cancelledAt DateTime?
+  notificationsSentAt DateTime?
+  reminderSentAt      DateTime?
+  minutesDocumentId   String?
   createdBy   String
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
@@ -2385,5 +2416,103 @@ model SsmDangerousSubstance {
   @@index([tenantId, sdsValidUntil])
   @@index([tenantId, casNumber])
   @@index([tenantId, name])
+}
+
+model SsmExposureSheet {
+  id                          String                  @id @default(cuid())
+  tenantId                    String
+  employeeId                  String
+  jobPositionId               String?
+  riskAssessmentId            String?
+  riskAssessmentVersionId     String?
+  riskAssessmentVersionNumber Int?
+  riskLevel                   Int?
+  trigger                     SsmExposureSheetTrigger @default(MANUAL)
+  status                      SsmExposureSheetStatus  @default(PENDING_SIGNATURE)
+  snapshot                    Json
+  employeeSignature           String?
+  employeeSignedAt            DateTime?
+  assessorName                String?
+  assessorFunction            String?
+  assessorSignature           String?
+  assessorSignedAt            DateTime?
+  pdfPath                     String?
+  pdfFileName                 String?
+  supersededAt                DateTime?
+  createdBy                   String
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId, status])
+  @@index([tenantId, status])
+  @@index([tenantId, riskAssessmentId])
+}
+
+model SsmConvention {
+  id                    String              @id @default(cuid())
+  tenantId              String
+  worksiteId            String
+  legalEntityId         String?
+  number                String
+  title                 String
+  activityDescription   String?
+  startsAt              DateTime
+  endsAt                DateTime?
+  status                SsmConventionStatus @default(DRAFT)
+  coordinatorName       String?
+  coordinatorFunction   String?
+  coordinatorEmail      String?
+  sharedRisks           String?
+  preventionMeasures    String?
+  emergencyArrangements String?
+  trainingArrangements  String?
+  eipArrangements       String?
+  notes                 String?
+  documentId            String?
+  activatedAt           DateTime?
+  terminatedAt          DateTime?
+  terminationReason     String?
+  expiryReminderSentAt  DateTime?
+  createdBy             String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  worksite    Worksite             @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity?         @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+  parties     SsmConventionParty[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, worksiteId, status])
+  @@index([tenantId, status, endsAt])
+}
+
+model SsmConventionParty {
+  id                     String    @id @default(cuid())
+  tenantId               String
+  conventionId           String
+  isHost                 Boolean   @default(false)
+  companyName            String
+  cui                    String?
+  representativeName     String
+  representativeFunction String?
+  ssmContactName         String?
+  ssmContactPhone        String?
+  ssmContactEmail        String?
+  workersCount           Int?
+  obligations            String?
+  signature              String?
+  signedAt               DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  convention SsmConvention @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, conventionId])
+  @@index([tenantId, companyName])
 }
 

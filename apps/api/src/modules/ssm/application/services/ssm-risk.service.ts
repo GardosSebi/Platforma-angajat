@@ -10,6 +10,7 @@ import PDFDocument from "pdfkit";
 import { applyUnicodeFonts, PdfFont } from "../../../../common/pdf-unicode-font";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { SsmExposureSheetService } from "./ssm-exposure-sheet.service";
 import {
   AddSsmRiskAssessmentVersionDto,
   CreateSsmRiskAssessmentDto,
@@ -37,7 +38,8 @@ function asMeasureList(value: unknown): SsmRiskMeasureDto[] {
 export class SsmRiskService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService
+    private readonly auditLog: AuditLogService,
+    private readonly exposureSheets: SsmExposureSheetService
   ) {}
 
   private async validateTarget(tenantId: string, dto: CreateSsmRiskAssessmentDto) {
@@ -196,7 +198,9 @@ export class SsmRiskService {
       }
     });
 
-    return result;
+    const exposure = await this.exposureSheets.onRiskAssessmentVersion(tenantId, actorId, result.assessmentId);
+
+    return { ...result, exposureSheetsIssued: exposure.issued };
   }
 
   async addVersion(tenantId: string, actorId: string, assessmentId: string, dto: AddSsmRiskAssessmentVersionDto) {
@@ -241,7 +245,14 @@ export class SsmRiskService {
       payload: { version: nextVersion, riskLevel: dto.riskLevel, reason: dto.updateReason.trim() }
     });
 
-    return { assessmentId, versionId: version.id, versionNumber: nextVersion };
+    const exposure = await this.exposureSheets.onRiskAssessmentVersion(tenantId, actorId, assessmentId);
+
+    return {
+      assessmentId,
+      versionId: version.id,
+      versionNumber: nextVersion,
+      exposureSheetsIssued: exposure.issued
+    };
   }
 
   async createPreventionPlanFromAssessment(tenantId: string, actorId: string, assessmentId: string) {

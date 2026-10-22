@@ -1,10 +1,14 @@
+import { Type } from "class-transformer";
 import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength
 } from "class-validator";
 import { SsmCssmMeetingKind, SsmCssmMemberRole } from "@prisma/client";
@@ -63,9 +67,31 @@ export class UpdateSsmCssmCommitteeDto {
   active?: boolean;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  meetingIntervalMonths?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(800)
   notes?: string;
+}
+
+export class SsmCssmArchiveQueryDto {
+  @IsOptional()
+  @IsString()
+  legalEntityId?: string;
+}
+
+export class SsmCssmArchiveZipQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  year?: number;
 }
 
 export class CreateSsmCssmMemberDto {

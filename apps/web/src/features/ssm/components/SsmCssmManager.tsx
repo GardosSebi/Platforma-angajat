@@ -3,6 +3,7 @@ import type {
   CreateSsmCssmCommitteeRequest,
   CreateSsmCssmMeetingRequest,
   CreateSsmCssmMemberRequest,
+  SsmCssmCadenceStatus,
   SsmCssmMeetingKind,
   SsmCssmMeetingStatus,
   SsmCssmMemberRole
@@ -23,6 +24,7 @@ import {
   useConveneCssmMeeting,
   useCreateCssmCommittee,
   useCreateCssmMeeting,
+  useCssmArchive,
   useCssmCommittee,
   useCssmCommittees,
   useHoldCssmMeeting,
@@ -32,7 +34,27 @@ import {
   useUpdateCssmMember
 } from "../hooks/useSsmCssm";
 
-type CssmTab = "members" | "meetings" | "minutes";
+type CssmTab = "members" | "meetings" | "minutes" | "archive";
+
+const CADENCE_LABELS: Record<SsmCssmCadenceStatus, string> = {
+  OK: "În termen",
+  SCHEDULED: "Ședință programată",
+  DUE_SOON: "Termen apropiat",
+  OVERDUE: "Termen depășit"
+};
+
+function cadenceChip(status: SsmCssmCadenceStatus): string {
+  if (status === "OK" || status === "SCHEDULED") return "ssm-chip good";
+  if (status === "DUE_SOON") return "ssm-chip warn";
+  return "ssm-chip bad";
+}
+
+function formatRoDate(value?: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("ro-RO");
+}
 
 const ROLE_LABELS: Record<SsmCssmMemberRole, string> = {
   PRESIDENT: "Președinte",
@@ -127,6 +149,7 @@ export function SsmCssmManager() {
     decisionNumber: "",
     decisionDate: "",
     constitutedAt: "",
+    meetingIntervalMonths: 3,
     notes: ""
   });
   const [memberForm, setMemberForm] = useState(EMPTY_MEMBER);
@@ -153,6 +176,13 @@ export function SsmCssmManager() {
   const cancelMeeting = useCancelCssmMeeting();
   const updateAttendee = useUpdateCssmAttendee();
   const saveMinutes = useSaveCssmMinutes();
+  const archiveQuery = useCssmArchive(committee?.legalEntityId, tab === "archive" && Boolean(committee?.legalEntityId));
+  const archiveCommittee = archiveQuery.data?.items
+    .flatMap((entity) => entity.committees)
+    .find((item) => item.id === committee?.id);
+  const archiveEntity = archiveQuery.data?.items.find((entity) => entity.legalEntityId === committee?.legalEntityId);
+  const convocationResult =
+    conveneMeeting.isSuccess && conveneMeeting.data?.id === activeMeeting?.id ? conveneMeeting.data.lastNotification : null;
 
   useEffect(() => {
     if (!committeeId && committees[0]?.id) {
@@ -181,9 +211,18 @@ export function SsmCssmManager() {
       decisionNumber: committee?.decisionNumber ?? "",
       decisionDate: toDateInput(committee?.decisionDate),
       constitutedAt: toDateInput(committee?.constitutedAt),
+      meetingIntervalMonths: committee?.meetingIntervalMonths ?? 3,
       notes: committee?.notes ?? ""
     });
-  }, [committee?.id, committee?.name, committee?.decisionNumber, committee?.decisionDate, committee?.constitutedAt, committee?.notes]);
+  }, [
+    committee?.id,
+    committee?.name,
+    committee?.decisionNumber,
+    committee?.decisionDate,
+    committee?.constitutedAt,
+    committee?.meetingIntervalMonths,
+    committee?.notes
+  ]);
 
   const entityOptions = useMemo(
     () => mapToOptions(legalEntities.data?.items ?? [], (item) => item.id, (item) => `${item.name}${item.cui ? ` (${item.cui})` : ""}`),
@@ -378,6 +417,7 @@ export function SsmCssmManager() {
                       decisionNumber: committeeEdit.decisionNumber.trim() || undefined,
                       decisionDate: committeeEdit.decisionDate || undefined,
                       constitutedAt: committeeEdit.constitutedAt || undefined,
+                      meetingIntervalMonths: committeeEdit.meetingIntervalMonths,
                       notes: committeeEdit.notes.trim() || undefined
                     }
                   });
@@ -411,6 +451,18 @@ export function SsmCssmManager() {
                     onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, decisionDate: event.target.value }))}
                   />
                 </div>
+                <FieldSelect
+                  id="cssm-edit-interval"
+                  label="Termen de ședință (întrunire cel puțin o dată la)"
+                  value={String(committeeEdit.meetingIntervalMonths)}
+                  onChange={(value) =>
+                    setCommitteeEdit((prev) => ({ ...prev, meetingIntervalMonths: Number(value) || 3 }))
+                  }
+                  options={[1, 2, 3, 6, 12].map((months) => ({
+                    value: String(months),
+                    label: months === 1 ? "1 lună" : `${months} luni${months === 3 ? " (trimestrial, minim legal)" : ""}`
+                  }))}
+                />
                 <div className="ssm-inline-actions">
                   <button className="btn-primary" type="submit" disabled={updateCommittee.isPending}>
                     {updateCommittee.isPending ? "Se salvează…" : "Salvează și publică în Documente"}
@@ -458,6 +510,26 @@ export function SsmCssmManager() {
               </div>
             )}
             {downloadError ? <p className="feedback error">{downloadError}</p> : null}
+            {committee.cadence ? (
+              <div className="ssm-cssm-cadence">
+                <div>
+                  <span className="field-hint">Ultima ședință ținută</span>
+                  <strong>{formatRoDate(committee.cadence.lastHeldAt)}</strong>
+                </div>
+                <div>
+                  <span className="field-hint">Termen următoarea ședință</span>
+                  <strong>{formatRoDate(committee.cadence.nextDueAt)}</strong>
+                </div>
+                <div>
+                  <span className="field-hint">Programată</span>
+                  <strong>{committee.cadence.upcomingMeetingAt ? formatRoDateTime(committee.cadence.upcomingMeetingAt) : "—"}</strong>
+                </div>
+                <span className={cadenceChip(committee.cadence.status)}>
+                  {CADENCE_LABELS[committee.cadence.status]}
+                  {committee.cadence.status === "DUE_SOON" ? ` · ${committee.cadence.daysUntilDue} zile` : ""}
+                </span>
+              </div>
+            ) : null}
             {committee.compositionWarnings.length ? (
               <div className="callout-warn" role="status">
                 {committee.compositionWarnings.map((warning) => (
@@ -471,7 +543,8 @@ export function SsmCssmManager() {
                 [
                   { id: "members", title: "Componență", caption: "Membri și roluri" },
                   { id: "meetings", title: "Ședințe", caption: "Convocări" },
-                  { id: "minutes", title: "Procese-verbale", caption: "Hotărâri" }
+                  { id: "minutes", title: "Procese-verbale", caption: "Hotărâri" },
+                  { id: "archive", title: "Arhivă", caption: "Pe entitate și an" }
                 ] as Array<{ id: CssmTab; title: string; caption: string }>
               ).map((item) => (
                 <button
@@ -726,6 +799,25 @@ export function SsmCssmManager() {
                     ) : null}
                   </div>
                   {downloadError ? <p className="feedback error">{downloadError}</p> : null}
+                  {conveneMeeting.isError ? (
+                    <p className="feedback error">{mutationErrorMessage(conveneMeeting.error)}</p>
+                  ) : null}
+                  {convocationResult ? (
+                    <p className="feedback success">
+                      Convocare trimisă: {convocationResult.email} e-mailuri (cu PDF atașat) și {convocationResult.inApp}{" "}
+                      notificări în aplicație.
+                    </p>
+                  ) : activeMeeting.notificationsSentAt ? (
+                    <p className="field-hint">Membrii au fost notificați la {formatRoDateTime(activeMeeting.notificationsSentAt)}.</p>
+                  ) : null}
+                  {activeMeeting.noticeWarning ? (
+                    <div className="callout-warn" role="status">
+                      {activeMeeting.noticeWarning}
+                    </div>
+                  ) : null}
+                  {activeMeeting.minutesDocumentId ? (
+                    <p className="field-hint">PV-ul este arhivat automat în Documente SSM (dosar de control), versionat la fiecare modificare.</p>
+                  ) : null}
 
                   <h5 className="ssm-subtitle">Prezență</h5>
                   <div className="ssm-history-list">
@@ -840,6 +932,109 @@ export function SsmCssmManager() {
                   ) : null}
                 </>
               )
+            ) : null}
+
+            {tab === "archive" ? (
+              <div className="form-stack">
+                <div className="ssm-card-header">
+                  <h5 className="ssm-subtitle">
+                    Arhivă CSSM — {archiveEntity?.legalEntityName ?? committee.legalEntityName}
+                    {archiveEntity?.legalEntityCui ? ` (${archiveEntity.legalEntityCui})` : ""}
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() =>
+                      downloadWithAuth(
+                        ssmApi.getCssmArchiveZipUrl(committee.id),
+                        `arhiva-cssm-${committee.id}.zip`
+                      ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)))
+                    }
+                  >
+                    Descarcă arhiva completă (ZIP)
+                  </button>
+                </div>
+                <p className="field-hint">
+                  Decizia de numire, convocările și procesele-verbale semnate, grupate pe ani. Acoperirea trimestrială
+                  arată dacă s-a ținut cel puțin o ședință în fiecare trimestru.
+                </p>
+                {archiveQuery.isLoading ? <p className="field-hint">Se încarcă arhiva…</p> : null}
+                {archiveQuery.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(archiveQuery.error)}</p>
+                ) : null}
+                {archiveEntity && archiveEntity.committees.length > 1 ? (
+                  <p className="field-hint">
+                    Entitatea are {archiveEntity.committees.length} comisii în arhivă (inclusiv comisii inactive).
+                  </p>
+                ) : null}
+                {archiveCommittee && !archiveCommittee.years.length ? (
+                  <p className="field-hint">Nu există încă ședințe în arhivă.</p>
+                ) : null}
+                {archiveCommittee?.years.map((year) => (
+                  <div key={year.year} className="ssm-cssm-archive-year">
+                    <div className="ssm-card-header">
+                      <strong>{year.year}</strong>
+                      <span className="ssm-cssm-quarters">
+                        {[1, 2, 3, 4].map((quarter) => (
+                          <span
+                            key={quarter}
+                            className={year.quartersCovered.includes(quarter) ? "ssm-chip good" : "ssm-chip"}
+                            title={year.quartersCovered.includes(quarter) ? "Ședință ținută" : "Fără ședință ținută"}
+                          >
+                            T{quarter}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="field-hint">{year.heldCount} ședințe ținute</span>
+                      <button
+                        type="button"
+                        className="btn-text"
+                        onClick={() =>
+                          downloadWithAuth(
+                            ssmApi.getCssmArchiveZipUrl(committee.id, year.year),
+                            `arhiva-cssm-${year.year}.zip`
+                          ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)))
+                        }
+                      >
+                        ZIP {year.year}
+                      </button>
+                    </div>
+                    <div className="ssm-history-list">
+                      {year.meetings.map((meeting) => (
+                        <div key={meeting.id} className="ssm-history-item">
+                          <div>
+                            <strong>{meeting.title}</strong>
+                            <div className="field-hint">
+                              {KIND_LABELS[meeting.kind]} · {formatRoDateTime(meeting.heldAt ?? meeting.scheduledAt)}
+                              {meeting.minutesNumber ? ` · PV ${meeting.minutesNumber}` : " · fără PV"}
+                              {meeting.attendeeCount
+                                ? ` · ${meeting.presentCount}/${meeting.attendeeCount} prezenți, ${meeting.signedCount} semnături`
+                                : ""}
+                            </div>
+                          </div>
+                          <div className="ssm-inline-actions">
+                            <span className={statusChip(meeting.status)}>{STATUS_LABELS[meeting.status]}</span>
+                            {meeting.minutesNumber ? (
+                              <button
+                                type="button"
+                                className="btn-text"
+                                onClick={() =>
+                                  downloadWithAuth(
+                                    ssmApi.getCssmMinutesUrl(meeting.id),
+                                    `proces-verbal-cssm-${meeting.id}.pdf`
+                                  ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)))
+                                }
+                              >
+                                PV (PDF)
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : null}
           </>
         )}

@@ -1458,6 +1458,18 @@ export interface UpdateSsmCssmCommitteeRequest {
   constitutedAt?: string;
   active?: boolean;
   notes?: string;
+  meetingIntervalMonths?: number;
+}
+
+export type SsmCssmCadenceStatus = "OK" | "SCHEDULED" | "DUE_SOON" | "OVERDUE";
+
+export interface SsmCssmCadence {
+  intervalMonths: number;
+  lastHeldAt: string | null;
+  nextDueAt: string;
+  upcomingMeetingAt: string | null;
+  status: SsmCssmCadenceStatus;
+  daysUntilDue: number;
 }
 
 export interface CreateSsmCssmMemberRequest {
@@ -1556,9 +1568,15 @@ export interface SsmCssmMeetingItem {
   convenedAt?: string | null;
   heldAt?: string | null;
   cancelledAt?: string | null;
+  notificationsSentAt?: string | null;
+  minutesDocumentId?: string | null;
+  /** Zile între convocare și ședință; null dacă ședința nu a fost convocată. */
+  noticeDays?: number | null;
+  noticeWarning?: string | null;
   attendees: SsmCssmAttendeeItem[];
   minutes?: SsmCssmMinutesItem | null;
   hasMinutes: boolean;
+  lastNotification?: { email: number; inApp: number } | null;
 }
 
 export interface SsmCssmCommitteeItem {
@@ -1576,6 +1594,52 @@ export interface SsmCssmCommitteeItem {
   members: SsmCssmMemberItem[];
   meetings: SsmCssmMeetingItem[];
   decisionDocumentId?: string | null;
+  meetingIntervalMonths: number;
+  cadence: SsmCssmCadence;
+}
+
+export interface SsmCssmArchiveMeeting {
+  id: string;
+  title: string;
+  kind: SsmCssmMeetingKind;
+  status: SsmCssmMeetingStatus;
+  scheduledAt: string;
+  convenedAt: string | null;
+  heldAt: string | null;
+  minutesNumber: string | null;
+  minutesDocumentId: string | null;
+  attendeeCount: number;
+  presentCount: number;
+  signedCount: number;
+}
+
+export interface SsmCssmArchiveYear {
+  year: number;
+  heldCount: number;
+  /** Trimestrele (1–4) în care s-a ținut cel puțin o ședință. */
+  quartersCovered: number[];
+  meetings: SsmCssmArchiveMeeting[];
+}
+
+export interface SsmCssmArchiveCommittee {
+  id: string;
+  name: string;
+  active: boolean;
+  decisionNumber: string | null;
+  decisionDate: string | null;
+  decisionDocumentId: string | null;
+  years: SsmCssmArchiveYear[];
+}
+
+export interface SsmCssmArchiveEntity {
+  legalEntityId: string;
+  legalEntityName: string;
+  legalEntityCui: string | null;
+  committees: SsmCssmArchiveCommittee[];
+}
+
+export interface SsmCssmArchiveResponse {
+  items: SsmCssmArchiveEntity[];
 }
 
 export const SSM_DANGEROUS_SUBSTANCE_HAZARDS = [
@@ -1733,4 +1797,265 @@ export interface ManagerTeamOverview {
   members: ManagerTeamMember[];
   pendingApprovals: ManagerTeamPendingApproval[];
   alerts: ManagerTeamAlert[];
+}
+
+export const SSM_EXPOSURE_SHEET_STATUSES = ["PENDING_SIGNATURE", "SIGNED", "SUPERSEDED"] as const;
+export type SsmExposureSheetStatus = (typeof SSM_EXPOSURE_SHEET_STATUSES)[number];
+
+export type SsmExposureSheetTrigger = "HIRE" | "JOB_CHANGE" | "RISK_UPDATE" | "MANUAL";
+
+export const SSM_EXPOSURE_SHEET_STATUS_LABELS: Record<SsmExposureSheetStatus, string> = {
+  PENDING_SIGNATURE: "În așteptarea semnăturilor",
+  SIGNED: "Semnată",
+  SUPERSEDED: "Înlocuită"
+};
+
+export const SSM_EXPOSURE_SHEET_TRIGGER_LABELS: Record<SsmExposureSheetTrigger, string> = {
+  HIRE: "La angajare",
+  JOB_CHANGE: "Schimbare post",
+  RISK_UPDATE: "Actualizare evaluare de risc",
+  MANUAL: "Emisă manual"
+};
+
+export interface SsmExposureFactor {
+  name: string;
+  probability?: number | null;
+  severity?: number | null;
+  score?: number | null;
+}
+
+export interface SsmExposureSheetItem {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  jobPositionId: string | null;
+  jobPositionName: string | null;
+  departmentName: string | null;
+  worksiteName: string | null;
+  riskAssessmentId: string | null;
+  riskAssessmentTitle: string | null;
+  riskAssessmentVersionNumber: number | null;
+  riskLevel: number | null;
+  trigger: SsmExposureSheetTrigger;
+  status: SsmExposureSheetStatus;
+  factors: SsmExposureFactor[];
+  measures: string[];
+  eipItems: string[];
+  employeeSignedAt: string | null;
+  assessorName: string | null;
+  assessorFunction: string | null;
+  assessorSignedAt: string | null;
+  hasPdf: boolean;
+  /** Evaluarea de risc a postului are între timp o versiune activă mai nouă. */
+  outdated: boolean;
+  createdAt: string;
+}
+
+export type SsmExposureCoverageState = "SIGNED" | "PENDING" | "OUTDATED" | "MISSING" | "NO_ASSESSMENT";
+
+export interface SsmExposureCoverageItem {
+  employeeId: string;
+  employeeName: string;
+  jobPositionId: string | null;
+  jobPositionName: string | null;
+  worksiteName: string | null;
+  state: SsmExposureCoverageState;
+  sheetId: string | null;
+  signedAt: string | null;
+}
+
+export interface SsmExposureCoverageResponse {
+  summary: Record<SsmExposureCoverageState, number> & { total: number };
+  items: SsmExposureCoverageItem[];
+}
+
+export interface IssueSsmExposureSheetRequest {
+  employeeId: string;
+}
+
+export interface IssueMissingSsmExposureSheetsRequest {
+  jobPositionId?: string;
+  worksiteId?: string;
+}
+
+export interface SignSsmExposureEmployeeRequest {
+  signature: string;
+}
+
+export interface SignSsmExposureAssessorRequest {
+  assessorName: string;
+  assessorFunction?: string;
+  signature: string;
+}
+
+export type SsmIsuTraffic = "GREEN" | "YELLOW" | "RED";
+
+export interface SsmIsuWorksiteReadiness {
+  worksiteId: string;
+  worksiteCode: string;
+  worksiteName: string;
+  legalEntityName: string | null;
+  score: number;
+  traffic: SsmIsuTraffic;
+  documents: {
+    instructions: boolean;
+    evacuationPlan: boolean;
+    intervention: boolean;
+    count: number;
+  };
+  equipment: {
+    total: number;
+    ok: number;
+    dueSoon: number;
+    overdue: number;
+    neverVerified: number;
+    byCategory: Record<SsmPsiEquipmentCategory, number>;
+  };
+  drills: {
+    lastConductedAt: string | null;
+    nextDueAt: string | null;
+    overdue: boolean;
+    countLast12Months: number;
+  };
+  personnel: {
+    activeEmployees: number;
+    trained: number;
+    coveragePercent: number;
+    untrained: Array<{ employeeId: string; fullName: string }>;
+  };
+  responsibles: {
+    roles: Array<{ role: SsmPsiResponsibleRole; persons: string[] }>;
+    missingRequired: SsmPsiResponsibleRole[];
+  };
+  gaps: string[];
+}
+
+export interface SsmIsuReadinessResponse {
+  generatedAt: string;
+  summary: {
+    worksites: number;
+    averageScore: number;
+    green: number;
+    yellow: number;
+    red: number;
+  };
+  items: SsmIsuWorksiteReadiness[];
+}
+
+export const SSM_CONVENTION_STATUSES = ["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED"] as const;
+export type SsmConventionStatus = (typeof SSM_CONVENTION_STATUSES)[number];
+
+export const SSM_CONVENTION_STATUS_LABELS: Record<SsmConventionStatus, string> = {
+  DRAFT: "Ciornă",
+  ACTIVE: "Activă",
+  EXPIRED: "Expirată",
+  TERMINATED: "Încetată"
+};
+
+export interface SsmConventionPartyItem {
+  id: string;
+  isHost: boolean;
+  companyName: string;
+  cui: string | null;
+  representativeName: string;
+  representativeFunction: string | null;
+  ssmContactName: string | null;
+  ssmContactPhone: string | null;
+  ssmContactEmail: string | null;
+  workersCount: number | null;
+  obligations: string | null;
+  signed: boolean;
+  signedAt: string | null;
+}
+
+export interface SsmConventionClauses {
+  activityDescription?: string | null;
+  sharedRisks?: string | null;
+  preventionMeasures?: string | null;
+  emergencyArrangements?: string | null;
+  trainingArrangements?: string | null;
+  eipArrangements?: string | null;
+}
+
+export interface SsmConventionItem extends SsmConventionClauses {
+  id: string;
+  worksiteId: string;
+  worksiteName: string;
+  legalEntityId: string | null;
+  legalEntityName: string | null;
+  number: string;
+  title: string;
+  startsAt: string;
+  endsAt: string | null;
+  daysUntilEnd: number | null;
+  status: SsmConventionStatus;
+  coordinatorName: string | null;
+  coordinatorFunction: string | null;
+  coordinatorEmail: string | null;
+  notes: string | null;
+  documentId: string | null;
+  activatedAt: string | null;
+  terminatedAt: string | null;
+  terminationReason: string | null;
+  parties: SsmConventionPartyItem[];
+  signedCount: number;
+  readyToActivate: boolean;
+}
+
+export interface SsmConventionUncoveredCompany {
+  companyName: string;
+  worksiteId: string;
+  worksiteName: string;
+  visits: number;
+  lastVisitAt: string;
+}
+
+export interface SsmConventionsListResponse {
+  items: SsmConventionItem[];
+  uncoveredCompanies: SsmConventionUncoveredCompany[];
+}
+
+export interface CreateSsmConventionPartyRequest {
+  companyName: string;
+  cui?: string;
+  representativeName: string;
+  representativeFunction?: string;
+  ssmContactName?: string;
+  ssmContactPhone?: string;
+  ssmContactEmail?: string;
+  workersCount?: number;
+  obligations?: string;
+}
+
+export type UpdateSsmConventionPartyRequest = Partial<CreateSsmConventionPartyRequest>;
+
+export interface CreateSsmConventionRequest extends SsmConventionClauses {
+  worksiteId: string;
+  number?: string;
+  title: string;
+  startsAt: string;
+  endsAt?: string;
+  coordinatorName?: string;
+  coordinatorFunction?: string;
+  coordinatorEmail?: string;
+  notes?: string;
+  parties?: CreateSsmConventionPartyRequest[];
+}
+
+export interface UpdateSsmConventionRequest extends SsmConventionClauses {
+  title?: string;
+  startsAt?: string;
+  endsAt?: string | null;
+  coordinatorName?: string;
+  coordinatorFunction?: string;
+  coordinatorEmail?: string;
+  notes?: string;
+}
+
+export interface SignSsmConventionPartyRequest {
+  signature: string;
+}
+
+export interface TerminateSsmConventionRequest {
+  reason?: string;
 }

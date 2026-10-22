@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Put, StreamableFile, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Param, Patch, Post, Put, Query, StreamableFile, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -15,6 +15,8 @@ import {
   UpdateSsmCssmCommitteeDto,
   UpdateSsmCssmMeetingDto,
   UpdateSsmCssmMemberDto,
+  SsmCssmArchiveQueryDto,
+  SsmCssmArchiveZipQueryDto,
   UpsertSsmCssmMinutesDto
 } from "./dto/ssm-cssm.dto";
 
@@ -37,6 +39,25 @@ export class SsmCssmController {
     @Body() dto: CreateSsmCssmCommitteeDto
   ) {
     return this.cssm.createCommittee(tenantId, user.sub, dto);
+  }
+
+  @Get("archive")
+  @RequirePermissions(Permission.SSM_CSSM_VIEW)
+  archive(@TenantId() tenantId: string, @Query() query: SsmCssmArchiveQueryDto) {
+    return this.cssm.archive(tenantId, query.legalEntityId || undefined);
+  }
+
+  @Get("committees/:id/archive.zip")
+  @RequirePermissions(Permission.SSM_CSSM_VIEW)
+  @Header("Content-Type", "application/zip")
+  async archiveZip(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { sub: string },
+    @Param("id") id: string,
+    @Query() query: SsmCssmArchiveZipQueryDto
+  ) {
+    const { buffer, fileName } = await this.cssm.archiveZip(tenantId, user.sub, id, query.year);
+    return new StreamableFile(buffer, { disposition: `attachment; filename="${fileName}"` });
   }
 
   @Get("committees/:id/decision.pdf")

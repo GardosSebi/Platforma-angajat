@@ -31,11 +31,13 @@ import {
 } from "../hooks/useSsmPsi";
 import { useCreateEvacuationDrill, useEvacuationDrills } from "../hooks/useSsmPpp";
 import { useTrainingTypes } from "../hooks/useSsmTrainingSuite";
+import { SsmIsuControlPanel } from "./SsmIsuControlPanel";
 
-type PsiTab = "docs" | "equipment" | "trainings" | "responsibles" | "drills";
+type PsiTab = "isu" | "docs" | "equipment" | "trainings" | "responsibles" | "drills";
 type EquipmentView = "inventory" | "check" | "alerts";
 
 const PSI_TABS: Array<{ id: PsiTab; title: string; caption: string }> = [
+  { id: "isu", title: "Control ISU", caption: "Pregătire + pachet" },
   { id: "docs", title: "Documentație", caption: "Acoperire pe punct" },
   { id: "equipment", title: "Echipamente", caption: "Inventar și verificări" },
   { id: "trainings", title: "Instruiri", caption: "Registru + suite PSI" },
@@ -129,7 +131,7 @@ function formatRoDate(value?: string | null): string {
 }
 
 export function SsmPsiManager() {
-  const [tab, setTab] = useState<PsiTab>("docs");
+  const [tab, setTab] = useState<PsiTab>("isu");
   const [equipmentView, setEquipmentView] = useState<EquipmentView>("inventory");
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<string>();
   const [editLocation, setEditLocation] = useState("");
@@ -261,7 +263,7 @@ export function SsmPsiManager() {
   return (
     <section className="ssm-eip-panel" aria-label="Modul PSI / urgențe">
       <div
-        className="ssm-panel-tabs ssm-panel-tabs--5"
+        className="ssm-panel-tabs ssm-panel-tabs--6"
         role="tablist"
         aria-label="Secțiuni PSI"
       >
@@ -288,6 +290,8 @@ export function SsmPsiManager() {
         <h3 className="card-title">{activeTabMeta.title}</h3>
         <p className="field-hint">{activeTabMeta.caption}</p>
       </header>
+
+      {tab === "isu" ? <SsmIsuControlPanel onOpenTab={(next) => setTab(next)} /> : null}
 
       {tab === "docs" ? (
         <div className="ssm-panel-layout ssm-panel-layout--single">

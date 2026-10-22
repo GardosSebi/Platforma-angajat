@@ -212,6 +212,7 @@ export const SsmSectionPermission = {
   quick: Permission.SSM_TRAINING_ASSIGN,
   documents: Permission.SSM_DOCUMENT_VIEW,
   substances: Permission.SSM_DOCUMENT_VIEW,
+  conventions: Permission.SSM_REPORT_VIEW,
   training: Permission.SSM_TRAINING_VIEW,
   eip: Permission.SSM_EIP_VIEW,
   accidents: Permission.SSM_ACCIDENT_VIEW,

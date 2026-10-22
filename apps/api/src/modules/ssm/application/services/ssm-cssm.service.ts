@@ -7,8 +7,11 @@ import {
   SsmDocumentTargetType,
   SsmDocumentType
 } from "@prisma/client";
+import JSZip from "jszip";
 import { PrismaService } from "../../../../infrastructure/prisma/prisma.service";
 import { AuditLogService } from "../../../../infrastructure/logging/audit-log.service";
+import { MailService } from "../../../../infrastructure/mail/mail.service";
+import { NotificationsService } from "../../../../infrastructure/notifications/notifications.service";
 import {
   CreateSsmCssmCommitteeDto,
   CreateSsmCssmMeetingDto,
@@ -52,12 +55,33 @@ function parseOptionalDate(value?: string | null): Date | null {
   return parseDate(value);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_NOTICE_DAYS = 5;
+const CADENCE_DUE_SOON_DAYS = 30;
+const CADENCE_REMINDER_COOLDOWN_DAYS = 7;
+const MEETING_REMINDER_DAYS = 2;
+const TERM_ENDING_DAYS = 30;
+
+type CadenceStatus = "OK" | "SCHEDULED" | "DUE_SOON" | "OVERDUE";
+
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date.getTime());
+  result.setMonth(result.getMonth() + months);
+  return result;
+}
+
+function safeFileName(value: string): string {
+  return value.replace(/[<>:"/\\|?*]+/g, "_").slice(0, 80);
+}
+
 @Injectable()
 export class SsmCssmService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly documentsService: SsmDocumentsService
+    private readonly documentsService: SsmDocumentsService,
+    private readonly mailService: MailService,
+    private readonly notifications: NotificationsService
   ) {}
 
   async listCommittees(tenantId: string) {
@@ -75,7 +99,7 @@ export class SsmCssmService {
       orderBy: [{ active: "desc" }, { name: "asc" }]
     });
     const items = rows.map((row) => this.mapCommittee(row));
-    return { items: await this.attachDecisionDocuments(tenantId, items) };
+    return { items: await this.attachCadence(tenantId, await this.attachDecisionDocuments(tenantId, items)) };
   }
 
   async getCommittee(tenantId: string, committeeId: string) {
@@ -94,7 +118,10 @@ export class SsmCssmService {
       }
     });
     if (!row) throw new NotFoundException("Comisia CSSM nu a fost găsită.");
-    const [committee] = await this.attachDecisionDocuments(tenantId, [this.mapCommittee(row, true)]);
+    const [committee] = await this.attachCadence(
+      tenantId,
+      await this.attachDecisionDocuments(tenantId, [this.mapCommittee(row, true)])
+    );
     return committee;
   }
 
@@ -139,6 +166,9 @@ export class SsmCssmService {
         ...(dto.decisionDate !== undefined ? { decisionDate: parseOptionalDate(dto.decisionDate) } : {}),
         ...(dto.constitutedAt !== undefined ? { constitutedAt: parseOptionalDate(dto.constitutedAt) } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
+        ...(dto.meetingIntervalMonths !== undefined
+          ? { meetingIntervalMonths: dto.meetingIntervalMonths, cadenceReminderSentAt: null }
+          : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes.trim() || null } : {})
       }
     });
@@ -285,6 +315,9 @@ export class SsmCssmService {
     if (meeting.status === SsmCssmMeetingStatus.CANCELLED) {
       throw new BadRequestException("Ședința anulată nu poate fi convocată.");
     }
+    if (meeting.status === SsmCssmMeetingStatus.HELD) {
+      throw new BadRequestException("Ședința a fost deja ținută.");
+    }
     await this.seedAttendees(tenantId, meetingId, meeting.committeeId);
     await this.prisma.ssmCssmMeeting.update({
       where: { id: meetingId },
@@ -294,6 +327,11 @@ export class SsmCssmService {
         convenedBy: actorId
       }
     });
+    const delivery = await this.notifyAttendees(tenantId, meetingId, "CONVOCATION");
+    await this.prisma.ssmCssmMeeting.update({
+      where: { id: meetingId },
+      data: { notificationsSentAt: new Date() }
+    });
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -301,9 +339,82 @@ export class SsmCssmService {
       action: "CSSM_MEETING_CONVENED",
       entityType: "SsmCssmMeeting",
       entityId: meetingId,
-      payload: {}
+      payload: { email: delivery.email, inApp: delivery.inApp, withoutContact: delivery.withoutContact }
     });
-    return this.getMeeting(tenantId, meetingId);
+    const result = await this.getMeeting(tenantId, meetingId);
+    return { ...result, lastNotification: { email: delivery.email, inApp: delivery.inApp } };
+  }
+
+  /** Trimite convocarea (cu PDF atașat) sau reamintirea către membrii convocați: e-mail + notificare în aplicație. */
+  private async notifyAttendees(tenantId: string, meetingId: string, kind: "CONVOCATION" | "REMINDER") {
+    const meeting = await this.loadMeetingForPdf(tenantId, meetingId);
+    const employeeIds = meeting.attendees.map((row) => row.employeeId).filter((id): id is string => Boolean(id));
+    const employees = employeeIds.length
+      ? await this.prisma.employee.findMany({
+          where: { tenantId, id: { in: employeeIds } },
+          select: { id: true, email: true }
+        })
+      : [];
+    const emailByEmployee = new Map(employees.map((row) => [row.id, row.email]));
+
+    const when = meeting.scheduledAt.toLocaleString("ro-RO", { dateStyle: "long", timeStyle: "short" });
+    const subject =
+      kind === "CONVOCATION"
+        ? `Convocare CSSM — ${meeting.title} (${when})`
+        : `Reamintire ședință CSSM — ${meeting.title} (${when})`;
+    const text = [
+      kind === "CONVOCATION"
+        ? `Sunteți convocat(ă) la ședința ${CSSM_KIND_LABEL[meeting.kind].toLowerCase()} a ${meeting.committee.name}.`
+        : `Vă reamintim ședința ${CSSM_KIND_LABEL[meeting.kind].toLowerCase()} a ${meeting.committee.name}.`,
+      `Data și ora: ${when}`,
+      `Locul: ${meeting.location ?? "—"}`,
+      "",
+      "Ordinea de zi:",
+      meeting.agenda?.trim() || "—"
+    ].join("\n");
+    const attachment =
+      kind === "CONVOCATION"
+        ? [
+            {
+              filename: `Convocare-CSSM-${safeFileName(meeting.title)}.pdf`,
+              content: await this.convocationPdf(tenantId, meetingId),
+              contentType: "application/pdf"
+            }
+          ]
+        : undefined;
+
+    let email = 0;
+    let inApp = 0;
+    let withoutContact = 0;
+    for (const attendee of meeting.attendees) {
+      const address = attendee.employeeId ? emailByEmployee.get(attendee.employeeId) : undefined;
+      if (!attendee.employeeId && !address) {
+        withoutContact += 1;
+        continue;
+      }
+      if (address) {
+        try {
+          const sent = await this.mailService.sendMail({ to: address, subject, text, attachments: attachment });
+          if (sent.sent) email += 1;
+        } catch {
+          // un e-mail eșuat nu blochează restul convocărilor
+        }
+      }
+      if (attendee.employeeId) {
+        const notified = await this.notifications.notifyEmployee({
+          tenantId,
+          employeeId: attendee.employeeId,
+          category: "SSM_CSSM",
+          title: subject,
+          body: `${when} · ${meeting.location ?? "locație nespecificată"}`,
+          linkPath: "/ssm?section=cssm",
+          entityType: "SsmCssmMeeting",
+          entityId: meetingId
+        });
+        if (notified) inApp += 1;
+      }
+    }
+    return { email, inApp, withoutContact };
   }
 
   async holdMeeting(tenantId: string, actorId: string, meetingId: string) {
@@ -378,6 +489,10 @@ export class SsmCssmService {
       entityId: attendeeId,
       payload: { present: updated.present }
     });
+    const hasMinutes = await this.prisma.ssmCssmMinutes.count({ where: { tenantId, meetingId: attendee.meetingId } });
+    if (hasMinutes) {
+      await this.publishMinutesDocument(tenantId, actorId, attendee.meetingId, "Actualizare prezență / semnături");
+    }
     return this.mapAttendee(updated);
   }
 
@@ -420,7 +535,356 @@ export class SsmCssmService {
       entityId: minutes.id,
       payload: { meetingId, number: minutes.number }
     });
+    await this.publishMinutesDocument(tenantId, actorId, meetingId, `Proces-verbal ${minutes.number} salvat`);
     return this.getMeeting(tenantId, meetingId);
+  }
+
+  /** PV-ul se arhivează automat în Documente SSM (dosar de control), versionat la fiecare modificare. */
+  private async publishMinutesDocument(tenantId: string, actorId: string, meetingId: string, changeNote: string) {
+    const meeting = await this.loadMeetingForPdf(tenantId, meetingId);
+    if (!meeting.minutes) return null;
+    const buffer = await this.minutesPdf(tenantId, meetingId);
+    const entity = meeting.committee.legalEntity;
+    const result = await this.documentsService.upsertGeneratedPdf(tenantId, actorId, {
+      type: SsmDocumentType.REGISTER,
+      title: `PV ședință CSSM ${meeting.minutes.number} — ${entity.name} (${meeting.scheduledAt.toLocaleDateString("ro-RO")})`,
+      targetType: SsmDocumentTargetType.ENTITY,
+      targetRefId: meeting.id,
+      targetLabel: entity.name,
+      entityName: entity.name,
+      legalEntityId: meeting.committee.legalEntityId,
+      fileName: `PV-CSSM-${safeFileName(meeting.minutes.number)}.pdf`,
+      buffer,
+      changeNote,
+      isControlFolder: true,
+      matchDocumentId: meeting.minutesDocumentId ?? null
+    });
+    if (meeting.minutesDocumentId !== result.documentId) {
+      await this.prisma.ssmCssmMeeting.update({ where: { id: meetingId }, data: { minutesDocumentId: result.documentId } });
+    }
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "CSSM_MINUTES_DOCUMENT_PUBLISHED",
+      entityType: "SsmDocument",
+      entityId: result.documentId,
+      payload: { meetingId, versionNumber: result.versionNumber, created: result.created }
+    });
+    return result;
+  }
+
+  async archive(tenantId: string, legalEntityId?: string) {
+    const committees = await this.prisma.ssmCssmCommittee.findMany({
+      where: { tenantId, ...(legalEntityId ? { legalEntityId } : {}) },
+      include: {
+        legalEntity: { select: { id: true, name: true, cui: true } },
+        meetings: {
+          orderBy: { scheduledAt: "desc" },
+          include: {
+            minutes: { select: { id: true, number: true } },
+            attendees: { select: { present: true, signedAt: true } }
+          }
+        }
+      },
+      orderBy: [{ active: "desc" }, { name: "asc" }]
+    });
+    const decisionDocs = await this.attachDecisionDocuments(
+      tenantId,
+      committees.map((row) => ({ id: row.id }))
+    );
+    const decisionByCommittee = new Map(decisionDocs.map((row) => [row.id, row.decisionDocumentId]));
+
+    type ArchiveCommittee = {
+      id: string;
+      name: string;
+      active: boolean;
+      decisionNumber: string | null;
+      decisionDate: string | null;
+      decisionDocumentId: string | null;
+      years: Array<{ year: number; heldCount: number; quartersCovered: number[]; meetings: unknown[] }>;
+    };
+    const entities = new Map<
+      string,
+      { legalEntityId: string; legalEntityName: string; legalEntityCui: string | null; committees: ArchiveCommittee[] }
+    >();
+    for (const committee of committees) {
+      const byYear = new Map<number, typeof committee.meetings>();
+      for (const meeting of committee.meetings) {
+        const year = (meeting.heldAt ?? meeting.scheduledAt).getFullYear();
+        byYear.set(year, [...(byYear.get(year) ?? []), meeting]);
+      }
+      const years = [...byYear.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([year, meetings]) => {
+          const held = meetings.filter((row) => row.status === SsmCssmMeetingStatus.HELD);
+          const quarters = new Set(held.map((row) => Math.floor((row.heldAt ?? row.scheduledAt).getMonth() / 3) + 1));
+          return {
+            year,
+            heldCount: held.length,
+            quartersCovered: [...quarters].sort(),
+            meetings: meetings.map((meeting) => ({
+              id: meeting.id,
+              title: meeting.title,
+              kind: meeting.kind,
+              kindLabel: CSSM_KIND_LABEL[meeting.kind],
+              status: meeting.status,
+              scheduledAt: meeting.scheduledAt.toISOString(),
+              heldAt: meeting.heldAt?.toISOString() ?? null,
+              convenedAt: meeting.convenedAt?.toISOString() ?? null,
+              minutesNumber: meeting.minutes?.number ?? null,
+              minutesDocumentId: meeting.minutesDocumentId,
+              attendeeCount: meeting.attendees.length,
+              presentCount: meeting.attendees.filter((row) => row.present).length,
+              signedCount: meeting.attendees.filter((row) => row.signedAt).length
+            }))
+          };
+        });
+      const entry = entities.get(committee.legalEntityId) ?? {
+        legalEntityId: committee.legalEntityId,
+        legalEntityName: committee.legalEntity.name,
+        legalEntityCui: committee.legalEntity.cui,
+        committees: []
+      };
+      entry.committees.push({
+        id: committee.id,
+        name: committee.name,
+        active: committee.active,
+        decisionNumber: committee.decisionNumber,
+        decisionDate: committee.decisionDate?.toISOString() ?? null,
+        decisionDocumentId: decisionByCommittee.get(committee.id) ?? null,
+        years
+      });
+      entities.set(committee.legalEntityId, entry);
+    }
+    return { items: [...entities.values()] };
+  }
+
+  async archiveZip(tenantId: string, actorId: string, committeeId: string, year?: number) {
+    const committee = await this.loadCommitteeForDecision(tenantId, committeeId);
+    const meetings = await this.prisma.ssmCssmMeeting.findMany({
+      where: {
+        tenantId,
+        committeeId,
+        ...(year
+          ? { scheduledAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } }
+          : {})
+      },
+      include: { minutes: { select: { number: true } } },
+      orderBy: { scheduledAt: "asc" }
+    });
+    const zip = new JSZip();
+    const warnings: string[] = [];
+    if (committee.decisionNumber?.trim()) {
+      zip.file(`00-Decizie-CSSM-${safeFileName(committee.decisionNumber)}.pdf`, await this.renderAppointmentDecision(committee));
+    }
+    const register: string[][] = [["Data", "Titlu", "Tip", "Stare", "Convocat la", "PV"]];
+    for (const meeting of meetings) {
+      const prefix = `${meeting.scheduledAt.toISOString().slice(0, 10)}-${safeFileName(meeting.title)}`;
+      register.push([
+        meeting.scheduledAt.toISOString().slice(0, 10),
+        meeting.title,
+        CSSM_KIND_LABEL[meeting.kind],
+        meeting.status,
+        meeting.convenedAt?.toISOString().slice(0, 10) ?? "",
+        meeting.minutes?.number ?? ""
+      ]);
+      if (meeting.status === SsmCssmMeetingStatus.CANCELLED) continue;
+      try {
+        zip.file(`sedinte/${prefix}/Convocare.pdf`, await this.convocationPdf(tenantId, meeting.id));
+        if (meeting.minutes) {
+          zip.file(
+            `sedinte/${prefix}/PV-${safeFileName(meeting.minutes.number)}.pdf`,
+            await this.minutesPdf(tenantId, meeting.id)
+          );
+        } else if (meeting.status === SsmCssmMeetingStatus.HELD) {
+          warnings.push(`Ședința din ${meeting.scheduledAt.toLocaleDateString("ro-RO")} nu are proces-verbal.`);
+        }
+      } catch {
+        warnings.push(`Nu s-au putut genera documentele pentru ședința „${meeting.title}”.`);
+      }
+    }
+    zip.file(
+      "registru-sedinte.csv",
+      "\uFEFF" +
+        register
+          .map((row) => row.map((cell) => (/[";\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(";"))
+          .join("\r\n")
+    );
+    if (warnings.length) zip.file("warnings.txt", warnings.map((line) => `- ${line}`).join("\r\n"));
+
+    await this.auditLog.write({
+      tenantId,
+      actorId,
+      module: "SSM",
+      action: "CSSM_ARCHIVE_EXPORTED",
+      entityType: "SsmCssmCommittee",
+      entityId: committeeId,
+      payload: { year: year ?? null, meetings: meetings.length }
+    });
+    return {
+      buffer: await zip.generateAsync({ type: "nodebuffer" }),
+      fileName: `Arhiva-CSSM-${safeFileName(committee.legalEntity.name)}-${year ?? "complet"}.zip`
+    };
+  }
+
+  /** Cron zilnic: termen trimestrial de ședință și reamintiri pentru ședințele convocate. */
+  async dispatchReminders(tenantId: string, actorId: string) {
+    const now = new Date();
+    const committees = await this.prisma.ssmCssmCommittee.findMany({
+      where: { tenantId, active: true },
+      include: {
+        legalEntity: { select: { name: true } },
+        members: { where: { active: true }, select: { employeeId: true, role: true } }
+      }
+    });
+    const cadence = await this.computeCadence(tenantId, committees.map((row) => row.id));
+
+    let cadenceReminders = 0;
+    for (const committee of committees) {
+      const state = cadence.get(committee.id);
+      if (!state || (state.status !== "DUE_SOON" && state.status !== "OVERDUE")) continue;
+      if (
+        committee.cadenceReminderSentAt &&
+        now.getTime() - committee.cadenceReminderSentAt.getTime() < CADENCE_REMINDER_COOLDOWN_DAYS * DAY_MS
+      ) {
+        continue;
+      }
+      const recipients = committee.members
+        .filter((row) => row.employeeId && (row.role === "PRESIDENT" || row.role === "SECRETARY"))
+        .map((row) => row.employeeId as string);
+      const title =
+        state.status === "OVERDUE"
+          ? `Ședința CSSM este restantă — ${committee.legalEntity.name}`
+          : `Termen ședință CSSM în ${state.daysUntilDue} zile — ${committee.legalEntity.name}`;
+      for (const employeeId of new Set(recipients)) {
+        await this.notifications.notifyEmployee({
+          tenantId,
+          employeeId,
+          category: "SSM_CSSM",
+          title,
+          body: `Comitetul se întrunește cel puțin o dată la ${committee.meetingIntervalMonths} luni. Termen: ${
+            state.nextDueAt ? new Date(state.nextDueAt).toLocaleDateString("ro-RO") : "—"
+          }.`,
+          linkPath: "/ssm?section=cssm",
+          entityType: "SsmCssmCommittee",
+          entityId: committee.id
+        });
+      }
+      await this.prisma.ssmCssmCommittee.update({ where: { id: committee.id }, data: { cadenceReminderSentAt: now } });
+      await this.auditLog.write({
+        tenantId,
+        actorId,
+        module: "SSM",
+        action: "CSSM_CADENCE_REMINDER",
+        entityType: "SsmCssmCommittee",
+        entityId: committee.id,
+        payload: { status: state.status, recipients: recipients.length }
+      });
+      cadenceReminders += 1;
+    }
+
+    const upcoming = await this.prisma.ssmCssmMeeting.findMany({
+      where: {
+        tenantId,
+        status: SsmCssmMeetingStatus.CONVENED,
+        reminderSentAt: null,
+        scheduledAt: { gte: now, lte: new Date(now.getTime() + MEETING_REMINDER_DAYS * DAY_MS) }
+      },
+      select: { id: true }
+    });
+    for (const meeting of upcoming) {
+      const delivery = await this.notifyAttendees(tenantId, meeting.id, "REMINDER");
+      await this.prisma.ssmCssmMeeting.update({ where: { id: meeting.id }, data: { reminderSentAt: now } });
+      await this.auditLog.write({
+        tenantId,
+        actorId,
+        module: "SSM",
+        action: "CSSM_MEETING_REMINDER",
+        entityType: "SsmCssmMeeting",
+        entityId: meeting.id,
+        payload: { email: delivery.email, inApp: delivery.inApp }
+      });
+    }
+    return { cadenceReminders, meetingReminders: upcoming.length };
+  }
+
+  private async computeCadence(tenantId: string, committeeIds: string[]) {
+    const result = new Map<
+      string,
+      {
+        intervalMonths: number;
+        lastHeldAt: string | null;
+        nextDueAt: string | null;
+        upcomingMeetingAt: string | null;
+        status: CadenceStatus;
+        daysUntilDue: number | null;
+      }
+    >();
+    if (!committeeIds.length) return result;
+    const now = new Date();
+    const [committees, held, upcoming] = await Promise.all([
+      this.prisma.ssmCssmCommittee.findMany({
+        where: { tenantId, id: { in: committeeIds } },
+        select: { id: true, meetingIntervalMonths: true, constitutedAt: true, decisionDate: true, createdAt: true }
+      }),
+      this.prisma.ssmCssmMeeting.groupBy({
+        by: ["committeeId"],
+        where: { tenantId, committeeId: { in: committeeIds }, status: SsmCssmMeetingStatus.HELD },
+        _max: { heldAt: true, scheduledAt: true }
+      }),
+      this.prisma.ssmCssmMeeting.groupBy({
+        by: ["committeeId"],
+        where: {
+          tenantId,
+          committeeId: { in: committeeIds },
+          status: { in: [SsmCssmMeetingStatus.DRAFT, SsmCssmMeetingStatus.CONVENED] },
+          scheduledAt: { gte: now }
+        },
+        _min: { scheduledAt: true }
+      })
+    ]);
+    const heldBy = new Map(held.map((row) => [row.committeeId, row._max.heldAt ?? row._max.scheduledAt]));
+    const upcomingBy = new Map(upcoming.map((row) => [row.committeeId, row._min.scheduledAt]));
+
+    for (const committee of committees) {
+      const lastHeld = heldBy.get(committee.id) ?? null;
+      const base = lastHeld ?? committee.constitutedAt ?? committee.decisionDate ?? committee.createdAt;
+      const nextDue = addMonths(base, committee.meetingIntervalMonths);
+      const upcomingAt = upcomingBy.get(committee.id) ?? null;
+      const daysUntilDue = Math.ceil((nextDue.getTime() - now.getTime()) / DAY_MS);
+      let status: CadenceStatus;
+      if (upcomingAt && upcomingAt <= nextDue) status = "SCHEDULED";
+      else if (daysUntilDue < 0) status = "OVERDUE";
+      else if (daysUntilDue <= CADENCE_DUE_SOON_DAYS) status = "DUE_SOON";
+      else status = "OK";
+      result.set(committee.id, {
+        intervalMonths: committee.meetingIntervalMonths,
+        lastHeldAt: lastHeld?.toISOString() ?? null,
+        nextDueAt: nextDue.toISOString(),
+        upcomingMeetingAt: upcomingAt?.toISOString() ?? null,
+        status,
+        daysUntilDue
+      });
+    }
+    return result;
+  }
+
+  private async attachCadence<T extends { id: string; compositionWarnings: string[] }>(tenantId: string, items: T[]) {
+    const cadence = await this.computeCadence(
+      tenantId,
+      items.map((item) => item.id)
+    );
+    return items.map((item) => {
+      const state = cadence.get(item.id) ?? null;
+      const warnings = [...item.compositionWarnings];
+      if (state?.status === "OVERDUE") {
+        warnings.push(
+          `Termenul de ședință a fost depășit (${state.daysUntilDue != null ? Math.abs(state.daysUntilDue) : "?"} zile) — CSSM se întrunește cel puțin o dată la ${state.intervalMonths} luni.`
+        );
+      }
+      return { ...item, meetingIntervalMonths: state?.intervalMonths ?? 3, cadence: state, compositionWarnings: warnings };
+    });
   }
 
   async decisionPdf(tenantId: string, committeeId: string) {
@@ -586,8 +1050,18 @@ export class SsmCssmService {
     return row;
   }
 
-  private compositionWarnings(members: Array<{ role: SsmCssmMemberRole; active: boolean }>) {
+  private compositionWarnings(
+    members: Array<{ role: SsmCssmMemberRole; active: boolean; fullName: string; termEndsAt: Date | null }>
+  ) {
     const active = members.filter((m) => m.active);
+    const now = Date.now();
+    const termWarnings = active
+      .filter((m) => m.termEndsAt && m.termEndsAt.getTime() - now <= TERM_ENDING_DAYS * DAY_MS)
+      .map((m) =>
+        m.termEndsAt && m.termEndsAt.getTime() < now
+          ? `Mandatul membrului ${m.fullName} a expirat (${m.termEndsAt.toLocaleDateString("ro-RO")}).`
+          : `Mandatul membrului ${m.fullName} expiră la ${m.termEndsAt?.toLocaleDateString("ro-RO")}.`
+      );
     const employer = active.filter((m) => m.role === "EMPLOYER_REPRESENTATIVE" || m.role === "PRESIDENT").length;
     const workers = active.filter(
       (m) => m.role === "EMPLOYEE_REPRESENTATIVE" || m.role === "DESIGNATED_WORKER"
@@ -598,7 +1072,7 @@ export class SsmCssmService {
     if (employer !== workers) {
       warnings.push("Numărul reprezentanților angajatorului și al lucrătorilor trebuie să fie egal.");
     }
-    return warnings;
+    return [...warnings, ...termWarnings];
   }
 
   private async loadCommitteeForDecision(tenantId: string, committeeId: string) {
@@ -777,6 +1251,8 @@ export class SsmCssmService {
     convenedAt: Date | null;
     heldAt: Date | null;
     cancelledAt: Date | null;
+    notificationsSentAt?: Date | null;
+    minutesDocumentId?: string | null;
     attendees?: Array<{
       id: string;
       memberId: string | null;
@@ -797,6 +1273,9 @@ export class SsmCssmService {
     } | null;
   }) {
     return {
+      ...this.noticeInfo(row),
+      notificationsSentAt: row.notificationsSentAt?.toISOString() ?? null,
+      minutesDocumentId: row.minutesDocumentId ?? null,
       id: row.id,
       committeeId: row.committeeId,
       kind: row.kind,
@@ -813,6 +1292,16 @@ export class SsmCssmService {
       minutes: this.mapMinutes(row.minutes ?? null),
       hasMinutes: Boolean(row.minutes)
     };
+  }
+
+  private noticeInfo(row: { kind: SsmCssmMeetingKind; scheduledAt: Date; convenedAt: Date | null }) {
+    if (!row.convenedAt) return { noticeDays: null as number | null, noticeWarning: null as string | null };
+    const noticeDays = Math.floor((row.scheduledAt.getTime() - row.convenedAt.getTime()) / DAY_MS);
+    const noticeWarning =
+      row.kind === SsmCssmMeetingKind.ORDINARY && noticeDays < MIN_NOTICE_DAYS
+        ? `Convocarea a fost transmisă cu ${Math.max(0, noticeDays)} zile înainte; recomandat minimum ${MIN_NOTICE_DAYS} zile.`
+        : null;
+    return { noticeDays, noticeWarning };
   }
 
   private mapCommittee(
@@ -849,6 +1338,8 @@ export class SsmCssmService {
         convenedAt: Date | null;
         heldAt: Date | null;
         cancelledAt: Date | null;
+        notificationsSentAt?: Date | null;
+        minutesDocumentId?: string | null;
         attendees?: Array<{
           id: string;
           memberId: string | null;
@@ -889,6 +1380,9 @@ export class SsmCssmService {
         includeMeetingDetails && "attendees" in meeting
           ? this.mapMeeting(meeting as Parameters<SsmCssmService["mapMeeting"]>[0])
           : {
+              ...this.noticeInfo(meeting),
+              notificationsSentAt: meeting.notificationsSentAt?.toISOString() ?? null,
+              minutesDocumentId: meeting.minutesDocumentId ?? null,
               id: meeting.id,
               committeeId: row.id,
               kind: meeting.kind,

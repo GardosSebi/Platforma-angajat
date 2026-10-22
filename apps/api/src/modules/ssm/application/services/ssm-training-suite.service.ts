@@ -51,6 +51,7 @@ import {
 } from "../legal-forms";
 import { SsmEipService } from "./ssm-eip.service";
 import { SsmRiskService } from "./ssm-risk.service";
+import { SsmExposureSheetService } from "./ssm-exposure-sheet.service";
 
 const MAX_MATERIAL_BYTES = 120 * 1024 * 1024;
 const ALLOWED_MATERIAL_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".mp4", ".mov", ".avi", ".mkv"]);
@@ -227,7 +228,8 @@ export class SsmTrainingSuiteService {
     private readonly notifications: NotificationsService,
     private readonly encryption: DataEncryptionService,
     private readonly riskService: SsmRiskService,
-    private readonly eipService: SsmEipService
+    private readonly eipService: SsmEipService,
+    private readonly exposureSheets: SsmExposureSheetService
   ) {}
 
   private async syncOverdue(tenantId: string) {
@@ -1530,6 +1532,8 @@ export class SsmTrainingSuiteService {
       const type: string = doc.type;
       return type === "EXPOSURE_SHEET" || type === "RISK_ASSESSMENT";
     });
+    const exposureSheets = (await this.exposureSheets.forDossier(tenantId, employeeId)).map((row) => row.item);
+    const hasOpenExposureSheet = exposureSheets.some((sheet) => sheet.status !== "SUPERSEDED");
     const eipDecisionCopies = documents.filter((doc) => {
       const type: string = doc.type;
       return type === "DECISION" || type === "EIP_NORM";
@@ -1561,13 +1565,18 @@ export class SsmTrainingSuiteService {
           fileName: doc.activeVersion?.fileName,
           updatedAt: doc.updatedAt
         })),
+      exposureSheets,
       riskExposureSheets: [
-        {
-          id: "generated-exposure-sheet",
-          title: "Fișă de expunere la riscuri profesionale",
-          fileName: "Fisa-expunere-riscuri-profesionale.pdf",
-          generated: true
-        },
+        ...(hasOpenExposureSheet
+          ? []
+          : [
+              {
+                id: "generated-exposure-sheet",
+                title: "Fișă de expunere la riscuri profesionale (previzualizare nesemnată)",
+                fileName: "Fisa-expunere-riscuri-profesionale.pdf",
+                generated: true
+              }
+            ]),
         ...riskExposureSheets.map((doc) => ({
           id: doc.id,
           title: doc.title,
@@ -1626,7 +1635,7 @@ export class SsmTrainingSuiteService {
         "- documents/ — documente SSM aprobate aplicabile angajatului",
         "- instruiri/ — fișa individuală de instruire Anexa 11 HG 1425/2006 (PDF)",
         "- medicina-muncii/ — fișe de aptitudini",
-        "- expunere/ — fișa de expunere la riscuri generată pentru angajat (PDF)",
+        "- expunere/ — fișele de expunere la riscuri semnate (versiunile înlocuite în expunere/arhiva/)",
         "- eip/ — decizie de acordare EIP (PDF) și evidență în dossier.json",
         "- dossier.json — index structurat"
       ].join("\n")
@@ -1665,11 +1674,27 @@ export class SsmTrainingSuiteService {
       warnings.push("Fișa de instruire individuală (Anexa 11) n-a putut fi generată.");
     }
 
-    try {
-      const exposurePdf = await this.riskService.generateExposureSheetPdf(tenantId, employeeId);
-      zip.file("expunere/Fisa-expunere-riscuri-profesionale.pdf", exposurePdf);
-    } catch {
-      warnings.push("Fișa de expunere la riscuri n-a putut fi generată.");
+    const exposureRows = await this.exposureSheets.forDossier(tenantId, employeeId);
+    let signedExposureFiles = 0;
+    for (const row of exposureRows) {
+      if (!row.pdfPath) continue;
+      try {
+        const fileBuffer = await readFile(row.pdfPath);
+        const prefix = row.item.status === "SUPERSEDED" ? "arhiva/" : "";
+        zip.file(`expunere/${prefix}${this.sanitizeZipPath(row.pdfFileName ?? `fisa-expunere-${row.item.id}.pdf`)}`, fileBuffer);
+        signedExposureFiles += 1;
+      } catch {
+        warnings.push(`Fișa de expunere semnată lipsește de pe disc: ${row.pdfFileName ?? row.item.id}`);
+      }
+    }
+    if (!signedExposureFiles) {
+      try {
+        const exposurePdf = await this.riskService.generateExposureSheetPdf(tenantId, employeeId);
+        zip.file("expunere/Fisa-expunere-riscuri-profesionale-NESEMNATA.pdf", exposurePdf);
+        warnings.push("Angajatul nu are o fișă de expunere semnată; a fost inclusă o previzualizare nesemnată.");
+      } catch {
+        warnings.push("Fișa de expunere la riscuri n-a putut fi generată.");
+      }
     }
 
     try {

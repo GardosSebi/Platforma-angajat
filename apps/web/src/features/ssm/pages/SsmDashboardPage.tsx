@@ -16,11 +16,12 @@ import { SsmReportsManager } from "../components/SsmReportsManager";
 import { SsmGateManager } from "../components/SsmGateManager";
 import { SsmCssmManager } from "../components/SsmCssmManager";
 import { SsmSubstancesManager } from "../components/SsmSubstancesManager";
+import { SsmConventionsManager } from "../components/SsmConventionsManager";
 
 const SSM_GROUPS: Array<{ id: string; title: string; sections: SsmSectionId[] }> = [
   { id: "compliance", title: "Conformitate", sections: ["compliance", "reports"] },
   { id: "training", title: "Instruire", sections: ["training", "quick"] },
-  { id: "documents", title: "Documente", sections: ["documents", "substances", "risk", "ppp"] },
+  { id: "documents", title: "Documente", sections: ["documents", "substances", "risk", "ppp", "conventions"] },
   { id: "people", title: "Personal", sections: ["medical", "eip", "accidents"] },
   { id: "emergency", title: "Urgențe", sections: ["psi", "cssm", "gate"] }
 ];
@@ -54,6 +55,13 @@ const SSM_SECTIONS: Array<{
       "Evidență pe punct de lucru: fișe SDS, cantități, locații de depozitare și scadențe de valabilitate."
   },
   {
+    id: "conventions",
+    title: "Convenții SSM",
+    caption: "Multi-angajator, firme terțe",
+    description:
+      "Convenții SSM pentru șantiere și depozite comune cu firme terțe: părți, riscuri comune, măsuri, coordonare, semnături și arhivare automată în dosarul de control. Firmele intrate pe poartă fără convenție activă sunt semnalate."
+  },
+  {
     id: "training",
     title: "Instruire și conformitate",
     caption: "Calendar, teste, fișe",
@@ -82,7 +90,8 @@ const SSM_SECTIONS: Array<{
     id: "risk",
     title: "Evaluări risc",
     caption: "Listă, creare, versionare",
-    description: "Lucrează pe secțiuni: listă evaluări, creare, versionare/PPP și fișă expunere PDF."
+    description:
+      "Lucrează pe secțiuni: listă evaluări, creare, versionare/PPP și fișe de expunere emise la angajare/revizie, semnate și arhivate în dosar."
   },
   {
     id: "ppp",
@@ -93,16 +102,16 @@ const SSM_SECTIONS: Array<{
   {
     id: "psi",
     title: "PSI / urgențe",
-    caption: "Documente, echipamente, instruiri",
+    caption: "Control ISU, echipamente, instruiri",
     description:
-      "Lucrează pe secțiuni: documentație structurată, echipamente/verificări/alerte, instruiri unificate, responsabili și exerciții."
+      "Lucrează pe secțiuni: pregătire și pachet control ISU, documentație structurată, echipamente/verificări/alerte, instruiri unificate, responsabili și exerciții."
   },
   {
     id: "cssm",
     title: "CSSM",
-    caption: "Comisie, ședințe, PV",
+    caption: "Comisie, ședințe, PV, arhivă",
     description:
-      "Componența comitetului CSSM, convocări/ședințe și procese-verbale. Decizia de numire se publică automat în Documente (tip Decizie)."
+      "Componența comitetului CSSM, termene de ședință, convocări notificate membrilor, procese-verbale arhivate automat în Documente și arhivă pe entitate."
   },
   {
     id: "compliance",
@@ -203,6 +212,8 @@ export function SsmDashboardPage() {
         return <SsmPsiManager />;
       case "cssm":
         return <SsmCssmManager />;
+      case "conventions":
+        return <SsmConventionsManager />;
       case "compliance":
         return <SsmComplianceDashboardManager />;
       case "reports":

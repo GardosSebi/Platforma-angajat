@@ -8,14 +8,12 @@ import type {
 } from "@repo/shared-types/ssm";
 import {
   useDepartmentsLookup,
-  useEmployeeOptions,
   useJobPositionsLookup,
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
-import { downloadWithAuth } from "../../../shared/api/http-download";
-import { ssmApi } from "../api/ssm.api";
+import { SsmExposureSheetsPanel } from "./SsmExposureSheetsPanel";
 import { hasPermission } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import {
@@ -46,7 +44,7 @@ const RISK_TABS: Array<{ id: RiskTabId; title: string; caption: string }> = [
   { id: "list", title: "Listă", caption: "Vezi evaluările" },
   { id: "create", title: "Evaluare nouă", caption: "Creare" },
   { id: "manage", title: "Versionare", caption: "Actualizare + PPP" },
-  { id: "exposure", title: "Fișă expunere", caption: "PDF angajat" }
+  { id: "exposure", title: "Fișe expunere", caption: "Emitere, semnare, arhivă" }
 ];
 
 const TARGET_TYPE_OPTIONS = [
@@ -242,16 +240,11 @@ export function SsmRiskManager() {
   const [createForm, setCreateForm] = useState<RiskFormState>(EMPTY_FORM);
   const [manageForm, setManageForm] = useState<RiskFormState | null>(null);
   const [versionReason, setVersionReason] = useState("Actualizare după reevaluare");
-  const [exposureEmployeeId, setExposureEmployeeId] = useState("");
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-
   const assessmentsQuery = useRiskAssessments(filters);
   const historyQuery = useRiskAssessmentHistory(selectedAssessmentId);
   const jobsLookup = useJobPositionsLookup();
   const worksitesLookup = useWorksitesLookup();
   const departmentsLookup = useDepartmentsLookup();
-  const employeesQuery = useEmployeeOptions();
-
   const createAssessment = useCreateRiskAssessment();
   const addVersion = useAddRiskAssessmentVersion();
   const archiveAssessment = useArchiveRiskAssessment();
@@ -260,7 +253,6 @@ export function SsmRiskManager() {
   const assessmentItems = assessmentsQuery.data?.items ?? [];
   const selectedAssessment = assessmentItems.find((item) => item.id === selectedAssessmentId);
   const latestVersion = historyQuery.data?.versions[0];
-  const employeeOptions = employeesQuery.data?.items ?? [];
   const activeTabMeta = RISK_TABS.find((item) => item.id === tab) ?? RISK_TABS[0];
 
   const createTargetOptions = useMemo(() => {
@@ -286,12 +278,6 @@ export function SsmRiskManager() {
     if (createTargetOptions.some((option) => option.value === createForm.targetId)) return;
     setCreateForm((prev) => ({ ...prev, targetId: createTargetOptions[0].value }));
   }, [createForm.targetId, createTargetOptions]);
-
-  useEffect(() => {
-    if (!employeeOptions.length) return;
-    if (exposureEmployeeId && employeeOptions.some((item) => item.id === exposureEmployeeId)) return;
-    setExposureEmployeeId(employeeOptions[0].id);
-  }, [employeeOptions, exposureEmployeeId]);
 
   useEffect(() => {
     if (!selectedAssessmentId || !latestVersion || !selectedAssessment) {
@@ -352,15 +338,6 @@ export function SsmRiskManager() {
       effectiveFrom: versionSource.effectiveFrom
     };
     addVersion.mutate({ assessmentId: selectedAssessmentId, payload });
-  };
-
-  const downloadExposureSheet = () => {
-    if (!exposureEmployeeId) return;
-    setDownloadError(null);
-    void downloadWithAuth(
-      ssmApi.getExposureSheetPdfUrl(exposureEmployeeId),
-      `fisa-expunere-${exposureEmployeeId}.pdf`
-    ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)));
   };
 
   return (
@@ -696,27 +673,7 @@ export function SsmRiskManager() {
         </div>
       ) : null}
 
-      {tab === "exposure" ? (
-        <div className="ssm-panel-layout ssm-panel-layout--single">
-          <div className="card form-stack ssm-doc-card">
-            <h4 className="card-title">Fișă expunere PDF</h4>
-            <p className="field-hint">Descarcă fișa pe baza evaluării active a postului angajatului.</p>
-            <FieldSelect
-              id="risk-exposure-employee"
-              label="Angajat"
-              value={exposureEmployeeId}
-              onChange={setExposureEmployeeId}
-              allowEmpty
-              emptyLabel="Selectează angajat"
-              options={mapToOptions(employeeOptions, (item) => item.id, (item) => item.fullName)}
-            />
-            <button className="btn-primary" type="button" disabled={!exposureEmployeeId} onClick={downloadExposureSheet}>
-              Descarcă PDF
-            </button>
-            {downloadError ? <p className="feedback error">{downloadError}</p> : null}
-          </div>
-        </div>
-      ) : null}
+      {tab === "exposure" ? <SsmExposureSheetsPanel /> : null}
     </section>
   );
 }

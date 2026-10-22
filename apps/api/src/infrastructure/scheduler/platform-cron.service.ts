@@ -10,6 +10,8 @@ import { SsmTrainingAutomationService } from "../../modules/ssm/application/serv
 import { CommunicationsService } from "../../modules/chatbot/application/services/communications.service";
 import { SurveysService } from "../../modules/surveys/application/services/surveys.service";
 import { SsmScheduledReportsService } from "../../modules/ssm/application/services/ssm-scheduled-reports.service";
+import { SsmCssmService } from "../../modules/ssm/application/services/ssm-cssm.service";
+import { SsmConventionsService } from "../../modules/ssm/application/services/ssm-conventions.service";
 import { isCronEnabled, SYSTEM_CRON_ACTOR } from "./scheduler.constants";
 
 @Injectable()
@@ -27,7 +29,9 @@ export class PlatformCronService {
     private readonly communications: CommunicationsService,
     private readonly surveys: SurveysService,
     private readonly retention: RetentionService,
-    private readonly scheduledReports: SsmScheduledReportsService
+    private readonly scheduledReports: SsmScheduledReportsService,
+    private readonly cssm: SsmCssmService,
+    private readonly conventions: SsmConventionsService
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
@@ -68,8 +72,10 @@ export class PlatformCronService {
     const retention = await this.retention.archiveDueRecords(tenantId);
     const absence = await this.trainingAutomation.processAbsenceTriggers(tenantId, SYSTEM_CRON_ACTOR);
     const scheduledReports = await this.scheduledReports.dispatchDueForTenant(tenantId);
+    const cssm = await this.cssm.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
+    const conventions = await this.conventions.dispatchReminders(tenantId, SYSTEM_CRON_ACTOR);
     this.logger.log(
-      `Tenant ${tenantId}: trainingOverdue=${overdue.marked}, trainingReminders=${training.sent}, medicalReminders=${medical.sent}, eipReminders=${eip.sent}, psiReminders=${psi.sent}, absenceTriggers=${absence.assigned}, announcementsPublished=${published.published}, announcementsArchived=${archivedAnnouncements.archived}, commReminders=${commReminders.sent}, surveysClosed=${closedSurveys.closed}, retentionArchived=${retention.archived}, scheduledReports=${scheduledReports.sent}`
+      `Tenant ${tenantId}: trainingOverdue=${overdue.marked}, trainingReminders=${training.sent}, medicalReminders=${medical.sent}, eipReminders=${eip.sent}, psiReminders=${psi.sent}, absenceTriggers=${absence.assigned}, announcementsPublished=${published.published}, announcementsArchived=${archivedAnnouncements.archived}, commReminders=${commReminders.sent}, surveysClosed=${closedSurveys.closed}, retentionArchived=${retention.archived}, scheduledReports=${scheduledReports.sent}, cssmCadence=${cssm.cadenceReminders}, cssmMeetings=${cssm.meetingReminders}, conventionsExpired=${conventions.expired}, conventionReminders=${conventions.reminded}`
     );
     return {
       overdue,
@@ -83,7 +89,9 @@ export class PlatformCronService {
       commReminders,
       closedSurveys,
       retention,
-      scheduledReports
+      scheduledReports,
+      cssm,
+      conventions
     };
   }
 }

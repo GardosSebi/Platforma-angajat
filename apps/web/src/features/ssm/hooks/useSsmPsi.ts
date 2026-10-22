@@ -8,6 +8,14 @@ import type {
 } from "@repo/shared-types/ssm";
 import { ssmApi } from "../api/ssm.api";
 
+export function useIsuReadiness(worksiteId?: string) {
+  return useQuery({
+    queryKey: ["ssm", "psi", "isu-readiness", worksiteId ?? "all"],
+    queryFn: () => ssmApi.isuReadiness(worksiteId),
+    refetchOnMount: "always"
+  });
+}
+
 export function usePsiDocumentation() {
   return useQuery({
     queryKey: ["ssm", "psi", "documentation"],

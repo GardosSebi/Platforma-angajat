@@ -22,7 +22,7 @@ import { SsmTrainingAutomationService } from "./ssm-training-automation.service"
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-type PsiDocKind = "INSTRUCTIONS" | "EVACUATION_PLAN" | "INTERVENTION" | "OTHER";
+export type PsiDocKind = "INSTRUCTIONS" | "EVACUATION_PLAN" | "INTERVENTION" | "OTHER";
 
 function parseDate(value: string): Date {
   const d = new Date(value);
@@ -45,7 +45,7 @@ function daysUntil(date: Date, now = new Date()): number {
   return Math.ceil((date.getTime() - now.getTime()) / DAY_MS);
 }
 
-function classifyPsiDocument(type: SsmDocumentType, title: string): PsiDocKind {
+export function classifyPsiDocument(type: SsmDocumentType, title: string): PsiDocKind {
   const normalized = title.toLowerCase();
   if (/evacuare|evacuat|evacuation|plan\s+de\s+evacu/.test(normalized)) return "EVACUATION_PLAN";
   if (/interven|organizare|coordonare\s+urgen|emergency\s+organiz/.test(normalized)) return "INTERVENTION";

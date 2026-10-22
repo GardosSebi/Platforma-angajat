@@ -38,6 +38,12 @@ import { SsmManagerController } from "./api/ssm-manager.controller";
 import { SSM_TRAINING_REPOSITORY } from "./domain/repositories/ssm-training.repository";
 import { PrismaSsmTrainingRepository } from "./infrastructure/prisma/prisma-ssm-training.repository";
 import { SsmScheduledReportsService } from "./application/services/ssm-scheduled-reports.service";
+import { SsmExposureSheetService } from "./application/services/ssm-exposure-sheet.service";
+import { SsmConventionsService } from "./application/services/ssm-conventions.service";
+import { SsmIsuControlService } from "./application/services/ssm-isu-control.service";
+import { SsmExposureController } from "./api/ssm-exposure.controller";
+import { SsmConventionsController } from "./api/ssm-conventions.controller";
+import { SsmIsuController } from "./api/ssm-isu.controller";
 
 @Module({
   imports: [NotificationsModule, MailModule],
@@ -57,7 +63,10 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmGateController,
     SsmCssmController,
     SsmSubstancesController,
-    SsmManagerController
+    SsmManagerController,
+    SsmExposureController,
+    SsmConventionsController,
+    SsmIsuController
   ],
   providers: [
     PermissionsGuard,
@@ -79,6 +88,9 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmCssmService,
     SsmSubstancesService,
     SsmManagerTeamService,
+    SsmExposureSheetService,
+    SsmConventionsService,
+    SsmIsuControlService,
     {
       provide: SSM_TRAINING_REPOSITORY,
       useClass: PrismaSsmTrainingRepository
@@ -91,7 +103,9 @@ import { SsmScheduledReportsService } from "./application/services/ssm-scheduled
     SsmPsiService,
     SsmTrainingAutomationService,
     ItmAccessService,
-    SsmScheduledReportsService
+    SsmScheduledReportsService,
+    SsmCssmService,
+    SsmConventionsService
   ]
 })
 export class SsmModule {}

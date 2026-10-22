@@ -6,4 +6,7 @@ export { renderCssmDecision } from "./cssm-decision";
 export { renderCssmMinutes } from "./cssm-minutes";
 export { renderEipNormDocument } from "./eip-norm";
 export { renderEipDecision } from "./eip-decision";
+export { renderExposureSheet } from "./exposure-sheet";
+export { renderSsmConvention } from "./ssm-convention";
+export { renderIsuControlSummary } from "./isu-control-summary";
 export { decryptStoredCnp, birthDateFromCnp } from "./pdf-form-kit";

@@ -6,6 +6,7 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
 import { ssmApi } from "../../ssm/api/ssm.api";
 import { formatRoDate, mutationErrorMessage } from "../utils";
+import { EmployeeExposureSheetsSection } from "./EmployeeExposureSheetsSection";
 
 export function EmployeeDossierPanel() {
   const session = useAuthSession();
@@ -163,9 +164,11 @@ export function EmployeeDossierPanel() {
         </section>
       ) : null}
 
+      <EmployeeExposureSheetsSection employeeId={employeeId} sheets={data?.exposureSheets ?? []} />
+
       {data?.riskExposureSheets?.length ? (
         <section className="card employee-dossier-section">
-          <h3 className="card-title">Fișe de expunere</h3>
+          <h3 className="card-title">Evaluări de risc și fișe atașate</h3>
           <ul className="employee-dossier-list">
             {data.riskExposureSheets.map((item) => (
               <li key={item.id}>

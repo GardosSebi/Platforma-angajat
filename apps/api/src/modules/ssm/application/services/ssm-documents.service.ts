@@ -1386,6 +1386,11 @@ export class SsmDocumentsService {
       buffer: Buffer;
       changeNote: string;
       isControlFolder?: boolean;
+      /**
+       * `undefined` → caută după tip + țintă (comportament implicit);
+       * `null` → creează mereu un document nou; string → versionează documentul indicat.
+       */
+      matchDocumentId?: string | null;
     }
   ) {
     const fakeFile = {
@@ -1395,16 +1400,23 @@ export class SsmDocumentsService {
       buffer: params.buffer
     } as Express.Multer.File;
 
-    const existing = await this.prisma.ssmDocument.findFirst({
-      where: {
-        tenantId,
-        type: params.type,
-        targetType: params.targetType,
-        ...(params.targetRefId ? { targetRefId: params.targetRefId } : {}),
-        status: { not: SsmDocumentStatus.ARCHIVED }
-      },
-      orderBy: { updatedAt: "desc" }
-    });
+    const existing =
+      params.matchDocumentId === null
+        ? null
+        : await this.prisma.ssmDocument.findFirst({
+            where: {
+              tenantId,
+              status: { not: SsmDocumentStatus.ARCHIVED },
+              ...(params.matchDocumentId
+                ? { id: params.matchDocumentId }
+                : {
+                    type: params.type,
+                    targetType: params.targetType,
+                    ...(params.targetRefId ? { targetRefId: params.targetRefId } : {})
+                  })
+            },
+            orderBy: { updatedAt: "desc" }
+          });
 
     if (existing) {
       const version = await this.addVersion(tenantId, actorId, existing.id, params.changeNote, fakeFile);
