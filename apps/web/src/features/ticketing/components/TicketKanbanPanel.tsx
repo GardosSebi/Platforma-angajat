@@ -79,10 +79,9 @@ export function TicketKanbanPanel({
       <div className="comms-toolbar">
         <div className="comms-toolbar-start">
           <h2 className="card-title">Board tichete</h2>
-          <p className="comms-toolbar-hint">Trage cardurile între coloane sau deschide un tichet pentru detalii.</p>
         </div>
         <button type="button" className="btn-primary comms-toolbar-cta" onClick={onCreateClick}>
-          Adaugă înregistrare manuală
+          Adaugă tichet
         </button>
       </div>
 

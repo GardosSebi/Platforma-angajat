@@ -1,14 +1,20 @@
-import { useEffect, type ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { matchPath, NavLink, useLocation } from "react-router-dom";
 import { LocaleSwitcher } from "../shared/components/LocaleSwitcher";
 import { NotificationBell } from "../shared/components/NotificationBell";
 import { NavIcons } from "./nav-icons";
+
+export type SidebarNavChild = {
+  to: string;
+  label: string;
+};
 
 export type SidebarNavItem = {
   to: string;
   label: string;
   icon: ReactNode;
   end?: boolean;
+  children?: SidebarNavChild[];
 };
 
 export type SidebarNavGroup = {
@@ -76,19 +82,23 @@ export function AppSidebar({ groups, tenantId, onSignOut, mobileOpen, onMobileOp
             <div key={group.title ?? `group-${groupIndex}`} className="app-sidebar-group">
               {group.title ? <p className="app-sidebar-group-title">{group.title}</p> : null}
               <ul className="app-sidebar-list">
-                {group.items.map((item) => (
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={item.end}
-                      className={({ isActive }) => `app-sidebar-link${isActive ? " active" : ""}`}
-                      onClick={() => onMobileOpenChange(false)}
-                    >
-                      <span className="app-sidebar-link-icon">{item.icon}</span>
-                      <span className="app-sidebar-link-label">{item.label}</span>
-                    </NavLink>
-                  </li>
-                ))}
+                {group.items.map((item) =>
+                  item.children?.length ? (
+                    <SidebarNavParent key={item.to} item={item} onNavigate={() => onMobileOpenChange(false)} />
+                  ) : (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={item.end}
+                        className={({ isActive }) => `app-sidebar-link${isActive ? " active" : ""}`}
+                        onClick={() => onMobileOpenChange(false)}
+                      >
+                        <span className="app-sidebar-link-icon">{item.icon}</span>
+                        <span className="app-sidebar-link-label">{item.label}</span>
+                      </NavLink>
+                    </li>
+                  )
+                )}
               </ul>
             </div>
           ))}
@@ -108,6 +118,49 @@ export function AppSidebar({ groups, tenantId, onSignOut, mobileOpen, onMobileOp
         </div>
       </aside>
     </>
+  );
+}
+
+function SidebarNavParent({ item, onNavigate }: { item: SidebarNavItem; onNavigate: () => void }) {
+  const location = useLocation();
+  const children = item.children ?? [];
+  const isWithin = children.some((child) => matchPath({ path: child.to, end: false }, location.pathname));
+  const [expanded, setExpanded] = useState(isWithin);
+  const submenuId = useId();
+
+  useEffect(() => {
+    if (isWithin) setExpanded(true);
+  }, [isWithin]);
+
+  return (
+    <li>
+      <button
+        type="button"
+        className={`app-sidebar-link app-sidebar-parent${isWithin ? " active" : ""}`}
+        aria-expanded={expanded}
+        aria-controls={submenuId}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span className="app-sidebar-link-icon">{item.icon}</span>
+        <span className="app-sidebar-link-label">{item.label}</span>
+        <span className={`app-sidebar-chevron${expanded ? " open" : ""}`} aria-hidden />
+      </button>
+      {expanded ? (
+        <ul id={submenuId} className="app-sidebar-sublist">
+          {children.map((child) => (
+            <li key={child.to}>
+              <NavLink
+                to={child.to}
+                className={({ isActive }) => `app-sidebar-sublink${isActive ? " active" : ""}`}
+                onClick={onNavigate}
+              >
+                {child.label}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
 }
 

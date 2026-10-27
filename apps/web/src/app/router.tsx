@@ -67,6 +67,7 @@ export function AppRouter() {
           <Route path="/itm" element={<ItmInspectorRoute />} />
           <Route path="/ssm" element={<SsmBackofficeRoute />} />
           <Route path="/ssm/poarta" element={<SsmGateRoute />} />
+          <Route path="/ssm/:section" element={<SsmBackofficeRoute />} />
           <Route
             path="/echipa"
             element={

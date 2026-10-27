@@ -155,6 +155,7 @@ export function FieldSelect({
         type="button"
         id={id}
         className="field-select-trigger"
+        title={displayLabel}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}

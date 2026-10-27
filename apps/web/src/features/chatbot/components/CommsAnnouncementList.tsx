@@ -73,7 +73,7 @@ export function CommsAnnouncementList({
         </div>
         {canEdit ? (
           <button type="button" className="btn-primary comms-toolbar-cta" onClick={onCreateClick}>
-            + Anunț nou
+             Anunț nou
           </button>
         ) : null}
       </div>

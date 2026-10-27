@@ -14,6 +14,7 @@ import {
 import { useAuthSession } from "../shared/auth/use-auth-session";
 import { AppSidebar, AppTopbar, type SidebarNavGroup } from "./AppSidebar";
 import { NavIcons } from "./nav-icons";
+import { ssmSectionPath, visibleSsmSections } from "../features/ssm/ssm-sections";
 
 function buildNavGroups(
   session: NonNullable<ReturnType<typeof useAuthSession>>,
@@ -51,22 +52,26 @@ function buildNavGroups(
 
   const groups: SidebarNavGroup[] = [];
 
-  if (showPortal) {
-    groups.push({
-      title: "Angajat",
-      items: [{ to: "/portal", label: t("nav.portal"), icon: NavIcons.home(), end: true }]
-    });
-  }
-
   const operations: SidebarNavGroup["items"] = [];
   if (hasBackoffice) {
+    const ssmChildren = visibleSsmSections(session.roles).map((section) => ({
+      to: ssmSectionPath(section.id),
+      label: section.label
+    }));
+    operations.push({ to: "/ssm", label: t("nav.ssm"), icon: NavIcons.ssm(), children: ssmChildren });
     operations.push({ to: "/echipa", label: t("nav.team"), icon: NavIcons.dossier(), end: true });
-    operations.push({ to: "/ssm", label: t("nav.ssm"), icon: NavIcons.ssm(), end: true });
     operations.push({ to: "/ssm/poarta", label: t("nav.gate"), icon: NavIcons.gate() });
     operations.push({ to: "/itm", label: t("nav.itm"), icon: NavIcons.itm() });
   }
   if (operations.length) {
     groups.push({ title: "Operațiuni", items: operations });
+  }
+
+  if (showPortal) {
+    groups.push({
+      title: "Angajat",
+      items: [{ to: "/portal", label: t("nav.portal"), icon: NavIcons.home(), end: true }]
+    });
   }
 
   if (hasBackoffice) {

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CreateSsmMedicalControlRequest,
   CreateSsmMedicalControlTypeRequest,
@@ -9,6 +9,7 @@ import type {
 } from "@repo/shared-types/ssm";
 import { downloadWithAuth } from "../../../shared/api/http-download";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { useEmployeeOptions, useJobPositionsLookup } from "../../master-data/hooks/useMasterData";
@@ -148,6 +149,18 @@ export function SsmMedicalManager() {
     setEditAptitudeSheet(undefined);
   }, [selectedControl]);
 
+  const openTypeForm = () => {
+    createType.reset();
+    setShowTypeForm(true);
+  };
+  const closeTypeForm = useCallback(() => setShowTypeForm(false), []);
+
+  const openCreateForm = () => {
+    createControl.reset();
+    setShowCreateForm(true);
+  };
+  const closeCreateForm = useCallback(() => setShowCreateForm(false), []);
+
   const selectForUpdate = (controlId: string) => {
     setSelectedControlId(controlId);
     setTab("update");
@@ -244,8 +257,8 @@ export function SsmMedicalManager() {
               <h4 className="card-title" style={{ margin: 0 }}>
                 Tipuri configurate
               </h4>
-              <button type="button" className="btn-primary" onClick={() => setShowTypeForm((v) => !v)}>
-                {showTypeForm ? "Ascunde formular" : "Tip nou"}
+              <button type="button" className="btn-primary" onClick={openTypeForm}>
+                Tip nou
               </button>
             </div>
             <div className="ssm-history-list">
@@ -267,64 +280,65 @@ export function SsmMedicalManager() {
           </div>
 
           {showTypeForm ? (
-            <form className="card form-stack ssm-doc-card" onSubmit={onCreateType}>
-              <h4 className="card-title">Tip control nou</h4>
-              <div className="field">
-                <label htmlFor="med-code">Cod</label>
-                <input
-                  id="med-code"
-                  required
-                  value={typeForm.code}
-                  onChange={(e) => setTypeForm((p) => ({ ...p, code: e.target.value }))}
+            <MasterDataCreateModal title="Tip control nou" titleId="med-type-modal-title" onClose={closeTypeForm}>
+              <form className="form-stack" onSubmit={onCreateType}>
+                <div className="field">
+                  <label htmlFor="med-code">Cod</label>
+                  <input
+                    id="med-code"
+                    required
+                    value={typeForm.code}
+                    onChange={(e) => setTypeForm((p) => ({ ...p, code: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="med-name">Denumire</label>
+                  <input
+                    id="med-name"
+                    required
+                    value={typeForm.name}
+                    onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
+                  />
+                </div>
+                <FieldSelect
+                  id="med-category"
+                  label="Categorie legală"
+                  value={typeForm.category}
+                  onChange={(category) => setTypeForm((p) => ({ ...p, category: category as SsmMedicalControlCategory }))}
+                  options={CONTROL_CATEGORIES.map((category) => ({ value: category, label: categoryLabel(category) }))}
                 />
-              </div>
-              <div className="field">
-                <label htmlFor="med-name">Denumire</label>
-                <input
-                  id="med-name"
-                  required
-                  value={typeForm.name}
-                  onChange={(e) => setTypeForm((p) => ({ ...p, name: e.target.value }))}
+                <FieldSelect
+                  id="med-job-position"
+                  label="Post"
+                  value={typeForm.jobPositionId}
+                  onChange={(jobPositionId) => setTypeForm((p) => ({ ...p, jobPositionId }))}
+                  allowEmpty
+                  emptyLabel="Selectează post"
+                  options={mapToOptions(
+                    jobPositions,
+                    (job) => job.id,
+                    (job) => `${job.code} — ${job.name}`
+                  )}
                 />
-              </div>
-              <FieldSelect
-                id="med-category"
-                label="Categorie legală"
-                value={typeForm.category}
-                onChange={(category) => setTypeForm((p) => ({ ...p, category: category as SsmMedicalControlCategory }))}
-                options={CONTROL_CATEGORIES.map((category) => ({ value: category, label: categoryLabel(category) }))}
-              />
-              <FieldSelect
-                id="med-job-position"
-                label="Post"
-                value={typeForm.jobPositionId}
-                onChange={(jobPositionId) => setTypeForm((p) => ({ ...p, jobPositionId }))}
-                allowEmpty
-                emptyLabel="Selectează post"
-                options={mapToOptions(
-                  jobPositions,
-                  (job) => job.id,
-                  (job) => `${job.code} — ${job.name}`
-                )}
-              />
-              <div className="field">
-                <label htmlFor="med-recurrence">Recurență (zile)</label>
-                <input
-                  id="med-recurrence"
-                  type="number"
-                  value={typeForm.recurrenceDays ?? 365}
-                  onChange={(e) => setTypeForm((p) => ({ ...p, recurrenceDays: Number(e.target.value || 365) }))}
-                />
-              </div>
-              <button type="submit" className="btn-primary" disabled={createType.isPending || !typeForm.jobPositionId}>
-                {createType.isPending ? "Se salvează..." : "Salvează tip"}
-              </button>
-              {createType.isError ? (
-                <p className="feedback error" role="alert">
-                  {mutationErrorMessage(createType.error)}
-                </p>
-              ) : null}
-            </form>
+                <div className="field">
+                  <label htmlFor="med-recurrence">Recurență (zile)</label>
+                  <input
+                    id="med-recurrence"
+                    type="number"
+                    value={typeForm.recurrenceDays ?? 365}
+                    onChange={(e) => setTypeForm((p) => ({ ...p, recurrenceDays: Number(e.target.value || 365) }))}
+                  />
+                </div>
+                <button type="submit" className="btn-primary" disabled={createType.isPending || !typeForm.jobPositionId}>
+                  {createType.isPending ? "Se salvează..." : "Salvează tip"}
+                </button>
+                {createType.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(createType.error)}
+                  </p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
           ) : null}
         </div>
       ) : null}
@@ -336,8 +350,8 @@ export function SsmMedicalManager() {
               <h4 className="card-title" style={{ margin: 0 }}>
                 Controale înregistrate
               </h4>
-              <button type="button" className="btn-primary" onClick={() => setShowCreateForm((v) => !v)}>
-                {showCreateForm ? "Ascunde formular" : "Control nou"}
+              <button type="button" className="btn-primary" onClick={openCreateForm}>
+                Control nou
               </button>
             </div>
             {downloadError ? <p className="feedback error">{downloadError}</p> : null}
@@ -378,92 +392,93 @@ export function SsmMedicalManager() {
           </div>
 
           {showCreateForm ? (
-            <form className="card form-stack ssm-doc-card" onSubmit={onCreateControl}>
-              <h4 className="card-title">Înregistrare control</h4>
-              <EmployeeSelect
-                id="med-employee"
-                value={controlForm.employeeId}
-                required
-                onChange={(employeeId) => setControlForm((p) => ({ ...p, employeeId }))}
-              />
-              <FieldSelect
-                id="med-type"
-                label="Tip control"
-                value={controlForm.controlTypeId}
-                onChange={(controlTypeId) => setControlForm((p) => ({ ...p, controlTypeId }))}
-                allowEmpty
-                emptyLabel="Selectează tip"
-                options={mapToOptions(
-                  typeOptions,
-                  (type) => type.id,
-                  (type) => `${type.code} - ${type.name} (${categoryLabel(type.category)})`
-                )}
-              />
-              <div className="field">
-                <label htmlFor="med-scheduled">Programare</label>
-                <input
-                  id="med-scheduled"
-                  value={controlForm.scheduledAt}
-                  onChange={(e) => setControlForm((p) => ({ ...p, scheduledAt: e.target.value }))}
+            <MasterDataCreateModal title="Control nou" titleId="med-control-modal-title" onClose={closeCreateForm}>
+              <form className="form-stack" onSubmit={onCreateControl}>
+                <EmployeeSelect
+                  id="med-employee"
+                  value={controlForm.employeeId}
+                  required
+                  onChange={(employeeId) => setControlForm((p) => ({ ...p, employeeId }))}
                 />
-              </div>
-              <div className="field">
-                <label htmlFor="med-performed">Efectuat la</label>
-                <input
-                  id="med-performed"
-                  value={controlForm.performedAt ?? ""}
-                  onChange={(e) => setControlForm((p) => ({ ...p, performedAt: e.target.value }))}
+                <FieldSelect
+                  id="med-type"
+                  label="Tip control"
+                  value={controlForm.controlTypeId}
+                  onChange={(controlTypeId) => setControlForm((p) => ({ ...p, controlTypeId }))}
+                  allowEmpty
+                  emptyLabel="Selectează tip"
+                  options={mapToOptions(
+                    typeOptions,
+                    (type) => type.id,
+                    (type) => `${type.code} - ${type.name} (${categoryLabel(type.category)})`
+                  )}
                 />
-              </div>
-              <FieldSelect
-                id="med-result"
-                label="Rezultat"
-                value={controlForm.result ?? ""}
-                onChange={(result) =>
-                  setControlForm((p) => ({ ...p, result: (result as SsmMedicalControlResult) || undefined }))
-                }
-                allowEmpty
-                emptyLabel="Neselectat"
-                options={CONTROL_RESULTS.map((result) => ({ value: result, label: resultLabel(result) }))}
-              />
-              <div className="field">
-                <label htmlFor="med-validity">Valabil până la</label>
-                <input
-                  id="med-validity"
-                  value={controlForm.validityUntil ?? ""}
-                  onChange={(e) => setControlForm((p) => ({ ...p, validityUntil: e.target.value }))}
+                <div className="field">
+                  <label htmlFor="med-scheduled">Programare</label>
+                  <input
+                    id="med-scheduled"
+                    value={controlForm.scheduledAt}
+                    onChange={(e) => setControlForm((p) => ({ ...p, scheduledAt: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="med-performed">Efectuat la</label>
+                  <input
+                    id="med-performed"
+                    value={controlForm.performedAt ?? ""}
+                    onChange={(e) => setControlForm((p) => ({ ...p, performedAt: e.target.value }))}
+                  />
+                </div>
+                <FieldSelect
+                  id="med-result"
+                  label="Rezultat"
+                  value={controlForm.result ?? ""}
+                  onChange={(result) =>
+                    setControlForm((p) => ({ ...p, result: (result as SsmMedicalControlResult) || undefined }))
+                  }
+                  allowEmpty
+                  emptyLabel="Neselectat"
+                  options={CONTROL_RESULTS.map((result) => ({ value: result, label: resultLabel(result) }))}
                 />
-              </div>
-              <div className="field">
-                <label htmlFor="med-recommendations">Recomandări</label>
-                <input
-                  id="med-recommendations"
-                  value={controlForm.recommendations ?? ""}
-                  onChange={(e) => setControlForm((p) => ({ ...p, recommendations: e.target.value }))}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="med-aptitude">Fișă aptitudini (PDF/JPG/PNG)</label>
-                <input
-                  id="med-aptitude"
-                  type="file"
-                  onChange={(e) => setAptitudeSheet(e.target.files?.[0])}
-                  accept=".pdf,.png,.jpg,.jpeg"
-                />
-              </div>
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={createControl.isPending || !controlForm.controlTypeId}
-              >
-                {createControl.isPending ? "Se salvează..." : "Salvează control"}
-              </button>
-              {createControl.isError ? (
-                <p className="feedback error" role="alert">
-                  {mutationErrorMessage(createControl.error)}
-                </p>
-              ) : null}
-            </form>
+                <div className="field">
+                  <label htmlFor="med-validity">Valabil până la</label>
+                  <input
+                    id="med-validity"
+                    value={controlForm.validityUntil ?? ""}
+                    onChange={(e) => setControlForm((p) => ({ ...p, validityUntil: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="med-recommendations">Recomandări</label>
+                  <input
+                    id="med-recommendations"
+                    value={controlForm.recommendations ?? ""}
+                    onChange={(e) => setControlForm((p) => ({ ...p, recommendations: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="med-aptitude">Fișă aptitudini (PDF/JPG/PNG)</label>
+                  <input
+                    id="med-aptitude"
+                    type="file"
+                    onChange={(e) => setAptitudeSheet(e.target.files?.[0])}
+                    accept=".pdf,.png,.jpg,.jpeg"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={createControl.isPending || !controlForm.controlTypeId}
+                >
+                  {createControl.isPending ? "Se salvează..." : "Salvează control"}
+                </button>
+                {createControl.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(createControl.error)}
+                  </p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
           ) : null}
         </div>
       ) : null}

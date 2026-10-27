@@ -260,6 +260,67 @@ button {
   opacity: 1;
 }
 
+.app-sidebar-parent {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-sidebar-parent.active {
+  background: transparent;
+}
+
+.app-sidebar-parent .app-sidebar-link-label {
+  flex: 1;
+}
+
+.app-sidebar-chevron {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+
+.app-sidebar-chevron.open {
+  transform: rotate(45deg);
+}
+
+.app-sidebar-sublist {
+  list-style: none;
+  margin: 0.15rem 0 0.35rem 1.55rem;
+  padding: 0 0 0 0.6rem;
+  border-left: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.app-sidebar-sublink {
+  display: block;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  font-size: 0.84rem;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.app-sidebar-sublink:hover {
+  background: var(--sidebar-bg-hover);
+  color: var(--sidebar-text-strong);
+}
+
+.app-sidebar-sublink.active {
+  background: var(--sidebar-active);
+  color: #5eead4;
+  font-weight: 600;
+}
+
 .nav-icon {
   display: block;
 }
@@ -410,6 +471,234 @@ button {
 
 .btn-text-link:hover {
   text-decoration: underline;
+}
+
+/* —— Comunicări: calendar programări —— */
+.comms-calendar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.comms-calendar-count {
+  flex-shrink: 0;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.comms-calendar-empty {
+  padding: 2rem 1rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.comms-calendar-empty p {
+  margin: 0;
+}
+
+.comms-calendar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.comms-calendar-day {
+  display: flex;
+  gap: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.comms-calendar-day.is-today {
+  border-color: rgba(15, 118, 110, 0.45);
+  box-shadow: 0 0 0 3px var(--color-primary-muted);
+}
+
+.comms-calendar-day.is-past {
+  opacity: 0.65;
+}
+
+.comms-calendar-date {
+  flex-shrink: 0;
+  width: 3.5rem;
+  height: 3.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+
+.comms-calendar-day.is-today .comms-calendar-date {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.comms-calendar-date-month {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.comms-calendar-day.is-today .comms-calendar-date-month {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.comms-calendar-date-day {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.comms-calendar-day-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comms-calendar-day-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.15rem 0 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.comms-calendar-relative {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.comms-calendar-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.comms-calendar-entry {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.comms-calendar-entry:hover {
+  border-color: rgba(15, 118, 110, 0.35);
+  background: var(--color-primary-muted);
+}
+
+.comms-calendar-entry:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.comms-calendar-time {
+  flex-shrink: 0;
+  min-width: 3rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+.comms-calendar-entry-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.comms-calendar-entry-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comms-calendar-audience {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.comms-calendar-status {
+  flex-shrink: 0;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.comms-calendar-status.status-scheduled {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.comms-calendar-status.status-ready_to_send {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.comms-calendar-status.status-published {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.comms-calendar-status.status-retracted {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .comms-calendar-day {
+    gap: 0.65rem;
+    padding: 0.7rem;
+  }
+
+  .comms-calendar-date {
+    width: 2.9rem;
+    height: 3.2rem;
+  }
+
+  .comms-calendar-entry {
+    flex-wrap: wrap;
+  }
 }
 
 .app-brand {
@@ -6504,13 +6793,14 @@ button.ssm-doc-item:hover {
   right: auto;
   min-width: 100%;
   width: max-content;
-  max-width: min(20rem, 90vw);
+  max-width: min(28rem, 90vw);
   overflow-x: hidden;
   overflow-y: auto;
 }
 
 .ticket-primary-filters .field-select-option {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ticket-filter-reset {

@@ -22,7 +22,6 @@ type Props = {
   onReporterChange: (employeeId: string) => void;
   onOperatorChange: (operatorId: string) => void;
   onSubmit: (event: FormEvent) => void;
-  onCancel: () => void;
 };
 
 export function TicketCreateForm({
@@ -34,20 +33,11 @@ export function TicketCreateForm({
   onChange,
   onReporterChange,
   onOperatorChange,
-  onSubmit,
-  onCancel
+  onSubmit
 }: Props) {
   return (
-    <form className="card form-stack comms-panel ticket-create-form" onSubmit={onSubmit}>
-      <div className="comms-compose-head">
-        <div>
-          <h2 className="card-title">Înregistrare manuală</h2>
-          <p className="comms-toolbar-hint">Înregistrează o solicitare primită telefonic, pe email sau la birou.</p>
-        </div>
-        <button type="button" className="btn-secondary" onClick={onCancel}>
-          Înapoi la board
-        </button>
-      </div>
+    <form className="form-stack ticket-create-form" onSubmit={onSubmit}>
+      <p className="comms-toolbar-hint">Înregistrează o solicitare primită telefonic, pe email sau la birou.</p>
 
       <fieldset className="comms-fieldset">
         <legend>Solicitare</legend>
@@ -59,6 +49,7 @@ export function TicketCreateForm({
             onChange={(event) => onChange({ title: event.target.value })}
             placeholder="Ex: Cerere concediu aprilie"
             required
+            autoFocus
           />
         </div>
         <div className="field">
@@ -78,7 +69,6 @@ export function TicketCreateForm({
             label="Destinatar (categorie) *"
             value={form.category ?? "HR"}
             onChange={(category) => onChange({ category })}
-            hint="Echipa/categoria care preia tichetul (HR, IT…), nu un destinatar persoană."
             options={TICKET_CATEGORIES.map((category) => ({
               value: category,
               label: TICKET_CATEGORY_LABELS[category]

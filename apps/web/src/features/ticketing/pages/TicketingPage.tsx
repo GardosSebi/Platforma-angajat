@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState, type DragEvent } from "react";
+import { FormEvent, useCallback, useMemo, useState, type DragEvent } from "react";
 import type {
   CreateHelpdeskTicketFromEmailRequest,
   CreateHelpdeskTicketRequest,
@@ -17,6 +17,8 @@ import {
   useTicketOperatorOptions
 } from "../hooks/useTicketing";
 import { TicketCreateForm } from "../components/TicketCreateForm";
+import { TicketCreateModal } from "../components/TicketCreateModal";
+import { TicketEmailForm } from "../components/TicketEmailForm";
 import { TicketDetailModal } from "../components/TicketDetailModal";
 import { TicketKanbanPanel } from "../components/TicketKanbanPanel";
 import { TicketStatsPanel } from "../components/TicketStatsPanel";
@@ -55,6 +57,17 @@ export function TicketingPage() {
   const [openedTicketId, setOpenedTicketId] = useState("");
   const [createFeedback, setCreateFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [emailFeedback, setEmailFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [boardFeedback, setBoardFeedback] = useState<string | null>(null);
+
+  const openCreate = useCallback(() => {
+    setCreateFeedback(null);
+    setEmailFeedback(null);
+    setBoardFeedback(null);
+    setCreateOpen(true);
+  }, []);
+
+  const closeCreate = useCallback(() => setCreateOpen(false), []);
 
   const kanbanQuery = useTicketingKanban(filters);
   const statsQuery = useTicketingStats();
@@ -112,7 +125,8 @@ export function TicketingPage() {
       {
         onSuccess: () => {
           setTicketForm(EMPTY_TICKET);
-          setCreateFeedback({ type: "success", message: "Tichet înregistrat în coloana Deschis." });
+          setBoardFeedback("Tichet înregistrat în coloana Deschis.");
+          setCreateOpen(false);
           setTab("board");
         },
         onError: (error) => {
@@ -135,7 +149,8 @@ export function TicketingPage() {
       {
         onSuccess: () => {
           setEmailForm(EMPTY_EMAIL_TICKET);
-          setEmailFeedback({ type: "success", message: "Tichet creat din email." });
+          setBoardFeedback("Tichet creat din email.");
+          setCreateOpen(false);
           setTab("board");
         },
         onError: (error) => {
@@ -191,7 +206,6 @@ export function TicketingPage() {
 
   const tabs: Array<{ id: TicketingTab; label: string }> = [
     { id: "board", label: "Board" },
-    { id: "create", label: "Înregistrare manuală" },
     { id: "stats", label: "Statistici" }
   ];
 
@@ -239,6 +253,12 @@ export function TicketingPage() {
         ))}
       </nav>
 
+      {tab === "board" && boardFeedback ? (
+        <div className="feedback success" role="status">
+          {boardFeedback}
+        </div>
+      ) : null}
+
       {tab === "board" ? (
         <TicketKanbanPanel
           columns={columns}
@@ -253,11 +273,7 @@ export function TicketingPage() {
           onViewModeChange={setViewMode}
           onFiltersChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
           onClearFilters={() => setFilters({})}
-          onCreateClick={() => {
-            setCreateFeedback(null);
-            setEmailFeedback(null);
-            setTab("create");
-          }}
+          onCreateClick={openCreate}
           onOpenTicket={setOpenedTicketId}
           onDragStart={onTicketDragStart}
           onDragEnd={() => {
@@ -270,89 +286,32 @@ export function TicketingPage() {
         />
       ) : null}
 
-      {tab === "create" ? (
-        <div className="form-stack">
-          <TicketCreateForm
-            form={ticketForm}
-            employees={employees}
-            operators={operators}
-            isPending={createTicket.isPending}
-            feedback={createFeedback}
-            onChange={(patch) => setTicketForm((prev) => ({ ...prev, ...patch }))}
-            onReporterChange={onReporterChange}
-            onOperatorChange={onOperatorChange}
-            onSubmit={onTicketSubmit}
-            onCancel={() => setTab("board")}
-          />
-
-          <form className="card form-stack comms-panel ticket-create-form" onSubmit={onEmailSubmit}>
-            <div className="comms-compose-head">
-              <div>
-                <h2 className="card-title">Înregistrează din email</h2>
-                <p className="comms-toolbar-hint">Creează un tichet pe baza unui mesaj email primit.</p>
-              </div>
-            </div>
-
-            <fieldset className="comms-fieldset">
-              <legend>Email</legend>
-              <div className="comms-form-row">
-                <div className="field">
-                  <label htmlFor="email-from">De la (email) *</label>
-                  <input
-                    id="email-from"
-                    type="email"
-                    value={emailForm.fromEmail}
-                    onChange={(event) => setEmailForm((prev) => ({ ...prev, fromEmail: event.target.value }))}
-                    placeholder="ex: angajat@companie.ro"
-                    required
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="email-from-name">Nume expeditor</label>
-                  <input
-                    id="email-from-name"
-                    value={emailForm.fromName ?? ""}
-                    onChange={(event) => setEmailForm((prev) => ({ ...prev, fromName: event.target.value }))}
-                    placeholder="Nume afișat"
-                  />
-                </div>
-              </div>
-              <div className="field">
-                <label htmlFor="email-subject">Subiect *</label>
-                <input
-                  id="email-subject"
-                  value={emailForm.subject}
-                  onChange={(event) => setEmailForm((prev) => ({ ...prev, subject: event.target.value }))}
-                  placeholder="Subiectul mesajului"
-                  required
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="email-body">Conținut *</label>
-                <textarea
-                  id="email-body"
-                  value={emailForm.body}
-                  onChange={(event) => setEmailForm((prev) => ({ ...prev, body: event.target.value }))}
-                  placeholder="Corpul mesajului email..."
-                  rows={4}
-                  required
-                />
-              </div>
-            </fieldset>
-
-            <div className="comms-compose-actions">
-              <button className="btn-primary" type="submit" disabled={createTicketFromEmail.isPending}>
-                {createTicketFromEmail.isPending ? "Se înregistrează..." : "Înregistrează din email"}
-              </button>
-            </div>
-
-            {emailFeedback ? (
-              <div className={`feedback ${emailFeedback.type}`} role={emailFeedback.type === "error" ? "alert" : "status"}>
-                {emailFeedback.message}
-              </div>
-            ) : null}
-          </form>
-        </div>
+      {createOpen ? (
+        <TicketCreateModal
+          onClose={closeCreate}
+          manualForm={
+            <TicketCreateForm
+              form={ticketForm}
+              employees={employees}
+              operators={operators}
+              isPending={createTicket.isPending}
+              feedback={createFeedback}
+              onChange={(patch) => setTicketForm((prev) => ({ ...prev, ...patch }))}
+              onReporterChange={onReporterChange}
+              onOperatorChange={onOperatorChange}
+              onSubmit={onTicketSubmit}
+            />
+          }
+          emailForm={
+            <TicketEmailForm
+              form={emailForm}
+              isPending={createTicketFromEmail.isPending}
+              feedback={emailFeedback}
+              onChange={(patch) => setEmailForm((prev) => ({ ...prev, ...patch }))}
+              onSubmit={onEmailSubmit}
+            />
+          }
+        />
       ) : null}
 
       {tab === "stats" ? (

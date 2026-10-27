@@ -42,7 +42,7 @@ export const CREATE_FORM_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const satisfi
 
 export type TicketOperatorOption = { id: string; name: string };
 
-export type TicketingTab = "board" | "create" | "stats";
+export type TicketingTab = "board" | "stats";
 
 export type TicketViewMode = "kanban" | "list";
 

@@ -100,7 +100,7 @@ export function ManagerTeamPage() {
           </p>
           {data ? <p className="field-hint">{data.scopeLabel}</p> : null}
         </div>
-        <Link className="btn-secondary" to="/ssm?section=compliance">
+        <Link className="btn-secondary" to="/ssm/compliance">
           Deschide dashboard SSM
         </Link>
       </header>
@@ -300,7 +300,7 @@ export function ManagerTeamPage() {
                         ) : (
                           <p className="field-hint">Fără restanțe pe acest angajat.</p>
                         )}
-                        <Link className="btn-secondary btn-sm" to={`/ssm?section=training`}>
+                        <Link className="btn-secondary btn-sm" to="/ssm/training">
                           Deschide dosar în SSM
                         </Link>
                       </td>
