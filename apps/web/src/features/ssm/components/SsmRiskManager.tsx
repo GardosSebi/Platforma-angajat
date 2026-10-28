@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AddSsmRiskAssessmentVersionRequest,
   CreateSsmRiskAssessmentRequest,
@@ -11,6 +11,7 @@ import {
   useJobPositionsLookup,
   useWorksitesLookup
 } from "../../master-data/hooks/useMasterData";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { SsmExposureSheetsPanel } from "./SsmExposureSheetsPanel";
@@ -26,7 +27,7 @@ import {
 } from "../hooks/useSsmRisk";
 import { riskScore } from "./RiskMatrixPicker";
 
-type RiskTabId = "list" | "create" | "manage" | "exposure";
+type RiskTabId = "list" | "exposure";
 
 type RiskFormState = {
   title: string;
@@ -41,9 +42,7 @@ type RiskFormState = {
 };
 
 const RISK_TABS: Array<{ id: RiskTabId; title: string; caption: string }> = [
-  { id: "list", title: "Listă", caption: "Vezi evaluările" },
-  { id: "create", title: "Evaluare nouă", caption: "Creare" },
-  { id: "manage", title: "Versionare", caption: "Actualizare + PPP" },
+  { id: "list", title: "Evaluări", caption: "Listă, versiuni și PPP" },
   { id: "exposure", title: "Fișe expunere", caption: "Emitere, semnare, arhivă" }
 ];
 
@@ -235,6 +234,7 @@ export function SsmRiskManager() {
   const session = useAuthSession();
   const canApprove = hasPermission(session?.roles, "ssm:risk:approve");
   const [tab, setTab] = useState<RiskTabId>("list");
+  const [createOpen, setCreateOpen] = useState(false);
   const [filters, setFilters] = useState({ targetType: "", status: "ACTIVE" });
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string>();
   const [createForm, setCreateForm] = useState<RiskFormState>(EMPTY_FORM);
@@ -253,8 +253,6 @@ export function SsmRiskManager() {
   const assessmentItems = assessmentsQuery.data?.items ?? [];
   const selectedAssessment = assessmentItems.find((item) => item.id === selectedAssessmentId);
   const latestVersion = historyQuery.data?.versions[0];
-  const activeTabMeta = RISK_TABS.find((item) => item.id === tab) ?? RISK_TABS[0];
-
   const createTargetOptions = useMemo(() => {
     if (createForm.targetType === "JOB_POSITION") {
       return mapToOptions(jobsLookup.data?.items ?? [], (job) => job.id, (job) => `${job.code} — ${job.name}`);
@@ -311,17 +309,26 @@ export function SsmRiskManager() {
     });
   }, [latestVersion, selectedAssessment, selectedAssessmentId]);
 
-  const openManage = (assessmentId: string) => {
-    setSelectedAssessmentId(assessmentId);
-    setTab("manage");
+  const openCreate = () => {
+    createAssessment.reset();
+    setCreateOpen(true);
   };
+  const closeCreate = useCallback(() => setCreateOpen(false), []);
+
+  const openManage = (assessmentId: string) => {
+    addVersion.reset();
+    createLinkedPlan.reset();
+    setVersionReason("Actualizare după reevaluare");
+    setSelectedAssessmentId(assessmentId);
+  };
+  const closeManage = useCallback(() => setSelectedAssessmentId(undefined), []);
 
   const onCreate = (event: FormEvent) => {
     event.preventDefault();
     createAssessment.mutate(toPayload(createForm), {
-      onSuccess: (result) => {
+      onSuccess: () => {
+        setCreateOpen(false);
         setCreateForm(EMPTY_FORM);
-        openManage(result.assessmentId);
       }
     });
   };
@@ -342,7 +349,7 @@ export function SsmRiskManager() {
 
   return (
     <section className="ssm-eip-panel" aria-label="Modul evaluări risc">
-      <div className="ssm-panel-tabs" role="tablist" aria-label="Secțiuni evaluări risc">
+      <div className="ssm-panel-tabs ssm-panel-tabs--2" role="tablist" aria-label="Secțiuni evaluări risc">
         {RISK_TABS.map((item) => (
           <button
             key={item.id}
@@ -358,11 +365,6 @@ export function SsmRiskManager() {
         ))}
       </div>
 
-      <header className="ssm-panel-header">
-        <h3 className="card-title">{activeTabMeta.title}</h3>
-        <p className="field-hint">{activeTabMeta.caption}</p>
-      </header>
-
       {tab === "list" ? (
         <div className="ssm-panel-layout ssm-panel-layout--single">
           <div className="card form-stack ssm-doc-card">
@@ -370,7 +372,7 @@ export function SsmRiskManager() {
               <h4 className="card-title" style={{ margin: 0 }}>
                 Evaluări ({assessmentItems.length})
               </h4>
-              <button type="button" className="btn-primary" onClick={() => setTab("create")}>
+              <button type="button" className="btn-primary" onClick={openCreate}>
                 Evaluare nouă
               </button>
             </div>
@@ -420,19 +422,21 @@ export function SsmRiskManager() {
                 </div>
               ))}
               {!assessmentsQuery.isLoading && assessmentItems.length === 0 ? (
-                <p className="field-hint">Nu există evaluări. Creează una din tab-ul „Evaluare nouă”.</p>
+                <p className="field-hint">Nu există evaluări. Adaugă prima evaluare.</p>
               ) : null}
             </div>
           </div>
         </div>
       ) : null}
 
-      {tab === "create" ? (
-        <div className="ssm-panel-layout ssm-panel-layout--single">
-          <form className="card form-stack ssm-doc-card" onSubmit={onCreate}>
-            <h4 className="card-title">Creare evaluare</h4>
-            <p className="field-hint">Completează doar datele de bază, factorii și măsurile.</p>
-
+      {createOpen ? (
+        <MasterDataCreateModal
+          title="Evaluare de risc nouă"
+          titleId="risk-create-modal-title"
+          size="wide"
+          onClose={closeCreate}
+        >
+          <form className="form-stack" onSubmit={onCreate}>
             <div className="field">
               <label htmlFor="risk-create-title">Titlu</label>
               <input
@@ -513,51 +517,26 @@ export function SsmRiskManager() {
               Creează și Plan PPP din măsuri
             </label>
 
-            <div className="ssm-inline-actions">
-              <button className="btn-primary" type="submit" disabled={createAssessment.isPending || !createForm.targetId}>
-                {createAssessment.isPending ? "Se salvează…" : "Salvează evaluarea"}
-              </button>
-              <button type="button" className="btn-secondary" onClick={() => setTab("list")}>
-                Înapoi la listă
-              </button>
-            </div>
+            <button className="btn-primary" type="submit" disabled={createAssessment.isPending || !createForm.targetId}>
+              {createAssessment.isPending ? "Se salvează…" : "Salvează evaluarea"}
+            </button>
             {createAssessment.isError ? (
               <p className="feedback error">{mutationErrorMessage(createAssessment.error)}</p>
             ) : null}
           </form>
-        </div>
+        </MasterDataCreateModal>
       ) : null}
 
-      {tab === "manage" ? (
-        <div className="ssm-panel-layout">
-          <div className="card form-stack ssm-doc-card">
-            <h4 className="card-title">Alege evaluarea</h4>
-            <p className="field-hint">Selectează din listă, apoi actualizează factorii/măsurile în dreapta.</p>
-            <div className="ssm-history-list">
-              {assessmentItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`ssm-doc-item ${selectedAssessmentId === item.id ? "selected" : ""}`}
-                  onClick={() => setSelectedAssessmentId(item.id)}
-                >
-                  <strong>{item.title}</strong>
-                  <span>
-                    risc {item.riskLevel ?? "—"} · v{item.activeVersionNumber ?? "—"}
-                  </span>
-                </button>
-              ))}
-              {assessmentItems.length === 0 ? <p className="field-hint">Nu există evaluări de gestionat.</p> : null}
-            </div>
-          </div>
-
-          {selectedAssessment && manageForm ? (
-            <form className="card form-stack ssm-doc-card" onSubmit={onAddVersion}>
-              <h4 className="card-title">{selectedAssessment.title}</h4>
-              <p className="field-hint">
-                {targetTypeLabel(selectedAssessment.targetType)} · {selectedAssessment.targetLabel ?? "—"} · actualizat{" "}
-                {formatRoDate(selectedAssessment.updatedAt)}
-              </p>
+      {selectedAssessment ? (
+        <MasterDataCreateModal
+          title={selectedAssessment.title}
+          titleId="risk-manage-modal-title"
+          description={`${targetTypeLabel(selectedAssessment.targetType)} · ${selectedAssessment.targetLabel ?? "—"} · actualizat ${formatRoDate(selectedAssessment.updatedAt)}`}
+          size="wide"
+          onClose={closeManage}
+        >
+          {manageForm ? (
+            <form className="form-stack" onSubmit={onAddVersion}>
 
               <div className="ssm-badge-row">
                 <span className="ssm-chip warn">Risc {manageForm.riskLevel}</span>
@@ -611,10 +590,7 @@ export function SsmRiskManager() {
                   disabled={archiveAssessment.isPending || selectedAssessment.status === "ARCHIVED"}
                   onClick={() =>
                     archiveAssessment.mutate(selectedAssessment.id, {
-                      onSuccess: () => {
-                        setSelectedAssessmentId(undefined);
-                        setTab("list");
-                      }
+                      onSuccess: () => setSelectedAssessmentId(undefined)
                     })
                   }
                 >
@@ -666,11 +642,9 @@ export function SsmRiskManager() {
               </div>
             </form>
           ) : (
-            <div className="card ssm-doc-card">
-              <p className="field-hint">Selectează o evaluare din stânga pentru versionare.</p>
-            </div>
+            <p className="field-hint">Se încarcă evaluarea…</p>
           )}
-        </div>
+        </MasterDataCreateModal>
       ) : null}
 
       {tab === "exposure" ? <SsmExposureSheetsPanel /> : null}

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
@@ -27,8 +27,9 @@ import {
 } from "../hooks/useSsmDocuments";
 import { ssmApi } from "../api/ssm.api";
 import { WordTemplateEditor } from "./WordTemplateEditor";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 
-type DocsTab = "library" | "upload" | "templates" | "control" | "policies";
+type DocsTab = "library" | "templates" | "control" | "policies";
 
 const SSM_DOCUMENT_TARGET_TYPES: ReadonlyArray<CreateSsmDocumentRequest["targetType"]> = [
   "JOB_POSITION",
@@ -495,6 +496,7 @@ export function SsmDocumentsManager() {
   const docsPage = usePagination();
   const [tab, setTab] = useState<DocsTab>("library");
   const [showFilters, setShowFilters] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>();
   const [createPayload, setCreatePayload] = useState<CreateSsmDocumentRequest>(EMPTY_DOC);
@@ -506,16 +508,13 @@ export function SsmDocumentsManager() {
     const tabs: Array<{ id: DocsTab; title: string; caption: string }> = [
       { id: "library", title: "Bibliotecă", caption: "Listă și versiuni" }
     ];
-    if (canUploadDocuments) {
-      tabs.push({ id: "upload", title: "Upload", caption: "Document nou" });
-    }
     tabs.push({ id: "templates", title: "Șabloane", caption: "Word editabil în platformă" });
     tabs.push({ id: "control", title: "Control ITM", caption: "Acces rapid" });
     if (canApproveDocuments) {
       tabs.push({ id: "policies", title: "Acces tipuri", caption: "Roluri pe categorie" });
     }
     return tabs;
-  }, [canApproveDocuments, canUploadDocuments]);
+  }, [canApproveDocuments]);
 
   useEffect(() => {
     if (!pageTabs.some((item) => item.id === tab)) {
@@ -560,7 +559,6 @@ export function SsmDocumentsManager() {
     return Boolean(value);
   }).length;
 
-  const activeTabMeta = pageTabs.find((item) => item.id === tab) ?? pageTabs[0];
   const controlFolders = controlQuery.data?.folders ?? [];
   const controlDocsCount = controlFolders.reduce((sum, folder) => sum + folder.count, 0);
 
@@ -574,11 +572,17 @@ export function SsmDocumentsManager() {
           setSelectedDocumentId(result.documentId);
           setCreateFile(null);
           setCreatePayload(EMPTY_DOC);
-          setTab("library");
+          setCreateOpen(false);
         }
       }
     );
   };
+
+  const openCreate = () => {
+    createMutation.reset();
+    setCreateOpen(true);
+  };
+  const closeCreate = useCallback(() => setCreateOpen(false), []);
 
   const onUploadVersion = (event: FormEvent) => {
     event.preventDefault();
@@ -600,25 +604,6 @@ export function SsmDocumentsManager() {
 
   return (
     <section className="ssm-eip-panel ssm-documents-panel" aria-label="Documente SSM">
-      <div className="ssm-training-metrics ssm-overview-metrics" aria-label="Indicatori documente">
-        <div>
-          <dt>Documente</dt>
-          <dd>{docsPaged.total}</dd>
-        </div>
-        <div>
-          <dt>Filtre</dt>
-          <dd>{activeFilterCount || "—"}</dd>
-        </div>
-        <div>
-          <dt>ITM/ISU</dt>
-          <dd>{controlDocsCount}</dd>
-        </div>
-        <div>
-          <dt>Selectat</dt>
-          <dd>{selectedDoc ? `v${selectedDoc.activeVersion.versionNumber}` : "—"}</dd>
-        </div>
-      </div>
-
       <div
         className={`ssm-panel-tabs${
           pageTabs.length >= 5
@@ -647,12 +632,8 @@ export function SsmDocumentsManager() {
         ))}
       </div>
 
-      <header className="ssm-panel-header ssm-overview-toolbar">
-        <div>
-          <h3 className="card-title">{activeTabMeta.title}</h3>
-          <p className="field-hint">{activeTabMeta.caption}</p>
-        </div>
-        {tab === "library" ? (
+      {tab === "library" ? (
+        <header className="ssm-panel-header ssm-overview-toolbar ssm-overview-toolbar--end">
           <div className="ssm-inline-actions">
             <button
               type="button"
@@ -662,13 +643,13 @@ export function SsmDocumentsManager() {
               Filtre{activeFilterCount ? ` (${activeFilterCount})` : ""}
             </button>
             {canUploadDocuments ? (
-              <button type="button" className="btn-primary" onClick={() => setTab("upload")}>
+              <button type="button" className="btn-primary" onClick={openCreate}>
                 Document nou
               </button>
             ) : null}
           </div>
-        ) : null}
-      </header>
+        </header>
+      ) : null}
 
       {tab === "library" ? (
         <>
@@ -1001,16 +982,15 @@ export function SsmDocumentsManager() {
         </>
       ) : null}
 
-      {tab === "upload" && canUploadDocuments ? (
-        <div className="ssm-panel-layout ssm-panel-layout--single" style={{ maxWidth: "36rem" }}>
-          <form onSubmit={onCreate} className="card form-stack ssm-doc-card">
-            <h4 className="card-title" style={{ margin: 0 }}>
-              Upload document nou
-            </h4>
-            <p className="field-hint" style={{ marginTop: 0 }}>
-              Word / PDF / video. Unele tipuri apar și în modulele dedicate (risc, PPP, accidente, PSI). Substanțele
-              periculoase se încarcă ca listă documentară, nu ca registru de inventar.
-            </p>
+      {createOpen && canUploadDocuments ? (
+        <MasterDataCreateModal
+          title="Document nou"
+          titleId="ssm-doc-create-modal-title"
+          description="Word, PDF sau video."
+          size="wide"
+          onClose={closeCreate}
+        >
+          <form onSubmit={onCreate} className="form-stack">
             <div className="field">
               <label htmlFor="doc-title">Titlu</label>
               <input
@@ -1128,18 +1108,13 @@ export function SsmDocumentsManager() {
             <button type="submit" className="btn-primary" disabled={createMutation.isPending || !createFile}>
               {createMutation.isPending ? "Se încarcă…" : "Adaugă document"}
             </button>
-            {createMutation.isSuccess ? (
-              <p className="feedback success" role="status">
-                Document adăugat.
-              </p>
-            ) : null}
             {createMutation.isError ? (
               <p className="feedback error" role="alert">
                 {mutationErrorMessage(createMutation.error)}
               </p>
             ) : null}
           </form>
-        </div>
+        </MasterDataCreateModal>
       ) : null}
 
       {tab === "templates" ? <DocumentTemplatesPanel canEdit={canEditDocuments} /> : null}

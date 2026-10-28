@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { PaginationBar, paginationFromResult } from "../../../shared/components/PaginationBar";
 import { usePagination } from "../../../shared/hooks/use-pagination";
 import type {
@@ -19,10 +19,11 @@ import { MasterDataCreateModal } from "../../master-data/components/MasterDataCr
 import { TrainingTypeSelect } from "./TrainingTypeSelect";
 import { TrainingInstructorFields } from "./TrainingInstructorFields";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
-import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
+import { useEmployeeOptions, useGroups } from "../../master-data/hooks/useMasterData";
 import {
   useCompleteTest,
   useCreateTrainingPlan,
+  useCreateTrainingPlanGroup,
   useCreateTrainingType,
   useDispatchTrainingReminders,
   useGenerateCollectiveSheet,
@@ -56,11 +57,10 @@ const TRAINING_CATEGORIES: SsmTrainingCategory[] = [
   "EMERGENCY_PSI"
 ];
 
-type TrainingTab = "track" | "plan" | "types" | "flow" | "dossier";
+type TrainingTab = "track" | "types" | "flow" | "dossier";
 
 const TRAINING_TABS: Array<{ id: TrainingTab; title: string; caption: string; adminOnly?: boolean }> = [
   { id: "track", title: "Urmărire", caption: "Planuri, scadențe, conformitate" },
-  { id: "plan", title: "Planificare", caption: "Alocare și fișă colectivă", adminOnly: true },
   { id: "types", title: "Catalog tipuri", caption: "Cod, categorie, test", adminOnly: true },
   { id: "flow", title: "Flux e-learning", caption: "Material, test, semnături" },
   { id: "dossier", title: "Dosar digital", caption: "Fișe și export ZIP" }
@@ -116,8 +116,6 @@ export function SsmTrainingSuiteManager() {
   );
 
   const [tab, setTab] = useState<TrainingTab>("track");
-  const activeTabMeta = visibleTabs.find((item) => item.id === tab) ?? visibleTabs[0] ?? TRAINING_TABS[0];
-
   useEffect(() => {
     if (!visibleTabs.some((item) => item.id === tab)) {
       setTab(visibleTabs[0]?.id ?? "track");
@@ -135,6 +133,7 @@ export function SsmTrainingSuiteManager() {
   const createType = useCreateTrainingType();
   const updateType = useUpdateTrainingType();
   const createPlan = useCreateTrainingPlan();
+  const createGroupPlans = useCreateTrainingPlanGroup();
   const updatePlan = useUpdateTrainingPlan();
   const completeMaterial = useMaterialComplete();
   const startMaterial = useStartMaterial();
@@ -192,7 +191,17 @@ export function SsmTrainingSuiteManager() {
   } | null>(null);
   const [showTestEditor, setShowTestEditor] = useState(false);
   const [showTypeForm, setShowTypeForm] = useState(false);
-  const [showCollectiveForm, setShowCollectiveForm] = useState(false);
+  const [planDialog, setPlanDialog] = useState<"plan" | "collective" | null>(null);
+  const [planTarget, setPlanTarget] = useState<"employee" | "group">("employee");
+  const [planGroupId, setPlanGroupId] = useState("");
+  const groupsQuery = useGroups({ page: 1, pageSize: 100 });
+  const groupOptions = useMemo(
+    () =>
+      (groupsQuery.data?.items ?? [])
+        .filter((group) => group.active)
+        .map((group) => ({ value: group.id, label: group.name })),
+    [groupsQuery.data?.items]
+  );
 
   const planOptions = plansPaged.items;
   const activePlan = planOptions.find((p) => p.id === activePlanId) ?? planOptions[0];
@@ -333,21 +342,37 @@ export function SsmTrainingSuiteManager() {
 
   const onCreatePlan = (event: FormEvent) => {
     event.preventDefault();
+    const payload = {
+      ...planForm,
+      trainerEmployeeId: planForm.trainerEmployeeId || undefined,
+      trainerName: planForm.trainerName?.trim() || undefined,
+      trainerFunction: planForm.trainerFunction?.trim() || undefined
+    };
+    if (planTarget === "group") {
+      if (!planGroupId) return;
+      const { employeeId: _employeeId, ...groupPayload } = payload;
+      createGroupPlans.mutate({ ...groupPayload, employeeGroupId: planGroupId }, { onSuccess: () => setPlanDialog(null) });
+      return;
+    }
     createPlan.mutate(
-      {
-        ...planForm,
-        trainerEmployeeId: planForm.trainerEmployeeId || undefined,
-        trainerName: planForm.trainerName?.trim() || undefined,
-        trainerFunction: planForm.trainerFunction?.trim() || undefined
-      },
+      payload,
       {
         onSuccess: (data) => {
+          setPlanDialog(null);
           setActivePlanId(data.id);
           setTab("flow");
         }
       }
     );
   };
+
+  const openPlanDialog = (next: "plan" | "collective") => {
+    createPlan.reset();
+    createGroupPlans.reset();
+    generateCollective.reset();
+    setPlanDialog(next);
+  };
+  const closePlanDialog = useCallback(() => setPlanDialog(null), []);
 
   const onGenerateCollective = (event: FormEvent) => {
     event.preventDefault();
@@ -356,14 +381,17 @@ export function SsmTrainingSuiteManager() {
       .map((name) => name.trim())
       .filter(Boolean);
     if (!attendees.length) return;
-    generateCollective.mutate({
-      title: collectiveForm.title.trim(),
-      trainerName: collectiveForm.trainerName.trim() || undefined,
-      trainerFunction: collectiveForm.trainerFunction.trim() || undefined,
-      location: collectiveForm.location.trim() || undefined,
-      visitDates: collectiveForm.visitDates.trim() || undefined,
-      attendees
-    });
+    generateCollective.mutate(
+      {
+        title: collectiveForm.title.trim(),
+        trainerName: collectiveForm.trainerName.trim() || undefined,
+        trainerFunction: collectiveForm.trainerFunction.trim() || undefined,
+        location: collectiveForm.location.trim() || undefined,
+        visitDates: collectiveForm.visitDates.trim() || undefined,
+        attendees
+      },
+      { onSuccess: () => setPlanDialog(null) }
+    );
   };
 
   const onStartElearning = () => {
@@ -424,25 +452,28 @@ export function SsmTrainingSuiteManager() {
         ))}
       </div>
 
-      <header className="ssm-panel-header">
-        <h3 className="card-title">{activeTabMeta.title}</h3>
-        <p className="field-hint">{activeTabMeta.caption}</p>
-      </header>
-
       {tab === "track" ? (
         <div className="ssm-panel-layout">
           <div className="card ssm-doc-card">
             <div className="ssm-card-header">
               <h4 className="card-title">Instruiri planificate</h4>
               {showCatalogForms ? (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => dispatchReminders.mutate()}
-                  disabled={dispatchReminders.isPending}
-                >
-                  {dispatchReminders.isPending ? "Se trimit…" : "Trimite remindere"}
-                </button>
+                <div className="ssm-inline-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => dispatchReminders.mutate()}
+                    disabled={dispatchReminders.isPending}
+                  >
+                    {dispatchReminders.isPending ? "Se trimit…" : "Trimite remindere"}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={() => openPlanDialog("collective")}>
+                    Fișă colectivă
+                  </button>
+                  <button type="button" className="btn-primary" onClick={() => openPlanDialog("plan")}>
+                    Instruire nouă
+                  </button>
+                </div>
               ) : null}
             </div>
             <p className="field-hint">
@@ -450,6 +481,11 @@ export function SsmTrainingSuiteManager() {
               {compliance?.summary.blockedAdmissionCount ?? 0} blocări admitere ·{" "}
               {remindersQuery.data?.reminders.length ?? 0} remindere
             </p>
+            {createGroupPlans.data ? (
+              <p className="feedback success" role="status">
+                {`Instruire alocată pentru ${createGroupPlans.data.createdCount} angajați din grupul „${createGroupPlans.data.groupName}”.`}
+              </p>
+            ) : null}
             <div className="ssm-doc-items">
               {planOptions.map((plan) => (
                 <button
@@ -536,17 +572,40 @@ export function SsmTrainingSuiteManager() {
         </div>
       ) : null}
 
-      {tab === "plan" && showCatalogForms ? (
-        <div className="ssm-panel-layout">
-          <form className="card form-stack ssm-doc-card" onSubmit={onCreatePlan}>
-            <h4 className="card-title">Alocare instruire</h4>
-            <EmployeeSelect
-              id="plan-employee"
-              label="Angajat"
-              value={planForm.employeeId}
-              required
-              onChange={(employeeId) => setPlanForm((p) => ({ ...p, employeeId }))}
+      {planDialog === "plan" && showCatalogForms ? (
+        <MasterDataCreateModal title="Instruire nouă" titleId="ssm-plan-modal-title" onClose={closePlanDialog}>
+          <form className="form-stack" onSubmit={onCreatePlan}>
+            <FieldSelect
+              id="plan-target"
+              label="Alocă pentru"
+              value={planTarget}
+              onChange={(value) => setPlanTarget(value as "employee" | "group")}
+              options={[
+                { value: "employee", label: "Un angajat" },
+                { value: "group", label: "Un grup de angajați" }
+              ]}
             />
+            {planTarget === "employee" ? (
+              <EmployeeSelect
+                id="plan-employee"
+                label="Angajat"
+                value={planForm.employeeId}
+                required
+                onChange={(employeeId) => setPlanForm((p) => ({ ...p, employeeId }))}
+              />
+            ) : (
+              <FieldSelect
+                id="plan-group"
+                label="Grup"
+                value={planGroupId}
+                onChange={setPlanGroupId}
+                options={groupOptions}
+                required
+                allowEmpty
+                emptyLabel="Selectează grupul"
+                hint={groupOptions.length ? undefined : "Nu există grupuri active. Grupurile se creează din Date de bază."}
+              />
+            )}
             <TrainingTypeSelect
               id="plan-type"
               label="Tip instruire"
@@ -598,97 +657,97 @@ export function SsmTrainingSuiteManager() {
             <button
               className="btn-primary"
               type="submit"
-              disabled={createPlan.isPending || !planForm.trainingTypeId || !planForm.employeeId}
+              disabled={
+                createPlan.isPending ||
+                createGroupPlans.isPending ||
+                !planForm.trainingTypeId ||
+                (planTarget === "employee" ? !planForm.employeeId : !planGroupId)
+              }
             >
-              {createPlan.isPending ? "Se planifică…" : "Planifică instruire"}
+              {createPlan.isPending || createGroupPlans.isPending
+                ? "Se planifică…"
+                : planTarget === "group"
+                  ? "Alocă pe grup"
+                  : "Planifică instruire"}
             </button>
-            {createPlan.isError ? (
+            {createPlan.isError || createGroupPlans.isError ? (
               <p className="feedback error" role="alert">
-                {mutationErrorMessage(createPlan.error)}
+                {mutationErrorMessage(createPlan.error ?? createGroupPlans.error)}
               </p>
             ) : null}
           </form>
+        </MasterDataCreateModal>
+      ) : null}
 
-          <div className="card form-stack ssm-doc-card">
-            <div className="ssm-card-header">
-              <h4 className="card-title">Fișă colectivă Anexa 12 HG 1425/2006</h4>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowCollectiveForm((v) => !v)}
-              >
-                {showCollectiveForm ? "Ascunde formular" : "Generează PDF"}
-              </button>
+      {planDialog === "collective" && showCatalogForms ? (
+        <MasterDataCreateModal
+          title="Fișă de instruire colectivă"
+          titleId="ssm-collective-modal-title"
+          description="Anexa 12 HG 1425/2006, pentru vizitatori și lucrători din firme externe."
+          onClose={closePlanDialog}
+        >
+          <form className="form-stack" onSubmit={onGenerateCollective}>
+            <div className="field">
+              <label htmlFor="collective-title">Tematică</label>
+              <input
+                id="collective-title"
+                value={collectiveForm.title}
+                onChange={(e) => setCollectiveForm((p) => ({ ...p, title: e.target.value }))}
+                required
+              />
             </div>
-            {showCollectiveForm ? (
-              <form className="form-stack" onSubmit={onGenerateCollective}>
-                <div className="field">
-                  <label htmlFor="collective-title">Tematică</label>
-                  <input
-                    id="collective-title"
-                    value={collectiveForm.title}
-                    onChange={(e) => setCollectiveForm((p) => ({ ...p, title: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="collective-trainer">Instructor</label>
-                  <input
-                    id="collective-trainer"
-                    value={collectiveForm.trainerName}
-                    onChange={(e) => setCollectiveForm((p) => ({ ...p, trainerName: e.target.value }))}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="collective-function">Funcția instructorului</label>
-                  <input
-                    id="collective-function"
-                    value={collectiveForm.trainerFunction}
-                    onChange={(e) => setCollectiveForm((p) => ({ ...p, trainerFunction: e.target.value }))}
-                    placeholder="lucrător desemnat / responsabil SSM"
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="collective-location">Locație / proveniență grup</label>
-                  <input
-                    id="collective-location"
-                    value={collectiveForm.location}
-                    onChange={(e) => setCollectiveForm((p) => ({ ...p, location: e.target.value }))}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="collective-dates">Zilele vizitei / prezenței</label>
-                  <input
-                    id="collective-dates"
-                    value={collectiveForm.visitDates}
-                    onChange={(e) => setCollectiveForm((p) => ({ ...p, visitDates: e.target.value }))}
-                    placeholder="ex. 25–26.08.2026"
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="collective-attendees">Participanți (câte unul pe linie; opțional „Nume | CI/grupă sanguină”)</label>
-                  <textarea
-                    id="collective-attendees"
-                    rows={5}
-                    value={collectiveForm.attendeesText}
-                    onChange={(e) => setCollectiveForm((p) => ({ ...p, attendeesText: e.target.value }))}
-                    required
-                  />
-                </div>
-                <button className="btn-primary" type="submit" disabled={generateCollective.isPending}>
-                  {generateCollective.isPending ? "Se generează…" : "Descarcă PDF"}
-                </button>
-                {generateCollective.isError ? (
-                  <p className="feedback error">{mutationErrorMessage(generateCollective.error)}</p>
-                ) : null}
-              </form>
-            ) : (
-              <p className="field-hint">
-                Generează Anexa nr. 12 la HG 1425/2006 — fișa de instruire colectivă pentru vizitatori / lucrători din întreprinderi externe.
-              </p>
-            )}
-          </div>
-        </div>
+            <div className="field">
+              <label htmlFor="collective-trainer">Instructor</label>
+              <input
+                id="collective-trainer"
+                value={collectiveForm.trainerName}
+                onChange={(e) => setCollectiveForm((p) => ({ ...p, trainerName: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="collective-function">Funcția instructorului</label>
+              <input
+                id="collective-function"
+                value={collectiveForm.trainerFunction}
+                onChange={(e) => setCollectiveForm((p) => ({ ...p, trainerFunction: e.target.value }))}
+                placeholder="lucrător desemnat / responsabil SSM"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="collective-location">Locație / proveniență grup</label>
+              <input
+                id="collective-location"
+                value={collectiveForm.location}
+                onChange={(e) => setCollectiveForm((p) => ({ ...p, location: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="collective-dates">Zilele vizitei / prezenței</label>
+              <input
+                id="collective-dates"
+                value={collectiveForm.visitDates}
+                onChange={(e) => setCollectiveForm((p) => ({ ...p, visitDates: e.target.value }))}
+                placeholder="ex. 25–26.08.2026"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="collective-attendees">Participanți (câte unul pe linie; opțional „Nume | CI/grupă sanguină”)</label>
+              <textarea
+                id="collective-attendees"
+                rows={5}
+                value={collectiveForm.attendeesText}
+                onChange={(e) => setCollectiveForm((p) => ({ ...p, attendeesText: e.target.value }))}
+                required
+              />
+            </div>
+            <button className="btn-primary" type="submit" disabled={generateCollective.isPending}>
+              {generateCollective.isPending ? "Se generează…" : "Descarcă PDF"}
+            </button>
+            {generateCollective.isError ? (
+              <p className="feedback error">{mutationErrorMessage(generateCollective.error)}</p>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
 
       {tab === "types" && showCatalogForms ? (
@@ -826,8 +885,8 @@ export function SsmTrainingSuiteManager() {
             <div className="ssm-card-header">
               <h4 className="card-title">Selectează instruirea</h4>
               {showCatalogForms ? (
-                <button type="button" className="btn-secondary" onClick={() => setTab("plan")}>
-                  Planifică instruire
+                <button type="button" className="btn-secondary" onClick={() => openPlanDialog("plan")}>
+                  Instruire nouă
                 </button>
               ) : null}
             </div>
@@ -856,12 +915,10 @@ export function SsmTrainingSuiteManager() {
               ))}
               {!plansQuery.isLoading && !planOptions.length ? (
                 <div className="form-stack">
-                  <p className="field-hint">
-                    Nicio instruire disponibilă. Fluxul e-learning folosește planurile deja alocate.
-                  </p>
+                  <p className="field-hint">Nicio instruire alocată.</p>
                   {showCatalogForms ? (
-                    <button type="button" className="btn-primary" onClick={() => setTab("plan")}>
-                      Mergi la Planificare
+                    <button type="button" className="btn-primary" onClick={() => openPlanDialog("plan")}>
+                      Instruire nouă
                     </button>
                   ) : (
                     <p className="field-hint">Cere unui responsabil SSM să îți aloce o instruire.</p>
@@ -882,64 +939,7 @@ export function SsmTrainingSuiteManager() {
 
           <div className="card form-stack ssm-doc-card">
             {!activePlan ? (
-              showCatalogForms && !plansQuery.isLoading ? (
-                <form className="form-stack" onSubmit={onCreatePlan}>
-                  <h4 className="card-title">Planifică o instruire</h4>
-                  <p className="field-hint">
-                    Creează un plan, apoi poți parcurge materialul, testul și semnăturile aici.
-                  </p>
-                  <EmployeeSelect
-                    id="flow-plan-employee"
-                    label="Angajat"
-                    value={planForm.employeeId}
-                    required
-                    onChange={(employeeId) => setPlanForm((p) => ({ ...p, employeeId }))}
-                  />
-                  <TrainingTypeSelect
-                    id="flow-plan-type"
-                    label="Tip instruire"
-                    value={planForm.trainingTypeId}
-                    valueField="id"
-                    allowEmpty
-                    emptyLabel="Selectează tip"
-                    activeOnly={false}
-                    onChange={(trainingTypeId) => setPlanForm((p) => ({ ...p, trainingTypeId }))}
-                  />
-                  <div className="field">
-                    <label htmlFor="flow-plan-material-title">Titlu material</label>
-                    <input
-                      id="flow-plan-material-title"
-                      value={planForm.materialTitle ?? ""}
-                      onChange={(e) => setPlanForm((p) => ({ ...p, materialTitle: e.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="flow-plan-due">Scadență</label>
-                    <input
-                      id="flow-plan-due"
-                      type="datetime-local"
-                      value={planForm.dueAt.slice(0, 16)}
-                      onChange={(e) =>
-                        setPlanForm((p) => ({ ...p, dueAt: new Date(e.target.value).toISOString() }))
-                      }
-                    />
-                  </div>
-                  <button
-                    className="btn-primary"
-                    type="submit"
-                    disabled={createPlan.isPending || !planForm.trainingTypeId || !planForm.employeeId}
-                  >
-                    {createPlan.isPending ? "Se planifică…" : "Planifică și deschide fluxul"}
-                  </button>
-                  {createPlan.isError ? (
-                    <p className="feedback error" role="alert">
-                      {mutationErrorMessage(createPlan.error)}
-                    </p>
-                  ) : null}
-                </form>
-              ) : (
-                <p className="field-hint">Selectează o instruire din listă.</p>
-              )
+              <p className="field-hint">Selectează o instruire din listă.</p>
             ) : (
               <>
                 <h4 className="card-title">

@@ -209,7 +209,6 @@ export function hasPermission(roles: string[] | undefined, permission: string): 
 }
 
 export const SsmSectionPermission = {
-  quick: Permission.SSM_TRAINING_ASSIGN,
   documents: Permission.SSM_DOCUMENT_VIEW,
   substances: Permission.SSM_DOCUMENT_VIEW,
   conventions: Permission.SSM_REPORT_VIEW,

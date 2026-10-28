@@ -35,7 +35,7 @@ import { useTrainingTypes } from "../hooks/useSsmTrainingSuite";
 import { SsmIsuControlPanel } from "./SsmIsuControlPanel";
 
 type PsiTab = "isu" | "docs" | "equipment" | "trainings" | "responsibles" | "drills";
-type EquipmentView = "inventory" | "alerts";
+type PsiDialog = "training" | "responsible" | "drill";
 
 const PSI_TABS: Array<{ id: PsiTab; title: string; caption: string }> = [
   { id: "isu", title: "Control ISU", caption: "Pregătire + pachet" },
@@ -133,7 +133,7 @@ function formatRoDate(value?: string | null): string {
 
 export function SsmPsiManager() {
   const [tab, setTab] = useState<PsiTab>("isu");
-  const [equipmentView, setEquipmentView] = useState<EquipmentView>("inventory");
+  const [dialog, setDialog] = useState<PsiDialog | null>(null);
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<string>();
   const [editLocation, setEditLocation] = useState("");
   const [showCreateEquipment, setShowCreateEquipment] = useState(false);
@@ -164,8 +164,6 @@ export function SsmPsiManager() {
   const [trainingForm, setTrainingForm] = useState(EMPTY_TRAINING);
   const [responsibleForm, setResponsibleForm] = useState(EMPTY_RESPONSIBLE);
   const [evacuationForm, setEvacuationForm] = useState(EMPTY_EVACUATION);
-
-  const activeTabMeta = PSI_TABS.find((item) => item.id === tab) ?? PSI_TABS[0];
 
   const worksiteOptions = mapToOptions(
     worksitesLookup.data?.items ?? [],
@@ -233,34 +231,66 @@ export function SsmPsiManager() {
     registerVerification.mutate(verificationForm);
   };
 
+  const openDialog = (next: PsiDialog) => {
+    createTraining.reset();
+    createResponsible.reset();
+    createEvacuation.reset();
+    setDialog(next);
+  };
+  const closeDialog = useCallback(() => setDialog(null), []);
+
   const onTrainingSubmit = (event: FormEvent) => {
     event.preventDefault();
-    createTraining.mutate({
-      ...trainingForm,
-      employeeId: trainingForm.employeeId || undefined,
-      trainingTypeId: trainingForm.trainingTypeId || undefined,
-      validUntil: trainingForm.validUntil || undefined
-    });
+    createTraining.mutate(
+      {
+        ...trainingForm,
+        employeeId: trainingForm.employeeId || undefined,
+        trainingTypeId: trainingForm.trainingTypeId || undefined,
+        validUntil: trainingForm.validUntil || undefined
+      },
+      {
+        onSuccess: () => {
+          setDialog(null);
+          setTrainingForm((prev) => ({ ...prev, employeeId: "", notes: "" }));
+        }
+      }
+    );
   };
 
   const onResponsibleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    createResponsible.mutate({
-      ...responsibleForm,
-      employeeId: responsibleForm.employeeId || undefined,
-      email: responsibleForm.email || undefined,
-      phone: responsibleForm.phone || undefined
-    });
+    createResponsible.mutate(
+      {
+        ...responsibleForm,
+        employeeId: responsibleForm.employeeId || undefined,
+        email: responsibleForm.email || undefined,
+        phone: responsibleForm.phone || undefined
+      },
+      {
+        onSuccess: () => {
+          setDialog(null);
+          setResponsibleForm((prev) => ({ ...EMPTY_RESPONSIBLE, worksiteId: prev.worksiteId }));
+        }
+      }
+    );
   };
 
   const onEvacuationSubmit = (event: FormEvent) => {
     event.preventDefault();
-    createEvacuation.mutate({
-      ...evacuationForm,
-      nextDueAt: evacuationForm.nextDueAt || undefined,
-      coordinatorName: evacuationForm.coordinatorName || undefined,
-      notes: evacuationForm.notes || undefined
-    });
+    createEvacuation.mutate(
+      {
+        ...evacuationForm,
+        nextDueAt: evacuationForm.nextDueAt || undefined,
+        coordinatorName: evacuationForm.coordinatorName || undefined,
+        notes: evacuationForm.notes || undefined
+      },
+      {
+        onSuccess: () => {
+          setDialog(null);
+          setEvacuationForm((prev) => ({ ...EMPTY_EVACUATION, worksiteId: prev.worksiteId }));
+        }
+      }
+    );
   };
 
   const openEquipmentCheck = (equipmentId: string) => {
@@ -299,19 +329,12 @@ export function SsmPsiManager() {
         ))}
       </div>
 
-      <header className="ssm-panel-header">
-        <h3 className="card-title">{activeTabMeta.title}</h3>
-        <p className="field-hint">{activeTabMeta.caption}</p>
-      </header>
-
       {tab === "isu" ? <SsmIsuControlPanel onOpenTab={(next) => setTab(next)} /> : null}
 
       {tab === "docs" ? (
         <div className="ssm-panel-layout ssm-panel-layout--single">
           <div className="card form-stack ssm-doc-card">
-            <p className="field-hint">
-              Documentele sunt grupate pe tip. Upload-ul rămâne în modulul Documente SSM.
-            </p>
+            <p className="field-hint">Documentele se încarcă din modulul Documente.</p>
             <div className="ssm-history-list">
               {(docsQuery.data?.worksites ?? []).map((worksite) => (
                 <div key={worksite.id} className="ssm-history-item" style={{ flexDirection: "column", alignItems: "stretch" }}>
@@ -360,132 +383,158 @@ export function SsmPsiManager() {
       ) : null}
 
       {tab === "equipment" ? (
-        <>
-          <div className="ssm-inline-actions" style={{ marginBottom: "0.85rem" }}>
-            {(
-              [
-                { id: "inventory", label: "Inventar" },
-                { id: "alerts", label: alertCount ? `Alerte (${alertCount})` : "Alerte" }
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={equipmentView === item.id ? "btn-primary" : "btn-secondary"}
-                onClick={() => setEquipmentView(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {equipmentView === "inventory" ? (
-            <div className="ssm-panel-layout">
-              <div className="card form-stack ssm-doc-card">
-                <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
-                  <h4 className="card-title" style={{ margin: 0 }}>
-                    Inventar activ
-                  </h4>
-                  <button type="button" className="btn-primary" onClick={openCreateEquipment}>
-                    Echipament nou
-                  </button>
-                </div>
-                <div className="ssm-history-list">
-                  {equipmentItems.map((item) => (
-                    <div key={item.id} className="ssm-history-item">
-                      <div>
-                        <strong>
-                          {item.code} — {item.name}
-                        </strong>
-                        <div className="field-hint">
-                          {CATEGORY_LABELS[item.category]} · {item.location || "fără locație"} · scadență{" "}
-                          {formatRoDate(item.nextDueAt)}
-                        </div>
+        <div className="ssm-panel-layout ssm-panel-layout--single">
+          {alertCount > 0 || dispatchReminders.isSuccess ? (
+            <div className="card form-stack ssm-doc-card">
+              <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+                <h4 className="card-title" style={{ margin: 0 }}>
+                  Scadențe apropiate ({alertCount})
+                </h4>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={dispatchReminders.isPending || !alertCount}
+                  onClick={() => dispatchReminders.mutate()}
+                >
+                  {dispatchReminders.isPending ? "Se trimit…" : "Trimite reminder-ele"}
+                </button>
+              </div>
+              {dispatchReminders.isSuccess ? (
+                <p className="field-hint">
+                  Trimise {dispatchReminders.data.sent} din {dispatchReminders.data.candidates} (email{" "}
+                  {dispatchReminders.data.sentEmail}, in-app {dispatchReminders.data.sentInApp}).
+                </p>
+              ) : null}
+              <div className="ssm-history-list">
+                {(notificationsQuery.data?.reminders ?? []).map((item) => (
+                  <div key={item.equipmentId} className="ssm-history-item">
+                    <div>
+                      <strong>
+                        {item.code} — {item.name}
+                      </strong>
+                      <div className="field-hint">
+                        {item.worksiteName} · {formatRoDate(item.nextDueAt)}
                       </div>
-                      <button type="button" className="btn-secondary" onClick={() => openEquipmentCheck(item.id)}>
+                    </div>
+                    <div className="ssm-inline-actions">
+                      <span className={item.daysUntilDue < 0 ? "badge-bad" : "badge-good"}>
+                        {item.daysUntilDue < 0
+                          ? `Restant ${Math.abs(item.daysUntilDue)} zile`
+                          : `În ${item.daysUntilDue} zile`}
+                      </span>
+                      <button type="button" className="btn-text" onClick={() => openEquipmentCheck(item.equipmentId)}>
                         Verifică
                       </button>
                     </div>
-                  ))}
-                  {!equipmentItems.length ? <p className="field-hint">Nu există echipamente PSI.</p> : null}
-                </div>
+                  </div>
+                ))}
               </div>
-
-              {showCreateEquipment ? (
-                <MasterDataCreateModal title="Echipament nou" titleId="psi-eq-modal-title" onClose={closeCreateEquipment}>
-                  <form className="form-stack" onSubmit={onEquipmentSubmit}>
-                    <FieldSelect
-                      id="psi-eq-worksite"
-                      label="Punct de lucru"
-                      value={equipmentForm.worksiteId}
-                      onChange={(worksiteId) => setEquipmentForm((prev) => ({ ...prev, worksiteId }))}
-                      options={worksiteOptions}
-                      required
-                    />
-                    <FieldSelect
-                      id="psi-eq-category"
-                      label="Categorie"
-                      value={equipmentForm.category}
-                      onChange={(category) =>
-                        setEquipmentForm((prev) => ({ ...prev, category: category as SsmPsiEquipmentCategory }))
-                      }
-                      options={SSM_PSI_EQUIPMENT_CATEGORIES.map((value) => ({
-                        value,
-                        label: CATEGORY_LABELS[value]
-                      }))}
-                    />
-                    <div className="field">
-                      <label htmlFor="psi-eq-code">Cod</label>
-                      <input
-                        id="psi-eq-code"
-                        required
-                        value={equipmentForm.code}
-                        onChange={(event) => setEquipmentForm((prev) => ({ ...prev, code: event.target.value }))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="psi-eq-name">Denumire</label>
-                      <input
-                        id="psi-eq-name"
-                        required
-                        value={equipmentForm.name}
-                        onChange={(event) => setEquipmentForm((prev) => ({ ...prev, name: event.target.value }))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="psi-eq-location">Locație</label>
-                      <input
-                        id="psi-eq-location"
-                        value={equipmentForm.location ?? ""}
-                        onChange={(event) => setEquipmentForm((prev) => ({ ...prev, location: event.target.value }))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="psi-eq-interval">Interval verificare (zile)</label>
-                      <input
-                        id="psi-eq-interval"
-                        type="number"
-                        min={1}
-                        required
-                        value={equipmentForm.verificationIntervalDays}
-                        onChange={(event) =>
-                          setEquipmentForm((prev) => ({
-                            ...prev,
-                            verificationIntervalDays: Number(event.target.value) || 1
-                          }))
-                        }
-                      />
-                    </div>
-                    <button className="btn-primary" type="submit" disabled={createEquipment.isPending}>
-                      {createEquipment.isPending ? "Se salvează…" : "Salvează echipamentul"}
-                    </button>
-                    {createEquipment.isError ? (
-                      <p className="feedback error">{mutationErrorMessage(createEquipment.error)}</p>
-                    ) : null}
-                  </form>
-                </MasterDataCreateModal>
-              ) : null}
             </div>
+          ) : null}
+
+          <div className="card form-stack ssm-doc-card">
+            <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+              <h4 className="card-title" style={{ margin: 0 }}>
+                Inventar activ
+              </h4>
+              <button type="button" className="btn-primary" onClick={openCreateEquipment}>
+                Echipament nou
+              </button>
+            </div>
+            <div className="ssm-history-list">
+              {equipmentItems.map((item) => (
+                <div key={item.id} className="ssm-history-item">
+                  <div>
+                    <strong>
+                      {item.code} — {item.name}
+                    </strong>
+                    <div className="field-hint">
+                      {CATEGORY_LABELS[item.category]} · {item.location || "fără locație"} · scadență{" "}
+                      {formatRoDate(item.nextDueAt)}
+                    </div>
+                  </div>
+                  <button type="button" className="btn-secondary" onClick={() => openEquipmentCheck(item.id)}>
+                    Verifică
+                  </button>
+                </div>
+              ))}
+              {!equipmentItems.length ? <p className="field-hint">Nu există echipamente PSI.</p> : null}
+            </div>
+          </div>
+
+          {showCreateEquipment ? (
+            <MasterDataCreateModal title="Echipament nou" titleId="psi-eq-modal-title" onClose={closeCreateEquipment}>
+              <form className="form-stack" onSubmit={onEquipmentSubmit}>
+                <FieldSelect
+                  id="psi-eq-worksite"
+                  label="Punct de lucru"
+                  value={equipmentForm.worksiteId}
+                  onChange={(worksiteId) => setEquipmentForm((prev) => ({ ...prev, worksiteId }))}
+                  options={worksiteOptions}
+                  required
+                />
+                <FieldSelect
+                  id="psi-eq-category"
+                  label="Categorie"
+                  value={equipmentForm.category}
+                  onChange={(category) =>
+                    setEquipmentForm((prev) => ({ ...prev, category: category as SsmPsiEquipmentCategory }))
+                  }
+                  options={SSM_PSI_EQUIPMENT_CATEGORIES.map((value) => ({
+                    value,
+                    label: CATEGORY_LABELS[value]
+                  }))}
+                />
+                <div className="field">
+                  <label htmlFor="psi-eq-code">Cod</label>
+                  <input
+                    id="psi-eq-code"
+                    required
+                    value={equipmentForm.code}
+                    onChange={(event) => setEquipmentForm((prev) => ({ ...prev, code: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="psi-eq-name">Denumire</label>
+                  <input
+                    id="psi-eq-name"
+                    required
+                    value={equipmentForm.name}
+                    onChange={(event) => setEquipmentForm((prev) => ({ ...prev, name: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="psi-eq-location">Locație</label>
+                  <input
+                    id="psi-eq-location"
+                    value={equipmentForm.location ?? ""}
+                    onChange={(event) => setEquipmentForm((prev) => ({ ...prev, location: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="psi-eq-interval">Interval verificare (zile)</label>
+                  <input
+                    id="psi-eq-interval"
+                    type="number"
+                    min={1}
+                    required
+                    value={equipmentForm.verificationIntervalDays}
+                    onChange={(event) =>
+                      setEquipmentForm((prev) => ({
+                        ...prev,
+                        verificationIntervalDays: Number(event.target.value) || 1
+                      }))
+                    }
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={createEquipment.isPending}>
+                  {createEquipment.isPending ? "Se salvează…" : "Salvează echipamentul"}
+                </button>
+                {createEquipment.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(createEquipment.error)}</p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
           ) : null}
 
           {checkOpen && selectedEquipment ? (
@@ -587,133 +636,98 @@ export function SsmPsiManager() {
               </div>
             </MasterDataCreateModal>
           ) : null}
-
-          {equipmentView === "alerts" ? (
-            <div className="ssm-panel-layout ssm-panel-layout--single">
-              <div className="card form-stack ssm-doc-card">
-                <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
-                  <h4 className="card-title" style={{ margin: 0 }}>
-                    Scadențe echipamente
-                  </h4>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={dispatchReminders.isPending}
-                    onClick={() => dispatchReminders.mutate()}
-                  >
-                    {dispatchReminders.isPending ? "Se trimit…" : "Trimite reminder-ele"}
-                  </button>
-                </div>
-                {dispatchReminders.isSuccess ? (
-                  <p className="field-hint">
-                    Trimise {dispatchReminders.data.sent} din {dispatchReminders.data.candidates} (email{" "}
-                    {dispatchReminders.data.sentEmail}, in-app {dispatchReminders.data.sentInApp}).
-                  </p>
-                ) : null}
-                <div className="ssm-history-list">
-                  {(notificationsQuery.data?.reminders ?? []).map((item) => (
-                    <div key={item.equipmentId} className="ssm-history-item">
-                      <div>
-                        <strong>
-                          {item.code} — {item.name}
-                        </strong>
-                        <div className="field-hint">
-                          {item.worksiteName} ·{" "}
-                          {item.daysUntilDue < 0
-                            ? `restant ${Math.abs(item.daysUntilDue)} zile`
-                            : `în ${item.daysUntilDue} zile`}{" "}
-                          · {formatRoDate(item.nextDueAt)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {!alertCount ? <p className="field-hint">Nicio alertă activă.</p> : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </>
+        </div>
       ) : null}
 
       {tab === "trainings" ? (
-        <div className="ssm-panel-layout">
-          <form className="card form-stack ssm-doc-card" onSubmit={onTrainingSubmit}>
-            <h4 className="card-title">Înregistrare în registrul PSI</h4>
-            <FieldSelect
-              id="psi-tr-worksite"
-              label="Punct de lucru"
-              value={trainingForm.worksiteId}
-              onChange={(worksiteId) => setTrainingForm((prev) => ({ ...prev, worksiteId }))}
-              options={worksiteOptions}
-              required
-            />
-            <EmployeeSelect
-              id="psi-tr-employee"
-              value={trainingForm.employeeId ?? ""}
-              onChange={(employeeId) => setTrainingForm((prev) => ({ ...prev, employeeId }))}
-            />
-            <FieldSelect
-              id="psi-tr-type"
-              label="Tip suite EMERGENCY_PSI"
-              value={trainingForm.trainingTypeId ?? ""}
-              onChange={(trainingTypeId) => {
-                const selected = emergencyTypes.find((item) => item.id === trainingTypeId);
-                setTrainingForm((prev) => ({
-                  ...prev,
-                  trainingTypeId,
-                  topic: selected?.name ?? prev.topic
-                }));
-              }}
-              allowEmpty
-              emptyLabel="Fără legătură la suite"
-              options={mapToOptions(emergencyTypes, (item) => item.id, (item) => item.name)}
-            />
-            <div className="field">
-              <label htmlFor="psi-tr-topic">Temă</label>
-              <input
-                id="psi-tr-topic"
-                required
-                value={trainingForm.topic}
-                onChange={(event) => setTrainingForm((prev) => ({ ...prev, topic: event.target.value }))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="psi-tr-date">Data</label>
-              <input
-                id="psi-tr-date"
-                type="date"
-                required
-                value={trainingForm.conductedAt}
-                onChange={(event) => setTrainingForm((prev) => ({ ...prev, conductedAt: event.target.value }))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="psi-tr-trainer">Trainer</label>
-              <input
-                id="psi-tr-trainer"
-                required
-                value={trainingForm.trainerName}
-                onChange={(event) => setTrainingForm((prev) => ({ ...prev, trainerName: event.target.value }))}
-              />
-            </div>
-            <button className="btn-primary" type="submit" disabled={createTraining.isPending}>
-              {createTraining.isPending ? "Se salvează…" : "Salvează"}
-            </button>
-            {createTraining.isError ? (
-              <p className="feedback error">{mutationErrorMessage(createTraining.error)}</p>
-            ) : null}
-          </form>
+        <div className="ssm-panel-layout ssm-panel-layout--single">
+          {dialog === "training" ? (
+            <MasterDataCreateModal title="Instruire PSI nouă" titleId="psi-tr-modal-title" onClose={closeDialog}>
+              <form className="form-stack" onSubmit={onTrainingSubmit}>
+                <FieldSelect
+                  id="psi-tr-worksite"
+                  label="Punct de lucru"
+                  value={trainingForm.worksiteId}
+                  onChange={(worksiteId) => setTrainingForm((prev) => ({ ...prev, worksiteId }))}
+                  options={worksiteOptions}
+                  required
+                />
+                <EmployeeSelect
+                  id="psi-tr-employee"
+                  value={trainingForm.employeeId ?? ""}
+                  onChange={(employeeId) => setTrainingForm((prev) => ({ ...prev, employeeId }))}
+                />
+                <FieldSelect
+                  id="psi-tr-type"
+                  label="Tip instruire"
+                  value={trainingForm.trainingTypeId ?? ""}
+                  onChange={(trainingTypeId) => {
+                    const selected = emergencyTypes.find((item) => item.id === trainingTypeId);
+                    setTrainingForm((prev) => ({
+                      ...prev,
+                      trainingTypeId,
+                      topic: selected?.name ?? prev.topic
+                    }));
+                  }}
+                  allowEmpty
+                  emptyLabel="Fără tip"
+                  options={mapToOptions(emergencyTypes, (item) => item.id, (item) => item.name)}
+                />
+                <div className="field">
+                  <label htmlFor="psi-tr-topic">Temă</label>
+                  <input
+                    id="psi-tr-topic"
+                    required
+                    value={trainingForm.topic}
+                    onChange={(event) => setTrainingForm((prev) => ({ ...prev, topic: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="psi-tr-date">Data</label>
+                  <input
+                    id="psi-tr-date"
+                    type="date"
+                    required
+                    value={trainingForm.conductedAt}
+                    onChange={(event) => setTrainingForm((prev) => ({ ...prev, conductedAt: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="psi-tr-trainer">Trainer</label>
+                  <input
+                    id="psi-tr-trainer"
+                    required
+                    value={trainingForm.trainerName}
+                    onChange={(event) => setTrainingForm((prev) => ({ ...prev, trainerName: event.target.value }))}
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={createTraining.isPending}>
+                  {createTraining.isPending ? "Se salvează…" : "Salvează"}
+                </button>
+                {createTraining.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(createTraining.error)}</p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
+          ) : null}
 
           <div className="card form-stack ssm-doc-card">
-            <h4 className="card-title">Evidență unificată</h4>
-            <p className="field-hint">Registru PSI + planuri din suite EMERGENCY_PSI.</p>
+            <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+              <h4 className="card-title" style={{ margin: 0 }}>
+                Instruiri PSI
+              </h4>
+              <button type="button" className="btn-primary" onClick={() => openDialog("training")}>
+                Instruire nouă
+              </button>
+            </div>
             <div className="ssm-history-list">
               {(trainingsQuery.data?.items ?? []).map((item) => (
                 <div key={`${item.source}-${item.id}`} className="ssm-history-item">
                   <div>
                     <strong>{item.topic}</strong>
                     <div className="field-hint">
-                      {item.source === "TRAINING_SUITE" ? "Suite" : "Registru"} · {item.employeeName ?? "colectiv"} ·{" "}
+                      {item.source === "TRAINING_SUITE" ? "Din Instruiri" : "Registru PSI"} ·{" "}
+                      {item.employeeName ?? "colectiv"} ·{" "}
                       {item.worksiteName} · {formatRoDate(item.conductedAt)}
                     </div>
                   </div>
@@ -728,65 +742,75 @@ export function SsmPsiManager() {
       ) : null}
 
       {tab === "responsibles" ? (
-        <div className="ssm-panel-layout">
-          <form className="card form-stack ssm-doc-card" onSubmit={onResponsibleSubmit}>
-            <h4 className="card-title">Adaugă responsabil</h4>
-            <FieldSelect
-              id="psi-resp-worksite"
-              label="Punct de lucru"
-              value={responsibleForm.worksiteId}
-              onChange={(worksiteId) => setResponsibleForm((prev) => ({ ...prev, worksiteId }))}
-              options={worksiteOptions}
-              required
-            />
-            <FieldSelect
-              id="psi-resp-role"
-              label="Rol"
-              value={responsibleForm.role}
-              onChange={(role) => setResponsibleForm((prev) => ({ ...prev, role: role as SsmPsiResponsibleRole }))}
-              options={RESPONSIBLE_ROLES}
-            />
-            <EmployeeSelect
-              id="psi-resp-employee"
-              value={responsibleForm.employeeId ?? ""}
-              onChange={(employeeId) => {
-                const employee = employeesOptions.data?.items.find((item) => item.id === employeeId);
-                setResponsibleForm((prev) => ({
-                  ...prev,
-                  employeeId,
-                  personName: employee?.fullName ?? prev.personName,
-                  email: employee?.email ?? prev.email
-                }));
-              }}
-            />
-            <div className="field">
-              <label htmlFor="psi-resp-name">Nume</label>
-              <input
-                id="psi-resp-name"
-                required
-                value={responsibleForm.personName}
-                onChange={(event) => setResponsibleForm((prev) => ({ ...prev, personName: event.target.value }))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="psi-resp-email">Email (reminder-e)</label>
-              <input
-                id="psi-resp-email"
-                type="email"
-                value={responsibleForm.email ?? ""}
-                onChange={(event) => setResponsibleForm((prev) => ({ ...prev, email: event.target.value }))}
-              />
-            </div>
-            <button className="btn-primary" type="submit" disabled={createResponsible.isPending}>
-              {createResponsible.isPending ? "Se salvează…" : "Adaugă"}
-            </button>
-            {createResponsible.isError ? (
-              <p className="feedback error">{mutationErrorMessage(createResponsible.error)}</p>
-            ) : null}
-          </form>
+        <div className="ssm-panel-layout ssm-panel-layout--single">
+          {dialog === "responsible" ? (
+            <MasterDataCreateModal title="Responsabil nou" titleId="psi-resp-modal-title" onClose={closeDialog}>
+              <form className="form-stack" onSubmit={onResponsibleSubmit}>
+                <FieldSelect
+                  id="psi-resp-worksite"
+                  label="Punct de lucru"
+                  value={responsibleForm.worksiteId}
+                  onChange={(worksiteId) => setResponsibleForm((prev) => ({ ...prev, worksiteId }))}
+                  options={worksiteOptions}
+                  required
+                />
+                <FieldSelect
+                  id="psi-resp-role"
+                  label="Rol"
+                  value={responsibleForm.role}
+                  onChange={(role) => setResponsibleForm((prev) => ({ ...prev, role: role as SsmPsiResponsibleRole }))}
+                  options={RESPONSIBLE_ROLES}
+                />
+                <EmployeeSelect
+                  id="psi-resp-employee"
+                  value={responsibleForm.employeeId ?? ""}
+                  onChange={(employeeId) => {
+                    const employee = employeesOptions.data?.items.find((item) => item.id === employeeId);
+                    setResponsibleForm((prev) => ({
+                      ...prev,
+                      employeeId,
+                      personName: employee?.fullName ?? prev.personName,
+                      email: employee?.email ?? prev.email
+                    }));
+                  }}
+                />
+                <div className="field">
+                  <label htmlFor="psi-resp-name">Nume</label>
+                  <input
+                    id="psi-resp-name"
+                    required
+                    value={responsibleForm.personName}
+                    onChange={(event) => setResponsibleForm((prev) => ({ ...prev, personName: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="psi-resp-email">Email (reminder-e)</label>
+                  <input
+                    id="psi-resp-email"
+                    type="email"
+                    value={responsibleForm.email ?? ""}
+                    onChange={(event) => setResponsibleForm((prev) => ({ ...prev, email: event.target.value }))}
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={createResponsible.isPending}>
+                  {createResponsible.isPending ? "Se salvează…" : "Adaugă"}
+                </button>
+                {createResponsible.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(createResponsible.error)}</p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
+          ) : null}
 
           <div className="card form-stack ssm-doc-card">
-            <h4 className="card-title">Activi pe puncte</h4>
+            <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+              <h4 className="card-title" style={{ margin: 0 }}>
+                Responsabili activi
+              </h4>
+              <button type="button" className="btn-primary" onClick={() => openDialog("responsible")}>
+                Adaugă responsabil
+              </button>
+            </div>
             <div className="ssm-history-list">
               {(responsiblesQuery.data?.items ?? [])
                 .filter((item) => item.active)
@@ -811,46 +835,56 @@ export function SsmPsiManager() {
       ) : null}
 
       {tab === "drills" ? (
-        <div className="ssm-panel-layout">
-          <form className="card form-stack ssm-doc-card" onSubmit={onEvacuationSubmit}>
-            <h4 className="card-title">Exercițiu nou</h4>
-            <FieldSelect
-              id="psi-drill-worksite"
-              label="Punct de lucru"
-              value={evacuationForm.worksiteId}
-              onChange={(worksiteId) => setEvacuationForm((prev) => ({ ...prev, worksiteId }))}
-              options={worksiteOptions}
-              required
-            />
-            <div className="field">
-              <label htmlFor="psi-drill-date">Data</label>
-              <input
-                id="psi-drill-date"
-                type="date"
-                required
-                value={evacuationForm.conductedAt}
-                onChange={(event) => setEvacuationForm((prev) => ({ ...prev, conductedAt: event.target.value }))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="psi-drill-result">Rezultat</label>
-              <input
-                id="psi-drill-result"
-                required
-                value={evacuationForm.result}
-                onChange={(event) => setEvacuationForm((prev) => ({ ...prev, result: event.target.value }))}
-              />
-            </div>
-            <button className="btn-primary" type="submit" disabled={createEvacuation.isPending}>
-              {createEvacuation.isPending ? "Se salvează…" : "Salvează"}
-            </button>
-            {createEvacuation.isError ? (
-              <p className="feedback error">{mutationErrorMessage(createEvacuation.error)}</p>
-            ) : null}
-          </form>
+        <div className="ssm-panel-layout ssm-panel-layout--single">
+          {dialog === "drill" ? (
+            <MasterDataCreateModal title="Exercițiu de evacuare nou" titleId="psi-drill-modal-title" onClose={closeDialog}>
+              <form className="form-stack" onSubmit={onEvacuationSubmit}>
+                <FieldSelect
+                  id="psi-drill-worksite"
+                  label="Punct de lucru"
+                  value={evacuationForm.worksiteId}
+                  onChange={(worksiteId) => setEvacuationForm((prev) => ({ ...prev, worksiteId }))}
+                  options={worksiteOptions}
+                  required
+                />
+                <div className="field">
+                  <label htmlFor="psi-drill-date">Data</label>
+                  <input
+                    id="psi-drill-date"
+                    type="date"
+                    required
+                    value={evacuationForm.conductedAt}
+                    onChange={(event) => setEvacuationForm((prev) => ({ ...prev, conductedAt: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="psi-drill-result">Rezultat</label>
+                  <input
+                    id="psi-drill-result"
+                    required
+                    value={evacuationForm.result}
+                    onChange={(event) => setEvacuationForm((prev) => ({ ...prev, result: event.target.value }))}
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={createEvacuation.isPending}>
+                  {createEvacuation.isPending ? "Se salvează…" : "Salvează"}
+                </button>
+                {createEvacuation.isError ? (
+                  <p className="feedback error">{mutationErrorMessage(createEvacuation.error)}</p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
+          ) : null}
 
           <div className="card form-stack ssm-doc-card">
-            <h4 className="card-title">Istoric</h4>
+            <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+              <h4 className="card-title" style={{ margin: 0 }}>
+                Exerciții de evacuare
+              </h4>
+              <button type="button" className="btn-primary" onClick={() => openDialog("drill")}>
+                Exercițiu nou
+              </button>
+            </div>
             <div className="ssm-history-list">
               {(evacuationQuery.data?.items ?? []).map((item) => (
                 <div key={item.id} className="ssm-history-item">

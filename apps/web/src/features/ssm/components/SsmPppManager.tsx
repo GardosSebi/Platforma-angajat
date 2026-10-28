@@ -1,7 +1,7 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { CreateSsmPreventionPlanRequest, SsmPreventionPlanItem, SsmRiskTargetType } from "@repo/shared-types/ssm";
 import { useDepartmentsLookup, useJobPositionsLookup, useWorksitesLookup } from "../../master-data/hooks/useMasterData";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import {
@@ -55,6 +55,17 @@ function formatRoDate(value?: string | null): string {
   return value ? new Date(value).toLocaleDateString("ro-RO") : "—";
 }
 
+function planDetailMeta(plan: SsmPreventionPlanItem): string {
+  return [
+    `${targetTypeLabel(plan.targetType)} · ${planTargetLabel(plan)}`,
+    plan.activeVersionNumber ? `v${plan.activeVersionNumber}` : "",
+    plan.reviewDate ? `revizie ${formatRoDate(plan.reviewDate)}` : "",
+    plan.riskAssessmentTitle ? `evaluare: ${plan.riskAssessmentTitle}` : ""
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function SsmPppManager() {
   const session = useAuthSession();
   const canApprove = hasPermission(session?.roles, "ssm:risk:approve");
@@ -69,6 +80,7 @@ export function SsmPppManager() {
   const updateMeasure = useUpdatePreventionMeasure();
   const addVersion = useAddPreventionPlanVersion();
 
+  const [createOpen, setCreateOpen] = useState(false);
   const [planForm, setPlanForm] = useState(EMPTY_PLAN);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [measureDescription, setMeasureDescription] = useState("");
@@ -107,26 +119,26 @@ export function SsmPppManager() {
     }));
   };
 
-  const closePlanModal = () => {
+  const openCreate = () => {
+    createPlan.reset();
+    setCreateOpen(true);
+  };
+  const closeCreate = useCallback(() => setCreateOpen(false), []);
+
+  const openPlan = (planId: string) => {
+    createMeasure.reset();
+    addVersion.reset();
+    archivePlan.reset();
+    setSelectedPlanId(planId);
+  };
+
+  const closePlanModal = useCallback(() => {
     setSelectedPlanId(null);
     setMeasureDescription("");
     setMeasureResponsible("");
     setMeasureDueDate("");
     setVersionReason("");
-  };
-
-  useEffect(() => {
-    if (!selectedPlanId) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closePlanModal();
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [selectedPlanId]);
+  }, []);
 
   useEffect(() => {
     if (selectedPlanId && !activePlans.some((plan) => plan.id === selectedPlanId)) {
@@ -145,8 +157,9 @@ export function SsmPppManager() {
       },
       {
         onSuccess: (result) => {
+          setCreateOpen(false);
           setPlanForm(EMPTY_PLAN);
-          setSelectedPlanId(result.planId);
+          openPlan(result.planId);
         }
       }
     );
@@ -200,74 +213,91 @@ export function SsmPppManager() {
   const openMeasuresTotal = activePlans.reduce((sum, plan) => sum + plan.openMeasures, 0);
 
   return (
-    <section className="ssm-ppp ssm-ppp--v2" aria-labelledby="ppp-workspace-title">
-      <div className="ssm-ppp-stats" aria-label="Rezumat PPP">
-        <div className="ssm-ppp-stat">
-          <span>Planuri active</span>
-          <strong>{activePlans.length}</strong>
-        </div>
-        <div className="ssm-ppp-stat">
-          <span>Măsuri deschise</span>
-          <strong>{openMeasuresTotal}</strong>
-        </div>
-        <div className="ssm-ppp-stat">
-          <span>Plan selectat</span>
-          <strong>{selectedPlan ? selectedPlan.openMeasures : "—"}</strong>
+    <section className="ssm-ppp" aria-labelledby="ppp-plans-title">
+      <div className="ssm-ppp-panel">
+        <header className="ssm-ppp-panel-head ssm-ppp-panel-head--row">
+          <div>
+            <h3 id="ppp-plans-title" className="ssm-ppp-panel-title">
+              Planuri active ({activePlans.length})
+            </h3>
+            <p className="ssm-ppp-panel-lead">
+              {openMeasuresTotal === 1 ? "1 măsură deschisă" : `${openMeasuresTotal} măsuri deschise`}
+            </p>
+          </div>
+          <button type="button" className="btn-primary" onClick={openCreate}>
+            Plan nou
+          </button>
+        </header>
+
+        <div className="ssm-ppp-plan-list">
+          {plansQuery.isLoading ? <p className="ssm-ppp-empty">Se încarcă planurile…</p> : null}
+          {!plansQuery.isLoading && activePlans.length === 0 ? (
+            <p className="ssm-ppp-empty">Nu există planuri active. Adaugă primul plan.</p>
+          ) : null}
+          {activePlans.map((plan) => (
+            <button key={plan.id} type="button" className="ssm-ppp-plan-card" onClick={() => openPlan(plan.id)}>
+              <div className="ssm-ppp-plan-card-top">
+                <strong>{plan.title}</strong>
+                {plan.reviewDate ? <span className="ssm-ppp-plan-date">Rev. {formatRoDate(plan.reviewDate)}</span> : null}
+              </div>
+              <p className="ssm-ppp-plan-meta">
+                {targetTypeLabel(plan.targetType)} · {planTargetLabel(plan)}
+                {plan.activeVersionNumber ? ` · v${plan.activeVersionNumber}` : ""}
+                {plan.riskAssessmentTitle ? ` · Eval: ${plan.riskAssessmentTitle}` : ""}
+              </p>
+              <div className="ssm-ppp-plan-stats">
+                <span className={`ssm-chip ${plan.openMeasures > 0 ? "warn" : "good"}`}>
+                  {plan.openMeasures} deschise
+                </span>
+                <span className="ssm-chip">{plan.measureCount} total</span>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="ssm-ppp-workspace">
-        <form className="ssm-ppp-panel ssm-ppp-create" onSubmit={onCreatePlan}>
-          <header className="ssm-ppp-panel-head">
-            <h3 id="ppp-workspace-title" className="ssm-ppp-panel-title">
-              Plan PPP nou
-            </h3>
-            <p className="ssm-ppp-panel-lead">Completează detaliile și creează planul. Măsurile se adaugă după salvare.</p>
-          </header>
-
-          <div className="ssm-ppp-fields">
-            <div className="field ssm-ppp-field ssm-ppp-field--full">
+      {createOpen ? (
+        <MasterDataCreateModal title="Plan PPP nou" titleId="ppp-create-modal-title" onClose={closeCreate}>
+          <form className="form-stack" onSubmit={onCreatePlan}>
+            <div className="field">
               <label htmlFor="ppp-title">Titlu plan</label>
               <input
                 id="ppp-title"
                 required
                 value={planForm.title}
-                placeholder="Ex. PPP depozit logistic — 2026"
+                placeholder="ex. PPP depozit logistic — 2026"
                 onChange={(event) => setPlanForm((prev) => ({ ...prev, title: event.target.value }))}
               />
             </div>
-
-            <FieldSelect
-              id="ppp-target-type"
-              label="Tip țintă"
-              className="ssm-ppp-field"
-              value={planForm.targetType}
-              onChange={(targetType) =>
-                setPlanForm((prev) => ({
-                  ...prev,
-                  targetType: targetType as SsmRiskTargetType,
-                  jobPositionId: undefined,
-                  worksiteId: undefined,
-                  departmentId: undefined
-                }))
-              }
-              options={[...TARGET_TYPE_OPTIONS]}
-            />
-
-            <div className="field ssm-ppp-field">
-              <label htmlFor="ppp-review-date">Data revizie</label>
-              <input
-                id="ppp-review-date"
-                type="date"
-                value={planForm.reviewDate ?? ""}
-                onChange={(event) => setPlanForm((prev) => ({ ...prev, reviewDate: event.target.value }))}
+            <div className="ssm-panel-fields-row">
+              <FieldSelect
+                id="ppp-target-type"
+                label="Tip țintă"
+                value={planForm.targetType}
+                onChange={(targetType) =>
+                  setPlanForm((prev) => ({
+                    ...prev,
+                    targetType: targetType as SsmRiskTargetType,
+                    jobPositionId: undefined,
+                    worksiteId: undefined,
+                    departmentId: undefined
+                  }))
+                }
+                options={[...TARGET_TYPE_OPTIONS]}
               />
+              <div className="field">
+                <label htmlFor="ppp-review-date">Data revizie</label>
+                <input
+                  id="ppp-review-date"
+                  type="date"
+                  value={planForm.reviewDate ?? ""}
+                  onChange={(event) => setPlanForm((prev) => ({ ...prev, reviewDate: event.target.value }))}
+                />
+              </div>
             </div>
-
             <FieldSelect
               id="ppp-target-ref"
               label={targetTypeLabel(planForm.targetType)}
-              className="ssm-ppp-field ssm-ppp-field--full"
               value={targetRefValue}
               onChange={onTargetRefChange}
               options={targetRefOptions}
@@ -275,11 +305,9 @@ export function SsmPppManager() {
               emptyLabel={`Selectează ${targetTypeLabel(planForm.targetType).toLowerCase()}`}
               hint={targetRefOptions.length === 0 ? "Nu există date master pentru ținta aleasă." : undefined}
             />
-
             <FieldSelect
               id="ppp-risk-assessment"
               label="Evaluare risc legată (opțional)"
-              className="ssm-ppp-field ssm-ppp-field--full"
               value={planForm.riskAssessmentId ?? ""}
               onChange={(riskAssessmentId) =>
                 setPlanForm((prev) => ({ ...prev, riskAssessmentId: riskAssessmentId || undefined }))
@@ -292,268 +320,176 @@ export function SsmPppManager() {
               allowEmpty
               emptyLabel="Fără legătură la evaluare"
             />
-
-            <details className="ssm-ppp-notes-details ssm-ppp-field--full">
-              <summary>Note opționale</summary>
-              <div className="field ssm-ppp-field ssm-ppp-field--full">
-                <label htmlFor="ppp-notes" className="visually-hidden">
-                  Note
-                </label>
-                <textarea
-                  id="ppp-notes"
-                  rows={3}
-                  value={planForm.notes ?? ""}
-                  placeholder="Observații sau referințe interne"
-                  onChange={(event) => setPlanForm((prev) => ({ ...prev, notes: event.target.value }))}
-                />
-              </div>
-            </details>
-          </div>
-
-          <footer className="ssm-ppp-panel-foot">
+            <div className="field">
+              <label htmlFor="ppp-notes">Note (opțional)</label>
+              <textarea
+                id="ppp-notes"
+                rows={2}
+                value={planForm.notes ?? ""}
+                onChange={(event) => setPlanForm((prev) => ({ ...prev, notes: event.target.value }))}
+              />
+            </div>
             <button type="submit" className="btn-primary" disabled={createPlan.isPending}>
-              {createPlan.isPending ? "Se salvează…" : "Creează plan PPP"}
+              {createPlan.isPending ? "Se salvează…" : "Creează planul"}
             </button>
             {createPlan.isError ? <p className="feedback error">{mutationErrorMessage(createPlan.error)}</p> : null}
-          </footer>
-        </form>
+          </form>
+        </MasterDataCreateModal>
+      ) : null}
 
-        <aside className="ssm-ppp-panel ssm-ppp-plans">
-          <header className="ssm-ppp-panel-head ssm-ppp-panel-head--row">
-            <div>
-              <h3 className="ssm-ppp-panel-title">Planuri active</h3>
-              <p className="ssm-ppp-panel-lead">Deschide un plan pentru a gestiona măsurile.</p>
-            </div>
-            <span className="ssm-chip">{activePlans.length}</span>
-          </header>
-
-          <div className="ssm-ppp-plan-list">
-            {plansQuery.isLoading ? <p className="ssm-ppp-empty">Se încarcă planurile…</p> : null}
-            {!plansQuery.isLoading && activePlans.length === 0 ? (
-              <p className="ssm-ppp-empty">Nu există planuri active. Creează primul plan din formularul alăturat.</p>
-            ) : null}
-            {activePlans.map((plan) => (
-              <button
-                key={plan.id}
-                type="button"
-                className={`ssm-ppp-plan-card${selectedPlanId === plan.id ? " is-selected" : ""}`}
-                onClick={() => setSelectedPlanId(plan.id)}
-              >
-                <div className="ssm-ppp-plan-card-top">
-                  <strong>{plan.title}</strong>
-                  {plan.reviewDate ? <span className="ssm-ppp-plan-date">Rev. {formatRoDate(plan.reviewDate)}</span> : null}
-                </div>
-                <p className="ssm-ppp-plan-meta">
-                  {targetTypeLabel(plan.targetType)} · {planTargetLabel(plan)}
-                  {plan.activeVersionNumber ? ` · v${plan.activeVersionNumber}` : ""}
-                  {plan.riskAssessmentTitle ? ` · Eval: ${plan.riskAssessmentTitle}` : ""}
-                </p>
-                <div className="ssm-ppp-plan-stats">
-                  <span className={`ssm-chip ${plan.openMeasures > 0 ? "warn" : "good"}`}>
-                    {plan.openMeasures} deschise
-                  </span>
-                  <span className="ssm-chip">{plan.measureCount} total</span>
-                  <span className="ssm-ppp-plan-open">Deschide detalii →</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </aside>
-      </div>
-
-      {selectedPlan
-        ? createPortal(
-            <div className="ssm-ppp-modal-backdrop" role="presentation" onClick={closePlanModal}>
-              <div
-                className="ssm-ppp-panel ssm-ppp-detail ssm-ppp-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="ppp-detail-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <header className="ssm-ppp-detail-head">
-                  <div>
-                    <p className="ssm-ppp-detail-eyebrow">Plan selectat</p>
-                    <h3 id="ppp-detail-title" className="ssm-ppp-detail-title">
-                      {selectedPlan.title}
-                    </h3>
-                    <p className="ssm-ppp-detail-meta">
-                      {targetTypeLabel(selectedPlan.targetType)} · {planTargetLabel(selectedPlan)}
-                      {selectedPlan.activeVersionNumber ? ` · v${selectedPlan.activeVersionNumber}` : ""}
-                      {selectedPlan.reviewDate ? ` · revizie ${formatRoDate(selectedPlan.reviewDate)}` : ""}
-                      {selectedPlan.riskAssessmentTitle
-                        ? ` · evaluare: ${selectedPlan.riskAssessmentTitle}`
-                        : ""}
-                    </p>
-                  </div>
-                  <div className="ssm-ppp-detail-actions">
-                  {canApprove ? (
-                    <button
-                      type="button"
-                      className="btn-secondary ssm-ppp-archive-btn"
-                      onClick={() =>
-                        archivePlan.mutate(selectedPlan.id, {
-                          onSuccess: closePlanModal
-                        })
-                      }
-                      disabled={archivePlan.isPending}
-                    >
-                      Arhivează plan
-                    </button>
-                  ) : null}
-                    <button type="button" className="btn-secondary" onClick={closePlanModal}>
-                      Închide
-                    </button>
-                  </div>
-                </header>
-
-                <form className="ssm-ppp-measure-add" onSubmit={onAddMeasure}>
-                  <h4 className="ssm-ppp-subtitle">Adaugă măsură</h4>
-                  <div className="ssm-ppp-fields ssm-ppp-fields--measure">
-                    <div className="field ssm-ppp-field ssm-ppp-field--full">
-                      <label htmlFor="ppp-measure-description">Descriere măsură</label>
-                      <textarea
-                        id="ppp-measure-description"
-                        required
-                        rows={2}
-                        value={measureDescription}
-                        placeholder="Ex. Montarea balustradelor de protecție la acces depozit"
-                        onChange={(event) => setMeasureDescription(event.target.value)}
-                      />
-                    </div>
-                    <div className="ssm-ppp-field">
-                      <label htmlFor="ppp-measure-responsible">Responsabil</label>
-                      <input
-                        id="ppp-measure-responsible"
-                        value={measureResponsible}
-                        placeholder="Nume responsabil"
-                        onChange={(event) => setMeasureResponsible(event.target.value)}
-                      />
-                    </div>
-                    <div className="field ssm-ppp-field">
-                      <label htmlFor="ppp-measure-due">Termen</label>
-                      <input
-                        id="ppp-measure-due"
-                        type="date"
-                        value={measureDueDate}
-                        onChange={(event) => setMeasureDueDate(event.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="ssm-ppp-measure-add-actions">
-                    <button type="submit" className="btn-primary" disabled={createMeasure.isPending || !measureDescription.trim()}>
-                      {createMeasure.isPending ? "Se adaugă…" : "Adaugă măsură"}
-                    </button>
-                  </div>
-                  {createMeasure.isError ? <p className="feedback error">{mutationErrorMessage(createMeasure.error)}</p> : null}
-                </form>
-
-                <div className="ssm-ppp-measures-section">
-                  <h4 className="ssm-ppp-subtitle">
-                    Măsuri înregistrate
-                    <span className="ssm-chip">{selectedPlan.measures.length}</span>
-                  </h4>
-                  {selectedPlan.measures.length === 0 ? (
-                    <p className="ssm-ppp-empty">Nu există măsuri în acest plan. Adaugă prima măsură mai sus.</p>
-                  ) : (
-                    <ul className="ssm-ppp-measure-list">
-                      {selectedPlan.measures.map((measure) => (
-                        <li key={measure.id} className={`ssm-ppp-measure-row status-${measure.status.toLowerCase()}`}>
-                          <div className="ssm-ppp-measure-copy">
-                            <strong>{measure.description}</strong>
-                            <span>
-                              {measure.responsiblePerson ?? "Fără responsabil"} ·{" "}
-                              {measure.dueDate ? formatRoDate(measure.dueDate) : "Fără termen"}
-                            </span>
-                          </div>
-                          <div className="ssm-ppp-measure-row-actions">
-                            <span
-                              className={`ssm-chip ${measure.status === "COMPLETED" ? "good" : measure.status === "OVERDUE" ? "bad" : "warn"}`}
-                            >
-                              {MEASURE_STATUS_LABELS[measure.status]}
-                            </span>
-                            {measure.status !== "COMPLETED" ? (
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                disabled={updateMeasure.isPending}
-                                onClick={() => updateMeasure.mutate({ measureId: measure.id, payload: { status: "COMPLETED" } })}
-                              >
-                                Finalizează
-                              </button>
-                            ) : null}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <form className="ssm-ppp-measure-add" onSubmit={onSaveVersion}>
-                  <h4 className="ssm-ppp-subtitle">Salvează versiune PPP</h4>
-                  <p className="field-hint">
-                    Creează un snapshot al măsurilor curente (ca la evaluările de risc). Motivul modificării este obligatoriu.
-                  </p>
-                  <div className="field">
-                    <label htmlFor="ppp-version-reason">Motiv actualizare</label>
-                    <input
-                      id="ppp-version-reason"
-                      required
-                      value={versionReason}
-                      placeholder="Ex. Actualizare după control ITM"
-                      onChange={(event) => setVersionReason(event.target.value)}
-                    />
-                  </div>
-                  <div className="ssm-ppp-measure-add-actions">
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      disabled={addVersion.isPending || !versionReason.trim()}
-                    >
-                      {addVersion.isPending ? "Se salvează…" : "Salvează versiune"}
-                    </button>
-                  </div>
-                  {addVersion.isSuccess ? (
-                    <p className="feedback success" role="status">
-                      Versiune PPP salvată.
-                    </p>
-                  ) : null}
-                  {addVersion.isError ? (
-                    <p className="feedback error">{mutationErrorMessage(addVersion.error)}</p>
-                  ) : null}
-                </form>
-
-                <div className="ssm-ppp-measures-section">
-                  <h4 className="ssm-ppp-subtitle">
-                    Istoric versiuni
-                    <span className="ssm-chip">{historyQuery.data?.versions.length ?? 0}</span>
-                  </h4>
-                  {historyQuery.isLoading ? <p className="ssm-ppp-empty">Se încarcă istoricul…</p> : null}
-                  <div className="ssm-history-list">
-                    {(historyQuery.data?.versions ?? []).map((version) => (
-                      <div key={version.id} className="ssm-history-item">
-                        <div>
-                          <strong>
-                            v{version.versionNumber}
-                            {version.id === historyQuery.data?.activeVersionId ? " · Activă" : ""}
-                          </strong>
-                          <div className="field-hint">
-                            {version.updateReason} · {formatRoDate(version.createdAt)} ·{" "}
-                            {version.measures.length} măsuri
-                          </div>
-                        </div>
+      {selectedPlan ? (
+        <MasterDataCreateModal
+          title={selectedPlan.title}
+          titleId="ppp-detail-title"
+          description={planDetailMeta(selectedPlan)}
+          size="wide"
+          onClose={closePlanModal}
+        >
+          <div className="form-stack">
+            <section>
+              <h4 className="ssm-ppp-subtitle">
+                Măsuri
+                <span className="ssm-chip">{selectedPlan.measures.length}</span>
+              </h4>
+              {selectedPlan.measures.length === 0 ? (
+                <p className="ssm-ppp-empty">Nu există măsuri în acest plan.</p>
+              ) : (
+                <ul className="ssm-ppp-measure-list">
+                  {selectedPlan.measures.map((measure) => (
+                    <li key={measure.id} className={`ssm-ppp-measure-row status-${measure.status.toLowerCase()}`}>
+                      <div className="ssm-ppp-measure-copy">
+                        <strong>{measure.description}</strong>
+                        <span>
+                          {measure.responsiblePerson ?? "Fără responsabil"} ·{" "}
+                          {measure.dueDate ? formatRoDate(measure.dueDate) : "Fără termen"}
+                        </span>
                       </div>
-                    ))}
-                    {!historyQuery.isLoading && !(historyQuery.data?.versions.length ?? 0) ? (
-                      <p className="ssm-ppp-empty">Nu există versiuni încă.</p>
-                    ) : null}
-                  </div>
+                      <div className="ssm-ppp-measure-row-actions">
+                        <span
+                          className={`ssm-chip ${measure.status === "COMPLETED" ? "good" : measure.status === "OVERDUE" ? "bad" : "warn"}`}
+                        >
+                          {MEASURE_STATUS_LABELS[measure.status]}
+                        </span>
+                        {measure.status !== "COMPLETED" ? (
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={updateMeasure.isPending}
+                            onClick={() => updateMeasure.mutate({ measureId: measure.id, payload: { status: "COMPLETED" } })}
+                          >
+                            Finalizează
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <form className="ssm-inline-form form-stack" onSubmit={onAddMeasure}>
+              <h4 className="ssm-ppp-subtitle">Măsură nouă</h4>
+              <div className="field">
+                <label htmlFor="ppp-measure-description">Descriere</label>
+                <textarea
+                  id="ppp-measure-description"
+                  required
+                  rows={2}
+                  value={measureDescription}
+                  placeholder="ex. Montarea balustradelor de protecție la acces depozit"
+                  onChange={(event) => setMeasureDescription(event.target.value)}
+                />
+              </div>
+              <div className="ssm-panel-fields-row">
+                <div className="field">
+                  <label htmlFor="ppp-measure-responsible">Responsabil</label>
+                  <input
+                    id="ppp-measure-responsible"
+                    value={measureResponsible}
+                    onChange={(event) => setMeasureResponsible(event.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="ppp-measure-due">Termen</label>
+                  <input
+                    id="ppp-measure-due"
+                    type="date"
+                    value={measureDueDate}
+                    onChange={(event) => setMeasureDueDate(event.target.value)}
+                  />
                 </div>
               </div>
-            </div>,
-            document.body
-          )
-        : null}
+              <div>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={createMeasure.isPending || !measureDescription.trim()}
+                >
+                  {createMeasure.isPending ? "Se adaugă…" : "Adaugă măsura"}
+                </button>
+              </div>
+              {createMeasure.isError ? <p className="feedback error">{mutationErrorMessage(createMeasure.error)}</p> : null}
+            </form>
+
+            <details className="ssm-ppp-versions">
+              <summary>Versiuni ({historyQuery.data?.versions.length ?? 0})</summary>
+              <form className="form-stack" onSubmit={onSaveVersion}>
+                <div className="field">
+                  <label htmlFor="ppp-version-reason">Motivul versiunii noi</label>
+                  <input
+                    id="ppp-version-reason"
+                    required
+                    value={versionReason}
+                    placeholder="ex. Actualizare după control ITM"
+                    onChange={(event) => setVersionReason(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <button type="submit" className="btn-secondary" disabled={addVersion.isPending || !versionReason.trim()}>
+                    {addVersion.isPending ? "Se salvează…" : "Salvează versiunea"}
+                  </button>
+                </div>
+                {addVersion.isSuccess ? (
+                  <p className="feedback success" role="status">
+                    Versiune salvată.
+                  </p>
+                ) : null}
+                {addVersion.isError ? <p className="feedback error">{mutationErrorMessage(addVersion.error)}</p> : null}
+              </form>
+              {historyQuery.isLoading ? <p className="field-hint">Se încarcă istoricul…</p> : null}
+              <div className="ssm-history-list">
+                {(historyQuery.data?.versions ?? []).map((version) => (
+                  <div key={version.id} className="ssm-history-item">
+                    <div>
+                      <strong>
+                        v{version.versionNumber}
+                        {version.id === historyQuery.data?.activeVersionId ? " · Activă" : ""}
+                      </strong>
+                      <div className="field-hint">
+                        {version.updateReason} · {formatRoDate(version.createdAt)} · {version.measures.length} măsuri
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+
+            {canApprove ? (
+              <div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={archivePlan.isPending}
+                  onClick={() => archivePlan.mutate(selectedPlan.id, { onSuccess: closePlanModal })}
+                >
+                  Arhivează planul
+                </button>
+                {archivePlan.isError ? <p className="feedback error">{mutationErrorMessage(archivePlan.error)}</p> : null}
+              </div>
+            ) : null}
+          </div>
+        </MasterDataCreateModal>
+      ) : null}
     </section>
   );
 }

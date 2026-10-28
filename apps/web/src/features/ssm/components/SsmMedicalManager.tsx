@@ -94,8 +94,6 @@ function categoryLabel(category: SsmMedicalControlCategory): string {
 
 export function SsmMedicalManager() {
   const [tab, setTab] = useState<MedicalTab>("register");
-  const activeTabMeta = MEDICAL_TABS.find((item) => item.id === tab) ?? MEDICAL_TABS[0];
-
   const typesQuery = useMedicalControlTypes();
   const controlsQuery = useMedicalControls();
   const remindersQuery = useMedicalReminders();
@@ -244,11 +242,6 @@ export function SsmMedicalManager() {
           </button>
         ))}
       </div>
-
-      <header className="ssm-panel-header">
-        <h3 className="card-title">{activeTabMeta.title}</h3>
-        <p className="field-hint">{activeTabMeta.caption}</p>
-      </header>
 
       {tab === "types" ? (
         <div className="ssm-panel-layout">

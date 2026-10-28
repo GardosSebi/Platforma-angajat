@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CreateSsmDangerousSubstanceRequest,
   SsmDangerousSubstanceHazard,
@@ -21,6 +21,7 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { useWorksitesLookup } from "../../master-data/hooks/useMasterData";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { ssmApi } from "../api/ssm.api";
 import {
   useCreateDangerousSubstance,
@@ -28,14 +29,6 @@ import {
   useRetireDangerousSubstance,
   useUpdateDangerousSubstance
 } from "../hooks/useSsmSubstances";
-
-type SubstancesTab = "register" | "add" | "update";
-
-const TABS: Array<{ id: SubstancesTab; title: string; caption: string }> = [
-  { id: "register", title: "Registru", caption: "Stoc pe locație" },
-  { id: "add", title: "Înregistrare", caption: "Substanță nouă" },
-  { id: "update", title: "Actualizare", caption: "Cantitate, SDS, status" }
-];
 
 const EMPTY_CREATE: CreateSsmDangerousSubstanceRequest = {
   worksiteId: "",
@@ -78,7 +71,7 @@ function statusChip(status: SsmDangerousSubstanceStatus): string {
 export function SsmSubstancesManager() {
   const session = useAuthSession();
   const canEdit = hasPermission(session?.roles, "ssm:documents:edit");
-  const [tab, setTab] = useState<SubstancesTab>("register");
+  const [createOpen, setCreateOpen] = useState(false);
   const [worksiteFilter, setWorksiteFilter] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [createForm, setCreateForm] = useState(EMPTY_CREATE);
@@ -120,15 +113,6 @@ export function SsmSubstancesManager() {
     if (!first) return;
     setCreateForm((prev) => (prev.worksiteId ? prev : { ...prev, worksiteId: first.id }));
   }, [worksitesLookup.data?.items]);
-
-  useEffect(() => {
-    if (!items.length) {
-      setSelectedId("");
-      return;
-    }
-    if (selectedId && items.some((item) => item.id === selectedId)) return;
-    setSelectedId(items[0].id);
-  }, [items, selectedId]);
 
   useEffect(() => {
     if (!selected) {
@@ -173,29 +157,45 @@ export function SsmSubstancesManager() {
         onSuccess: () => {
           setCreateForm((prev) => ({ ...EMPTY_CREATE, worksiteId: prev.worksiteId }));
           setCreateSds(undefined);
-          setTab("register");
+          setCreateOpen(false);
         }
       }
     );
   };
 
+  const openCreate = () => {
+    createMutation.reset();
+    setCreateOpen(true);
+  };
+  const closeCreate = useCallback(() => setCreateOpen(false), []);
+
+  const openEdit = (id: string) => {
+    updateMutation.reset();
+    retireMutation.reset();
+    setSelectedId(id);
+  };
+  const closeEdit = useCallback(() => setSelectedId(""), []);
+
   const onUpdate = (event: FormEvent) => {
     event.preventDefault();
     if (!selected) return;
-    updateMutation.mutate({
-      id: selected.id,
-      payload: {
-        ...editForm,
-        tradeName: editForm.tradeName?.toString().trim() || null,
-        casNumber: editForm.casNumber?.toString().trim() || null,
-        unNumber: editForm.unNumber?.toString().trim() || null,
-        containerType: editForm.containerType?.toString().trim() || null,
-        sdsValidUntil: editForm.sdsValidUntil?.toString().trim() || null,
-        responsibleName: editForm.responsibleName?.toString().trim() || null,
-        notes: editForm.notes?.toString().trim() || null
+    updateMutation.mutate(
+      {
+        id: selected.id,
+        payload: {
+          ...editForm,
+          tradeName: editForm.tradeName?.toString().trim() || null,
+          casNumber: editForm.casNumber?.toString().trim() || null,
+          unNumber: editForm.unNumber?.toString().trim() || null,
+          containerType: editForm.containerType?.toString().trim() || null,
+          sdsValidUntil: editForm.sdsValidUntil?.toString().trim() || null,
+          responsibleName: editForm.responsibleName?.toString().trim() || null,
+          notes: editForm.notes?.toString().trim() || null
+        },
+        sdsSheet: editSds
       },
-      sdsSheet: editSds
-    });
+      { onSuccess: () => setSelectedId("") }
+    );
   };
 
   const downloadSds = (item: SsmDangerousSubstanceItem) => {
@@ -207,352 +207,330 @@ export function SsmSubstancesManager() {
 
   return (
     <div className="form-stack">
-      <nav className="comms-tabs" aria-label="Substanțe periculoase">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`comms-tab${tab === item.id ? " active" : ""}`}
-            onClick={() => setTab(item.id)}
-            disabled={item.id === "add" && !canEdit}
-          >
-            <strong>{item.title}</strong>
-            <span>{item.caption}</span>
-          </button>
-        ))}
-      </nav>
-
-      {tab === "register" ? (
-        <section className="card form-stack ssm-doc-card">
+      <section className="card form-stack ssm-doc-card">
+        <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+          <h4 className="card-title" style={{ margin: 0 }}>
+            Registru ({items.length})
+          </h4>
+          {canEdit ? (
+            <button type="button" className="btn-primary" onClick={openCreate}>
+              Substanță nouă
+            </button>
+          ) : null}
+        </div>
+        <div className="ssm-filters">
           <FieldSelect
+            variant="inline"
             id="substance-worksite-filter"
-            label="Punct de lucru"
             value={worksiteFilter}
             onChange={setWorksiteFilter}
             allowEmpty
-            emptyLabel="Toate punctele"
+            emptyLabel="Toate punctele de lucru"
             options={worksiteOptions}
           />
-          {listQuery.isLoading ? <p className="field-hint">Se încarcă registrul…</p> : null}
-          {listQuery.isError ? <p className="feedback error">{mutationErrorMessage(listQuery.error)}</p> : null}
-          {downloadError ? <p className="feedback error">{downloadError}</p> : null}
-          {!items.length && !listQuery.isLoading ? (
-            <p className="field-hint">Nu există substanțe înregistrate pe filtrul curent.</p>
-          ) : null}
-          <div className="ssm-history-list">
-            {items.map((item) => (
-              <div key={item.id} className="ssm-history-item">
-                <div>
-                  <strong>{item.name}</strong>
-                  <div className="field-hint">
-                    {item.worksiteCode} · {item.location} · {formatQuantity(item)}
-                    {item.casNumber ? ` · CAS ${item.casNumber}` : ""}
-                  </div>
-                  <div className="field-hint">
-                    {SSM_DANGEROUS_SUBSTANCE_HAZARD_LABELS[item.hazardClass]}
-                    {item.sdsValidUntil ? ` · SDS până la ${formatRoDate(item.sdsValidUntil)}` : " · fără termen SDS"}
-                  </div>
+        </div>
+        {listQuery.isLoading ? <p className="field-hint">Se încarcă registrul…</p> : null}
+        {listQuery.isError ? <p className="feedback error">{mutationErrorMessage(listQuery.error)}</p> : null}
+        {downloadError ? <p className="feedback error">{downloadError}</p> : null}
+        {!items.length && !listQuery.isLoading ? (
+          <p className="field-hint">Nu există substanțe înregistrate pe filtrul curent.</p>
+        ) : null}
+        <div className="ssm-history-list">
+          {items.map((item) => (
+            <div key={item.id} className="ssm-history-item">
+              <div>
+                <strong>{item.name}</strong>
+                <div className="field-hint">
+                  {item.worksiteCode} · {item.location} · {formatQuantity(item)}
+                  {item.casNumber ? ` · CAS ${item.casNumber}` : ""}
                 </div>
-                <div className="ssm-inline-actions">
-                  <span className={`badge-${statusChip(item.status)}`}>
-                    {SSM_DANGEROUS_SUBSTANCE_STATUS_LABELS[item.status]}
-                  </span>
-                  {item.hasSdsSheet ? (
-                    <button type="button" className="btn-text" onClick={() => downloadSds(item)}>
-                      Fișă SDS
-                    </button>
-                  ) : null}
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      className="btn-text"
-                      onClick={() => {
-                        setSelectedId(item.id);
-                        setTab("update");
-                      }}
-                    >
-                      Actualizează
-                    </button>
-                  ) : null}
+                <div className="field-hint">
+                  {SSM_DANGEROUS_SUBSTANCE_HAZARD_LABELS[item.hazardClass]}
+                  {item.sdsValidUntil ? ` · SDS până la ${formatRoDate(item.sdsValidUntil)}` : " · fără termen SDS"}
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+              <div className="ssm-inline-actions">
+                <span className={`badge-${statusChip(item.status)}`}>
+                  {SSM_DANGEROUS_SUBSTANCE_STATUS_LABELS[item.status]}
+                </span>
+                {item.hasSdsSheet ? (
+                  <button type="button" className="btn-text" onClick={() => downloadSds(item)}>
+                    Fișă SDS
+                  </button>
+                ) : null}
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="btn-text"
+                    onClick={() => openEdit(item.id)}
+                  >
+                    Actualizează
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      {tab === "add" && canEdit ? (
-        <form className="card form-stack ssm-doc-card" onSubmit={onCreate}>
-          <p className="field-hint">
-            Evidență pe punct de lucru: cantitate, locație de depozitare și fișă SDS (PDF/Word).
-          </p>
-          <FieldSelect
-            id="create-substance-worksite"
-            label="Punct de lucru"
-            value={createForm.worksiteId}
-            onChange={(worksiteId) => setCreateForm((prev) => ({ ...prev, worksiteId }))}
-            options={worksiteOptions}
-          />
-          <div className="field">
-            <label htmlFor="create-substance-name">Denumire *</label>
-            <input
-              id="create-substance-name"
-              required
-              value={createForm.name}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
+      {createOpen && canEdit ? (
+        <MasterDataCreateModal
+          title="Substanță nouă"
+          titleId="substance-create-modal-title"
+          size="wide"
+          onClose={closeCreate}
+        >
+          <form className="form-stack" onSubmit={onCreate}>
+            <FieldSelect
+              id="create-substance-worksite"
+              label="Punct de lucru"
+              value={createForm.worksiteId}
+              onChange={(worksiteId) => setCreateForm((prev) => ({ ...prev, worksiteId }))}
+              options={worksiteOptions}
             />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-trade">Denumire comercială</label>
-            <input
-              id="create-substance-trade"
-              value={createForm.tradeName ?? ""}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, tradeName: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-cas">Număr CAS</label>
-            <input
-              id="create-substance-cas"
-              value={createForm.casNumber ?? ""}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, casNumber: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-un">Număr UN</label>
-            <input
-              id="create-substance-un"
-              value={createForm.unNumber ?? ""}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, unNumber: event.target.value }))}
-            />
-          </div>
-          <FieldSelect
-            id="create-substance-hazard"
-            label="Clasă de pericol"
-            value={createForm.hazardClass ?? "OTHER"}
-            onChange={(hazardClass) =>
-              setCreateForm((prev) => ({ ...prev, hazardClass: hazardClass as SsmDangerousSubstanceHazard }))
-            }
-            options={hazardOptions}
-          />
-          <div className="field">
-            <label htmlFor="create-substance-location">Locație depozitare *</label>
-            <input
-              id="create-substance-location"
-              required
-              value={createForm.location}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, location: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-qty">Cantitate *</label>
-            <input
-              id="create-substance-qty"
-              type="number"
-              min={0}
-              step="0.001"
-              required
-              value={createForm.quantity}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, quantity: Number(event.target.value) }))}
-            />
-          </div>
-          <FieldSelect
-            id="create-substance-unit"
-            label="Unitate"
-            value={createForm.unit ?? "L"}
-            onChange={(unit) => setCreateForm((prev) => ({ ...prev, unit: unit as SsmDangerousSubstanceUnit }))}
-            options={unitOptions}
-          />
-          <div className="field">
-            <label htmlFor="create-substance-container">Ambalaj / recipient</label>
-            <input
-              id="create-substance-container"
-              value={createForm.containerType ?? ""}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, containerType: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-sds-date">Valabilitate fișă SDS</label>
-            <input
-              id="create-substance-sds-date"
-              type="date"
-              value={createForm.sdsValidUntil ?? ""}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, sdsValidUntil: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-responsible">Responsabil</label>
-            <input
-              id="create-substance-responsible"
-              value={createForm.responsibleName ?? ""}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, responsibleName: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-notes">Observații</label>
-            <input
-              id="create-substance-notes"
-              value={createForm.notes ?? ""}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, notes: event.target.value }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="create-substance-sds">Fișă SDS (PDF/Word)</label>
-            <input
-              id="create-substance-sds"
-              type="file"
-              accept=".pdf,.doc,.docx"
-              onChange={(event) => setCreateSds(event.target.files?.[0])}
-            />
-          </div>
-          <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
-            {createMutation.isPending ? "Se salvează…" : "Adaugă în registru"}
-          </button>
-          {createMutation.isError ? (
-            <p className="feedback error">{mutationErrorMessage(createMutation.error)}</p>
-          ) : null}
-        </form>
-      ) : null}
-
-      {tab === "update" ? (
-        <section className="card form-stack ssm-doc-card">
-          {!items.length ? (
-            <p className="field-hint">Nu există substanțe de actualizat.</p>
-          ) : (
-            <>
-              <FieldSelect
-                id="update-substance-select"
-                label="Substanță"
-                value={selectedId}
-                onChange={setSelectedId}
-                options={items.map((item) => ({
-                  value: item.id,
-                  label: `${item.name} · ${item.location} (${formatQuantity(item)})`
-                }))}
+            <div className="field">
+              <label htmlFor="create-substance-name">Denumire *</label>
+              <input
+                id="create-substance-name"
+                required
+                value={createForm.name}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
               />
-              {selected && canEdit ? (
-                <form className="form-stack" onSubmit={onUpdate}>
-                  <div className="field">
-                    <label htmlFor="edit-substance-name">Denumire</label>
-                    <input
-                      id="edit-substance-name"
-                      value={editForm.name ?? ""}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="edit-substance-location">Locație depozitare</label>
-                    <input
-                      id="edit-substance-location"
-                      value={editForm.location ?? ""}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, location: event.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="edit-substance-qty">Cantitate</label>
-                    <input
-                      id="edit-substance-qty"
-                      type="number"
-                      min={0}
-                      step="0.001"
-                      value={editForm.quantity ?? 0}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, quantity: Number(event.target.value) }))}
-                    />
-                  </div>
-                  <FieldSelect
-                    id="edit-substance-unit"
-                    label="Unitate"
-                    value={editForm.unit ?? "L"}
-                    onChange={(unit) => setEditForm((prev) => ({ ...prev, unit: unit as SsmDangerousSubstanceUnit }))}
-                    options={unitOptions}
-                  />
-                  <FieldSelect
-                    id="edit-substance-hazard"
-                    label="Clasă de pericol"
-                    value={editForm.hazardClass ?? "OTHER"}
-                    onChange={(hazardClass) =>
-                      setEditForm((prev) => ({ ...prev, hazardClass: hazardClass as SsmDangerousSubstanceHazard }))
-                    }
-                    options={hazardOptions}
-                  />
-                  <FieldSelect
-                    id="edit-substance-status"
-                    label="Status"
-                    value={editForm.status ?? "ACTIVE"}
-                    onChange={(status) =>
-                      setEditForm((prev) => ({ ...prev, status: status as SsmDangerousSubstanceStatus }))
-                    }
-                    options={statusOptions}
-                  />
-                  <div className="field">
-                    <label htmlFor="edit-substance-cas">Număr CAS</label>
-                    <input
-                      id="edit-substance-cas"
-                      value={editForm.casNumber ?? ""}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, casNumber: event.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="edit-substance-sds-date">Valabilitate fișă SDS</label>
-                    <input
-                      id="edit-substance-sds-date"
-                      type="date"
-                      value={editForm.sdsValidUntil ?? ""}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, sdsValidUntil: event.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="edit-substance-responsible">Responsabil</label>
-                    <input
-                      id="edit-substance-responsible"
-                      value={editForm.responsibleName ?? ""}
-                      onChange={(event) => setEditForm((prev) => ({ ...prev, responsibleName: event.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="edit-substance-sds">Înlocuire fișă SDS</label>
-                    <input
-                      id="edit-substance-sds"
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={(event) => setEditSds(event.target.files?.[0])}
-                    />
-                    {selected.sdsSheetName ? (
-                      <p className="field-hint">Fișă curentă: {selected.sdsSheetName}</p>
-                    ) : null}
-                  </div>
-                  <div className="form-actions">
-                    <button type="submit" className="btn-primary" disabled={updateMutation.isPending}>
-                      {updateMutation.isPending ? "Se salvează…" : "Salvează"}
-                    </button>
-                    {selected.status !== "RETIRED" ? (
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        disabled={retireMutation.isPending}
-                        onClick={() => retireMutation.mutate(selected.id)}
-                      >
-                        Scoate din evidență
-                      </button>
-                    ) : null}
-                  </div>
-                  {updateMutation.isSuccess ? (
-                    <p className="feedback success" role="status">
-                      Registrul a fost actualizat.
-                    </p>
-                  ) : null}
-                  {updateMutation.isError ? (
-                    <p className="feedback error">{mutationErrorMessage(updateMutation.error)}</p>
-                  ) : null}
-                  {retireMutation.isError ? (
-                    <p className="feedback error">{mutationErrorMessage(retireMutation.error)}</p>
-                  ) : null}
-                </form>
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-trade">Denumire comercială</label>
+              <input
+                id="create-substance-trade"
+                value={createForm.tradeName ?? ""}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, tradeName: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-cas">Număr CAS</label>
+              <input
+                id="create-substance-cas"
+                value={createForm.casNumber ?? ""}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, casNumber: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-un">Număr UN</label>
+              <input
+                id="create-substance-un"
+                value={createForm.unNumber ?? ""}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, unNumber: event.target.value }))}
+              />
+            </div>
+            <FieldSelect
+              id="create-substance-hazard"
+              label="Clasă de pericol"
+              value={createForm.hazardClass ?? "OTHER"}
+              onChange={(hazardClass) =>
+                setCreateForm((prev) => ({ ...prev, hazardClass: hazardClass as SsmDangerousSubstanceHazard }))
+              }
+              options={hazardOptions}
+            />
+            <div className="field">
+              <label htmlFor="create-substance-location">Locație depozitare *</label>
+              <input
+                id="create-substance-location"
+                required
+                value={createForm.location}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, location: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-qty">Cantitate *</label>
+              <input
+                id="create-substance-qty"
+                type="number"
+                min={0}
+                step="0.001"
+                required
+                value={createForm.quantity}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, quantity: Number(event.target.value) }))}
+              />
+            </div>
+            <FieldSelect
+              id="create-substance-unit"
+              label="Unitate"
+              value={createForm.unit ?? "L"}
+              onChange={(unit) => setCreateForm((prev) => ({ ...prev, unit: unit as SsmDangerousSubstanceUnit }))}
+              options={unitOptions}
+            />
+            <div className="field">
+              <label htmlFor="create-substance-container">Ambalaj / recipient</label>
+              <input
+                id="create-substance-container"
+                value={createForm.containerType ?? ""}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, containerType: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-sds-date">Valabilitate fișă SDS</label>
+              <input
+                id="create-substance-sds-date"
+                type="date"
+                value={createForm.sdsValidUntil ?? ""}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, sdsValidUntil: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-responsible">Responsabil</label>
+              <input
+                id="create-substance-responsible"
+                value={createForm.responsibleName ?? ""}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, responsibleName: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-notes">Observații</label>
+              <input
+                id="create-substance-notes"
+                value={createForm.notes ?? ""}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, notes: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="create-substance-sds">Fișă SDS (PDF/Word)</label>
+              <input
+                id="create-substance-sds"
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(event) => setCreateSds(event.target.files?.[0])}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Se salvează…" : "Adaugă în registru"}
+            </button>
+            {createMutation.isError ? (
+              <p className="feedback error">{mutationErrorMessage(createMutation.error)}</p>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
+      ) : null}
+
+      {selected && canEdit ? (
+        <MasterDataCreateModal
+          title={selected.name}
+          titleId="substance-edit-modal-title"
+          description={`${selected.worksiteCode} · ${selected.location} · ${formatQuantity(selected)}`}
+          size="wide"
+          onClose={closeEdit}
+        >
+          <form className="form-stack" onSubmit={onUpdate}>
+            <div className="field">
+              <label htmlFor="edit-substance-name">Denumire</label>
+              <input
+                id="edit-substance-name"
+                value={editForm.name ?? ""}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-substance-location">Locație depozitare</label>
+              <input
+                id="edit-substance-location"
+                value={editForm.location ?? ""}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, location: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-substance-qty">Cantitate</label>
+              <input
+                id="edit-substance-qty"
+                type="number"
+                min={0}
+                step="0.001"
+                value={editForm.quantity ?? 0}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, quantity: Number(event.target.value) }))}
+              />
+            </div>
+            <FieldSelect
+              id="edit-substance-unit"
+              label="Unitate"
+              value={editForm.unit ?? "L"}
+              onChange={(unit) => setEditForm((prev) => ({ ...prev, unit: unit as SsmDangerousSubstanceUnit }))}
+              options={unitOptions}
+            />
+            <FieldSelect
+              id="edit-substance-hazard"
+              label="Clasă de pericol"
+              value={editForm.hazardClass ?? "OTHER"}
+              onChange={(hazardClass) =>
+                setEditForm((prev) => ({ ...prev, hazardClass: hazardClass as SsmDangerousSubstanceHazard }))
+              }
+              options={hazardOptions}
+            />
+            <FieldSelect
+              id="edit-substance-status"
+              label="Status"
+              value={editForm.status ?? "ACTIVE"}
+              onChange={(status) =>
+                setEditForm((prev) => ({ ...prev, status: status as SsmDangerousSubstanceStatus }))
+              }
+              options={statusOptions}
+            />
+            <div className="field">
+              <label htmlFor="edit-substance-cas">Număr CAS</label>
+              <input
+                id="edit-substance-cas"
+                value={editForm.casNumber ?? ""}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, casNumber: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-substance-sds-date">Valabilitate fișă SDS</label>
+              <input
+                id="edit-substance-sds-date"
+                type="date"
+                value={editForm.sdsValidUntil ?? ""}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, sdsValidUntil: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-substance-responsible">Responsabil</label>
+              <input
+                id="edit-substance-responsible"
+                value={editForm.responsibleName ?? ""}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, responsibleName: event.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-substance-sds">Înlocuire fișă SDS</label>
+              <input
+                id="edit-substance-sds"
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(event) => setEditSds(event.target.files?.[0])}
+              />
+              {selected.sdsSheetName ? (
+                <p className="field-hint">Fișă curentă: {selected.sdsSheetName}</p>
               ) : null}
-              {!canEdit ? <p className="field-hint">Ai drept de vizualizare, fără editare.</p> : null}
-            </>
-          )}
-        </section>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="btn-primary" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Se salvează…" : "Salvează"}
+              </button>
+              {selected.status !== "RETIRED" ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={retireMutation.isPending}
+                  onClick={() => retireMutation.mutate(selected.id, { onSuccess: () => setSelectedId("") })}
+                >
+                  Scoate din evidență
+                </button>
+              ) : null}
+            </div>
+            {updateMutation.isError ? (
+              <p className="feedback error">{mutationErrorMessage(updateMutation.error)}</p>
+            ) : null}
+            {retireMutation.isError ? (
+              <p className="feedback error">{mutationErrorMessage(retireMutation.error)}</p>
+            ) : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
     </div>
   );

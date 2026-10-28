@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CreateSsmCssmCommitteeRequest,
   CreateSsmCssmMeetingRequest,
@@ -16,6 +16,7 @@ import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { mapToOptions } from "../../../shared/components/field-select-options";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { useLegalEntitiesLookup } from "../../master-data/hooks/useMasterData";
 import { ssmApi } from "../api/ssm.api";
 import {
@@ -35,6 +36,7 @@ import {
 } from "../hooks/useSsmCssm";
 
 type CssmTab = "members" | "meetings" | "minutes" | "archive";
+type CssmDialog = "committee" | "decision" | "member" | "meeting" | "minutes";
 
 const CADENCE_LABELS: Record<SsmCssmCadenceStatus, string> = {
   OK: "În termen",
@@ -157,6 +159,8 @@ export function SsmCssmManager() {
   const [minutesForm, setMinutesForm] = useState({ number: "", topics: "", decisions: "", nextMeetingAt: "" });
   const [signature, setSignature] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<CssmDialog | null>(null);
+  const closeDialog = useCallback(() => setDialog(null), []);
 
   const legalEntities = useLegalEntitiesLookup();
   const listQuery = useCssmCommittees();
@@ -176,6 +180,32 @@ export function SsmCssmManager() {
   const cancelMeeting = useCancelCssmMeeting();
   const updateAttendee = useUpdateCssmAttendee();
   const saveMinutes = useSaveCssmMinutes();
+
+  const openDialog = (next: CssmDialog) => {
+    if (next === "committee") {
+      createCommittee.reset();
+      setCommitteeForm(EMPTY_COMMITTEE);
+    }
+    if (next === "decision") updateCommittee.reset();
+    if (next === "member") {
+      addMember.reset();
+      setMemberForm(EMPTY_MEMBER);
+    }
+    if (next === "meeting") {
+      createMeeting.reset();
+      setMeetingForm({ ...EMPTY_MEETING, scheduledAt: new Date().toISOString() });
+    }
+    if (next === "minutes") {
+      saveMinutes.reset();
+      setMinutesForm({
+        number: activeMeeting?.minutes?.number ?? "",
+        topics: activeMeeting?.minutes?.topics ?? "",
+        decisions: activeMeeting?.minutes?.decisions ?? "",
+        nextMeetingAt: toDateInput(activeMeeting?.minutes?.nextMeetingAt)
+      });
+    }
+    setDialog(next);
+  };
   const archiveQuery = useCssmArchive(committee?.legalEntityId, tab === "archive" && Boolean(committee?.legalEntityId));
   const archiveCommittee = archiveQuery.data?.items
     .flatMap((entity) => entity.committees)
@@ -244,6 +274,7 @@ export function SsmCssmManager() {
         onSuccess: (created) => {
           setCommitteeId(created.id);
           setCommitteeForm(EMPTY_COMMITTEE);
+          closeDialog();
         }
       }
     );
@@ -252,17 +283,25 @@ export function SsmCssmManager() {
   const onAddMember = (event: FormEvent) => {
     event.preventDefault();
     if (!committeeId) return;
-    addMember.mutate({
-      committeeId,
-      payload: {
-        ...memberForm,
-        employeeId: memberForm.employeeId || undefined,
-        fullName: memberForm.fullName?.trim() || undefined,
-        functionTitle: memberForm.functionTitle?.trim() || undefined,
-        appointedAt: memberForm.appointedAt || undefined,
-        notes: memberForm.notes?.trim() || undefined
+    addMember.mutate(
+      {
+        committeeId,
+        payload: {
+          ...memberForm,
+          employeeId: memberForm.employeeId || undefined,
+          fullName: memberForm.fullName?.trim() || undefined,
+          functionTitle: memberForm.functionTitle?.trim() || undefined,
+          appointedAt: memberForm.appointedAt || undefined,
+          notes: memberForm.notes?.trim() || undefined
+        }
+      },
+      {
+        onSuccess: () => {
+          setMemberForm(EMPTY_MEMBER);
+          closeDialog();
+        }
       }
-    });
+    );
   };
 
   const onCreateMeeting = (event: FormEvent) => {
@@ -280,7 +319,8 @@ export function SsmCssmManager() {
       {
         onSuccess: (created) => {
           setMeetingId(created.id);
-          setTab("meetings");
+          setTab("minutes");
+          closeDialog();
         }
       }
     );
@@ -289,27 +329,57 @@ export function SsmCssmManager() {
   const onSaveMinutes = (event: FormEvent) => {
     event.preventDefault();
     if (!activeMeeting?.id) return;
-    saveMinutes.mutate({
-      meetingId: activeMeeting.id,
-      payload: {
-        number: minutesForm.number.trim() || undefined,
-        topics: minutesForm.topics.trim() || undefined,
-        decisions: minutesForm.decisions.trim() || undefined,
-        nextMeetingAt: minutesForm.nextMeetingAt || undefined
-      }
-    });
+    saveMinutes.mutate(
+      {
+        meetingId: activeMeeting.id,
+        payload: {
+          number: minutesForm.number.trim() || undefined,
+          topics: minutesForm.topics.trim() || undefined,
+          decisions: minutesForm.decisions.trim() || undefined,
+          nextMeetingAt: minutesForm.nextMeetingAt || undefined
+        }
+      },
+      { onSuccess: closeDialog }
+    );
   };
+
+  const onSaveDecision = (event: FormEvent) => {
+    event.preventDefault();
+    if (!committee) return;
+    updateCommittee.mutate(
+      {
+        committeeId: committee.id,
+        payload: {
+          name: committeeEdit.name.trim(),
+          decisionNumber: committeeEdit.decisionNumber.trim() || undefined,
+          decisionDate: committeeEdit.decisionDate || undefined,
+          constitutedAt: committeeEdit.constitutedAt || undefined,
+          meetingIntervalMonths: committeeEdit.meetingIntervalMonths,
+          notes: committeeEdit.notes.trim() || undefined
+        }
+      },
+      { onSuccess: closeDialog }
+    );
+  };
+
+  const downloadDecision = (id: string) =>
+    downloadWithAuth(ssmApi.getCssmDecisionUrl(id), `decizie-cssm-${id}.pdf`).catch((error: unknown) =>
+      setDownloadError(mutationErrorMessage(error))
+    );
 
   return (
     <div className="ssm-panel-layout">
       <div className="card form-stack ssm-doc-card">
-        <div className="ssm-card-header">
-          <h4 className="card-title">Comisii CSSM</h4>
+        <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+          <h4 className="card-title" style={{ margin: 0 }}>
+            Comisii CSSM
+          </h4>
+          {canEdit ? (
+            <button type="button" className="btn-primary" onClick={() => openDialog("committee")}>
+              Comisie nouă
+            </button>
+          ) : null}
         </div>
-        <p className="field-hint">
-          Comitetul de securitate și sănătate în muncă — componență, convocări și procese-verbale. Completarea
-          numărului de decizie publică automat documentul în bibliotecă (tip Decizie), pentru control ITM.
-        </p>
         <div className="ssm-doc-items">
           {committees.map((item) => (
             <button
@@ -328,53 +398,54 @@ export function SsmCssmManager() {
           ))}
           {!committees.length ? <p className="field-hint">Nu există încă o comisie CSSM.</p> : null}
         </div>
-        {canEdit ? (
-          <form className="form-stack" onSubmit={onCreateCommittee}>
-            <h5 className="ssm-subtitle">Comisie nouă</h5>
-            <FieldSelect
-              id="cssm-entity"
-              label="Entitate juridică"
-              value={committeeForm.legalEntityId}
-              onChange={(legalEntityId) => setCommitteeForm((prev) => ({ ...prev, legalEntityId }))}
-              options={entityOptions}
-              required
-              allowEmpty
-              emptyLabel="Selectează entitatea"
-            />
-            <div className="field">
-              <label htmlFor="cssm-name">Denumire</label>
-              <input
-                id="cssm-name"
-                value={committeeForm.name}
-                onChange={(event) => setCommitteeForm((prev) => ({ ...prev, name: event.target.value }))}
+        {canEdit && dialog === "committee" ? (
+          <MasterDataCreateModal title="Comisie CSSM nouă" titleId="cssm-committee-modal" onClose={closeDialog}>
+            <form className="form-stack" onSubmit={onCreateCommittee}>
+              <FieldSelect
+                id="cssm-entity"
+                label="Entitate juridică"
+                value={committeeForm.legalEntityId}
+                onChange={(legalEntityId) => setCommitteeForm((prev) => ({ ...prev, legalEntityId }))}
+                options={entityOptions}
                 required
+                allowEmpty
+                emptyLabel="Selectează entitatea"
               />
-            </div>
-            <div className="field">
-              <label htmlFor="cssm-decision">Nr. decizie constituire</label>
-              <input
-                id="cssm-decision"
-                value={committeeForm.decisionNumber ?? ""}
-                onChange={(event) => setCommitteeForm((prev) => ({ ...prev, decisionNumber: event.target.value }))}
-                placeholder="ex. 12/2026"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="cssm-decision-date">Data deciziei</label>
-              <input
-                id="cssm-decision-date"
-                type="date"
-                value={committeeForm.decisionDate ?? ""}
-                onChange={(event) => setCommitteeForm((prev) => ({ ...prev, decisionDate: event.target.value }))}
-              />
-            </div>
-            <button className="btn-primary" type="submit" disabled={createCommittee.isPending}>
-              {createCommittee.isPending ? "Se creează…" : "Creează comisia"}
-            </button>
-            {createCommittee.isError ? (
-              <p className="feedback error">{mutationErrorMessage(createCommittee.error)}</p>
-            ) : null}
-          </form>
+              <div className="field">
+                <label htmlFor="cssm-name">Denumire</label>
+                <input
+                  id="cssm-name"
+                  value={committeeForm.name}
+                  onChange={(event) => setCommitteeForm((prev) => ({ ...prev, name: event.target.value }))}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="cssm-decision">Nr. decizie constituire</label>
+                <input
+                  id="cssm-decision"
+                  value={committeeForm.decisionNumber ?? ""}
+                  onChange={(event) => setCommitteeForm((prev) => ({ ...prev, decisionNumber: event.target.value }))}
+                  placeholder="ex. 12/2026"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="cssm-decision-date">Data deciziei</label>
+                <input
+                  id="cssm-decision-date"
+                  type="date"
+                  value={committeeForm.decisionDate ?? ""}
+                  onChange={(event) => setCommitteeForm((prev) => ({ ...prev, decisionDate: event.target.value }))}
+                />
+              </div>
+              <button className="btn-primary" type="submit" disabled={createCommittee.isPending}>
+                {createCommittee.isPending ? "Se creează…" : "Creează comisia"}
+              </button>
+              {createCommittee.isError ? (
+                <p className="feedback error">{mutationErrorMessage(createCommittee.error)}</p>
+              ) : null}
+            </form>
+          </MasterDataCreateModal>
         ) : null}
       </div>
 
@@ -385,130 +456,90 @@ export function SsmCssmManager() {
           <>
             <div className="ssm-card-header">
               <h4 className="card-title">{committee.name}</h4>
-              {canEdit ? (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() =>
-                    updateCommittee.mutate({
-                      committeeId: committee.id,
-                      payload: { active: !committee.active }
-                    })
-                  }
-                >
-                  {committee.active ? "Dezactivează" : "Reactivează"}
+              <div className="ssm-inline-actions">
+                <button type="button" className="btn-secondary" onClick={() => void downloadDecision(committee.id)}>
+                  Decizie (PDF)
                 </button>
-              ) : null}
+                {canEdit ? (
+                  <>
+                    <button type="button" className="btn-secondary" onClick={() => openDialog("decision")}>
+                      Editează decizia
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() =>
+                        updateCommittee.mutate({
+                          committeeId: committee.id,
+                          payload: { active: !committee.active }
+                        })
+                      }
+                    >
+                      {committee.active ? "Dezactivează" : "Reactivează"}
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
             <p className="field-hint">
               {committee.legalEntityName}
               {committee.decisionNumber ? ` · Decizie ${committee.decisionNumber}` : ""}
               {committee.decisionDocumentId ? " · publicată în Documente" : ""}
             </p>
-            {canEdit ? (
-              <form
-                className="form-stack"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  updateCommittee.mutate({
-                    committeeId: committee.id,
-                    payload: {
-                      name: committeeEdit.name.trim(),
-                      decisionNumber: committeeEdit.decisionNumber.trim() || undefined,
-                      decisionDate: committeeEdit.decisionDate || undefined,
-                      constitutedAt: committeeEdit.constitutedAt || undefined,
-                      meetingIntervalMonths: committeeEdit.meetingIntervalMonths,
-                      notes: committeeEdit.notes.trim() || undefined
+            {canEdit && dialog === "decision" ? (
+              <MasterDataCreateModal title="Decizie de numire" titleId="cssm-decision-modal" onClose={closeDialog}>
+                <form className="form-stack" onSubmit={onSaveDecision}>
+                  <div className="field">
+                    <label htmlFor="cssm-edit-name">Denumire</label>
+                    <input
+                      id="cssm-edit-name"
+                      value={committeeEdit.name}
+                      onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, name: event.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="cssm-edit-decision">Nr. decizie constituire</label>
+                    <input
+                      id="cssm-edit-decision"
+                      value={committeeEdit.decisionNumber}
+                      onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, decisionNumber: event.target.value }))}
+                      placeholder="ex. 12/2026"
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="cssm-edit-decision-date">Data deciziei</label>
+                    <input
+                      id="cssm-edit-decision-date"
+                      type="date"
+                      value={committeeEdit.decisionDate}
+                      onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, decisionDate: event.target.value }))}
+                    />
+                  </div>
+                  <FieldSelect
+                    id="cssm-edit-interval"
+                    label="Termen de ședință (întrunire cel puțin o dată la)"
+                    value={String(committeeEdit.meetingIntervalMonths)}
+                    onChange={(value) =>
+                      setCommitteeEdit((prev) => ({ ...prev, meetingIntervalMonths: Number(value) || 3 }))
                     }
-                  });
-                }}
-              >
-                <h5 className="ssm-subtitle">Decizie de numire</h5>
-                <div className="field">
-                  <label htmlFor="cssm-edit-name">Denumire</label>
-                  <input
-                    id="cssm-edit-name"
-                    value={committeeEdit.name}
-                    onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, name: event.target.value }))}
-                    required
+                    options={[1, 2, 3, 6, 12].map((months) => ({
+                      value: String(months),
+                      label: months === 1 ? "1 lună" : `${months} luni${months === 3 ? " (trimestrial, minim legal)" : ""}`
+                    }))}
                   />
-                </div>
-                <div className="field">
-                  <label htmlFor="cssm-edit-decision">Nr. decizie constituire</label>
-                  <input
-                    id="cssm-edit-decision"
-                    value={committeeEdit.decisionNumber}
-                    onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, decisionNumber: event.target.value }))}
-                    placeholder="ex. 12/2026"
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="cssm-edit-decision-date">Data deciziei</label>
-                  <input
-                    id="cssm-edit-decision-date"
-                    type="date"
-                    value={committeeEdit.decisionDate}
-                    onChange={(event) => setCommitteeEdit((prev) => ({ ...prev, decisionDate: event.target.value }))}
-                  />
-                </div>
-                <FieldSelect
-                  id="cssm-edit-interval"
-                  label="Termen de ședință (întrunire cel puțin o dată la)"
-                  value={String(committeeEdit.meetingIntervalMonths)}
-                  onChange={(value) =>
-                    setCommitteeEdit((prev) => ({ ...prev, meetingIntervalMonths: Number(value) || 3 }))
-                  }
-                  options={[1, 2, 3, 6, 12].map((months) => ({
-                    value: String(months),
-                    label: months === 1 ? "1 lună" : `${months} luni${months === 3 ? " (trimestrial, minim legal)" : ""}`
-                  }))}
-                />
-                <div className="ssm-inline-actions">
+                  <p className="field-hint">
+                    Cu număr de decizie completat, salvarea publică decizia în Documente SSM (tip Decizie).
+                  </p>
                   <button className="btn-primary" type="submit" disabled={updateCommittee.isPending}>
-                    {updateCommittee.isPending ? "Se salvează…" : "Salvează și publică în Documente"}
+                    {updateCommittee.isPending ? "Se salvează…" : "Salvează decizia"}
                   </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() =>
-                      downloadWithAuth(
-                        ssmApi.getCssmDecisionUrl(committee.id),
-                        `decizie-cssm-${committee.id}.pdf`
-                      ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)))
-                    }
-                  >
-                    Descarcă decizia (PDF)
-                  </button>
-                </div>
-                {committee.decisionDocumentId ? (
-                  <p className="field-hint">
-                    Decizia este în biblioteca SSM (tip Decizie), dosar control ITM. Salvarea actualizează versiunea.
-                  </p>
-                ) : (
-                  <p className="field-hint">
-                    Completează numărul deciziei și salvează pentru a o publica automat la Documente.
-                  </p>
-                )}
-                {updateCommittee.isError ? (
-                  <p className="feedback error">{mutationErrorMessage(updateCommittee.error)}</p>
-                ) : null}
-              </form>
-            ) : (
-              <div className="ssm-inline-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() =>
-                    downloadWithAuth(
-                      ssmApi.getCssmDecisionUrl(committee.id),
-                      `decizie-cssm-${committee.id}.pdf`
-                    ).catch((error: unknown) => setDownloadError(mutationErrorMessage(error)))
-                  }
-                >
-                  Descarcă decizia (PDF)
-                </button>
-              </div>
-            )}
+                  {updateCommittee.isError ? (
+                    <p className="feedback error">{mutationErrorMessage(updateCommittee.error)}</p>
+                  ) : null}
+                </form>
+              </MasterDataCreateModal>
+            ) : null}
             {downloadError ? <p className="feedback error">{downloadError}</p> : null}
             {committee.cadence ? (
               <div className="ssm-cssm-cadence">
@@ -563,6 +594,13 @@ export function SsmCssmManager() {
 
             {tab === "members" ? (
               <>
+                {canEdit ? (
+                  <div className="ssm-inline-actions" style={{ justifyContent: "flex-end" }}>
+                    <button type="button" className="btn-primary" onClick={() => openDialog("member")}>
+                      Membru nou
+                    </button>
+                  </div>
+                ) : null}
                 <div className="ssm-history-list">
                   {committee.members.map((member) => (
                     <div key={member.id} className="ssm-history-item">
@@ -595,52 +633,60 @@ export function SsmCssmManager() {
                   ))}
                   {!committee.members.length ? <p className="field-hint">Adaugă membrii comisiei.</p> : null}
                 </div>
-                {canEdit ? (
-                  <form className="form-stack" onSubmit={onAddMember}>
-                    <h5 className="ssm-subtitle">Membru nou</h5>
-                    <EmployeeSelect
-                      id="cssm-member-employee"
-                      label="Angajat"
-                      value={memberForm.employeeId ?? ""}
-                      allowEmpty
-                      emptyLabel="Selectează angajat (opțional)"
-                      onChange={(employeeId) => setMemberForm((prev) => ({ ...prev, employeeId }))}
-                    />
-                    <div className="field">
-                      <label htmlFor="cssm-member-name">Nume (dacă nu e angajat intern)</label>
-                      <input
-                        id="cssm-member-name"
-                        value={memberForm.fullName ?? ""}
-                        onChange={(event) => setMemberForm((prev) => ({ ...prev, fullName: event.target.value }))}
+                {canEdit && dialog === "member" ? (
+                  <MasterDataCreateModal title="Membru nou CSSM" titleId="cssm-member-modal" onClose={closeDialog}>
+                    <form className="form-stack" onSubmit={onAddMember}>
+                      <EmployeeSelect
+                        id="cssm-member-employee"
+                        label="Angajat"
+                        value={memberForm.employeeId ?? ""}
+                        allowEmpty
+                        emptyLabel="Selectează angajat (opțional)"
+                        onChange={(employeeId) => setMemberForm((prev) => ({ ...prev, employeeId }))}
                       />
-                    </div>
-                    <FieldSelect
-                      id="cssm-member-role"
-                      label="Rol CSSM"
-                      value={memberForm.role}
-                      onChange={(role) => setMemberForm((prev) => ({ ...prev, role: role as SsmCssmMemberRole }))}
-                      options={SSM_CSSM_MEMBER_ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] }))}
-                      required
-                    />
-                    <div className="field">
-                      <label htmlFor="cssm-member-function">Funcția</label>
-                      <input
-                        id="cssm-member-function"
-                        value={memberForm.functionTitle ?? ""}
-                        onChange={(event) => setMemberForm((prev) => ({ ...prev, functionTitle: event.target.value }))}
+                      <div className="field">
+                        <label htmlFor="cssm-member-name">Nume (dacă nu e angajat intern)</label>
+                        <input
+                          id="cssm-member-name"
+                          value={memberForm.fullName ?? ""}
+                          onChange={(event) => setMemberForm((prev) => ({ ...prev, fullName: event.target.value }))}
+                        />
+                      </div>
+                      <FieldSelect
+                        id="cssm-member-role"
+                        label="Rol CSSM"
+                        value={memberForm.role}
+                        onChange={(role) => setMemberForm((prev) => ({ ...prev, role: role as SsmCssmMemberRole }))}
+                        options={SSM_CSSM_MEMBER_ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] }))}
+                        required
                       />
-                    </div>
-                    <button className="btn-primary" type="submit" disabled={addMember.isPending}>
-                      {addMember.isPending ? "Se adaugă…" : "Adaugă membru"}
-                    </button>
-                    {addMember.isError ? <p className="feedback error">{mutationErrorMessage(addMember.error)}</p> : null}
-                  </form>
+                      <div className="field">
+                        <label htmlFor="cssm-member-function">Funcția</label>
+                        <input
+                          id="cssm-member-function"
+                          value={memberForm.functionTitle ?? ""}
+                          onChange={(event) => setMemberForm((prev) => ({ ...prev, functionTitle: event.target.value }))}
+                        />
+                      </div>
+                      <button className="btn-primary" type="submit" disabled={addMember.isPending}>
+                        {addMember.isPending ? "Se adaugă…" : "Adaugă membru"}
+                      </button>
+                      {addMember.isError ? <p className="feedback error">{mutationErrorMessage(addMember.error)}</p> : null}
+                    </form>
+                  </MasterDataCreateModal>
                 ) : null}
               </>
             ) : null}
 
             {tab === "meetings" ? (
               <>
+                {canEdit ? (
+                  <div className="ssm-inline-actions" style={{ justifyContent: "flex-end" }}>
+                    <button type="button" className="btn-primary" onClick={() => openDialog("meeting")}>
+                      Ședință nouă
+                    </button>
+                  </div>
+                ) : null}
                 <div className="ssm-history-list">
                   {meetings.map((meeting) => (
                     <div key={meeting.id} className="ssm-history-item">
@@ -663,66 +709,67 @@ export function SsmCssmManager() {
                   ))}
                   {!meetings.length ? <p className="field-hint">Nu există ședințe înregistrate.</p> : null}
                 </div>
-                {canEdit ? (
-                  <form className="form-stack" onSubmit={onCreateMeeting}>
-                    <h5 className="ssm-subtitle">Ședință / convocare nouă</h5>
-                    <FieldSelect
-                      id="cssm-meeting-kind"
-                      label="Tip"
-                      value={meetingForm.kind ?? "ORDINARY"}
-                      onChange={(kind) =>
-                        setMeetingForm((prev) => ({ ...prev, kind: kind as SsmCssmMeetingKind }))
-                      }
-                      options={SSM_CSSM_MEETING_KINDS.map((kind) => ({ value: kind, label: KIND_LABELS[kind] }))}
-                    />
-                    <div className="field">
-                      <label htmlFor="cssm-meeting-title">Titlu</label>
-                      <input
-                        id="cssm-meeting-title"
-                        value={meetingForm.title}
-                        onChange={(event) => setMeetingForm((prev) => ({ ...prev, title: event.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="cssm-meeting-when">Data și ora</label>
-                      <input
-                        id="cssm-meeting-when"
-                        type="datetime-local"
-                        value={toDatetimeLocal(meetingForm.scheduledAt)}
-                        onChange={(event) =>
-                          setMeetingForm((prev) => ({
-                            ...prev,
-                            scheduledAt: new Date(event.target.value).toISOString()
-                          }))
+                {canEdit && dialog === "meeting" ? (
+                  <MasterDataCreateModal title="Ședință CSSM nouă" titleId="cssm-meeting-modal" onClose={closeDialog}>
+                    <form className="form-stack" onSubmit={onCreateMeeting}>
+                      <FieldSelect
+                        id="cssm-meeting-kind"
+                        label="Tip"
+                        value={meetingForm.kind ?? "ORDINARY"}
+                        onChange={(kind) =>
+                          setMeetingForm((prev) => ({ ...prev, kind: kind as SsmCssmMeetingKind }))
                         }
-                        required
+                        options={SSM_CSSM_MEETING_KINDS.map((kind) => ({ value: kind, label: KIND_LABELS[kind] }))}
                       />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="cssm-meeting-location">Locație</label>
-                      <input
-                        id="cssm-meeting-location"
-                        value={meetingForm.location ?? ""}
-                        onChange={(event) => setMeetingForm((prev) => ({ ...prev, location: event.target.value }))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="cssm-meeting-agenda">Ordinea de zi</label>
-                      <textarea
-                        id="cssm-meeting-agenda"
-                        rows={4}
-                        value={meetingForm.agenda ?? ""}
-                        onChange={(event) => setMeetingForm((prev) => ({ ...prev, agenda: event.target.value }))}
-                      />
-                    </div>
-                    <button className="btn-primary" type="submit" disabled={createMeeting.isPending}>
-                      {createMeeting.isPending ? "Se creează…" : "Creează ședința"}
-                    </button>
-                    {createMeeting.isError ? (
-                      <p className="feedback error">{mutationErrorMessage(createMeeting.error)}</p>
-                    ) : null}
-                  </form>
+                      <div className="field">
+                        <label htmlFor="cssm-meeting-title">Titlu</label>
+                        <input
+                          id="cssm-meeting-title"
+                          value={meetingForm.title}
+                          onChange={(event) => setMeetingForm((prev) => ({ ...prev, title: event.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="cssm-meeting-when">Data și ora</label>
+                        <input
+                          id="cssm-meeting-when"
+                          type="datetime-local"
+                          value={toDatetimeLocal(meetingForm.scheduledAt)}
+                          onChange={(event) =>
+                            setMeetingForm((prev) => ({
+                              ...prev,
+                              scheduledAt: new Date(event.target.value).toISOString()
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="cssm-meeting-location">Locație</label>
+                        <input
+                          id="cssm-meeting-location"
+                          value={meetingForm.location ?? ""}
+                          onChange={(event) => setMeetingForm((prev) => ({ ...prev, location: event.target.value }))}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="cssm-meeting-agenda">Ordinea de zi</label>
+                        <textarea
+                          id="cssm-meeting-agenda"
+                          rows={4}
+                          value={meetingForm.agenda ?? ""}
+                          onChange={(event) => setMeetingForm((prev) => ({ ...prev, agenda: event.target.value }))}
+                        />
+                      </div>
+                      <button className="btn-primary" type="submit" disabled={createMeeting.isPending}>
+                        {createMeeting.isPending ? "Se creează…" : "Creează ședința"}
+                      </button>
+                      {createMeeting.isError ? (
+                        <p className="feedback error">{mutationErrorMessage(createMeeting.error)}</p>
+                      ) : null}
+                    </form>
+                  </MasterDataCreateModal>
                 ) : null}
               </>
             ) : null}
@@ -797,6 +844,11 @@ export function SsmCssmManager() {
                         Anulează
                       </button>
                     ) : null}
+                    {canEdit && activeMeeting.status !== "CANCELLED" ? (
+                      <button type="button" className="btn-primary" onClick={() => openDialog("minutes")}>
+                        {activeMeeting.hasMinutes ? "Editează PV" : "Redactează PV"}
+                      </button>
+                    ) : null}
                   </div>
                   {downloadError ? <p className="feedback error">{downloadError}</p> : null}
                   {conveneMeeting.isError ? (
@@ -815,8 +867,18 @@ export function SsmCssmManager() {
                       {activeMeeting.noticeWarning}
                     </div>
                   ) : null}
-                  {activeMeeting.minutesDocumentId ? (
-                    <p className="field-hint">PV-ul este arhivat automat în Documente SSM (dosar de control), versionat la fiecare modificare.</p>
+                  {saveMinutes.isSuccess ? (
+                    <p className="feedback success">Proces-verbal salvat. Ședința este marcată ca ținută.</p>
+                  ) : null}
+                  {activeMeeting.minutes ? (
+                    <div className="form-stack">
+                      <h5 className="ssm-subtitle">
+                        PV {activeMeeting.minutes.number}
+                        {activeMeeting.minutesDocumentId ? " · arhivat în Documente" : ""}
+                      </h5>
+                      <p>{activeMeeting.minutes.topics || "—"}</p>
+                      <p>{activeMeeting.minutes.decisions || "—"}</p>
+                    </div>
                   ) : null}
 
                   <h5 className="ssm-subtitle">Prezență</h5>
@@ -874,61 +936,58 @@ export function SsmCssmManager() {
                     </div>
                   ) : null}
 
-                  {canEdit && activeMeeting.status !== "CANCELLED" ? (
-                    <form className="form-stack" onSubmit={onSaveMinutes}>
-                      <h5 className="ssm-subtitle">Proces-verbal</h5>
-                      <div className="field">
-                        <label htmlFor="cssm-pv-number">Număr PV</label>
-                        <input
-                          id="cssm-pv-number"
-                          value={minutesForm.number}
-                          onChange={(event) => setMinutesForm((prev) => ({ ...prev, number: event.target.value }))}
-                          placeholder="se generează automat dacă e gol"
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="cssm-pv-topics">Dezbatere / puncte discutate</label>
-                        <textarea
-                          id="cssm-pv-topics"
-                          rows={5}
-                          value={minutesForm.topics}
-                          onChange={(event) => setMinutesForm((prev) => ({ ...prev, topics: event.target.value }))}
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="cssm-pv-decisions">Hotărâri / măsuri</label>
-                        <textarea
-                          id="cssm-pv-decisions"
-                          rows={5}
-                          value={minutesForm.decisions}
-                          onChange={(event) => setMinutesForm((prev) => ({ ...prev, decisions: event.target.value }))}
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="cssm-pv-next">Următoarea ședință</label>
-                        <input
-                          id="cssm-pv-next"
-                          type="date"
-                          value={minutesForm.nextMeetingAt}
-                          onChange={(event) => setMinutesForm((prev) => ({ ...prev, nextMeetingAt: event.target.value }))}
-                        />
-                      </div>
-                      <button className="btn-primary" type="submit" disabled={saveMinutes.isPending}>
-                        {saveMinutes.isPending ? "Se salvează…" : "Salvează proces-verbal"}
-                      </button>
-                      {saveMinutes.isError ? (
-                        <p className="feedback error">{mutationErrorMessage(saveMinutes.error)}</p>
-                      ) : null}
-                      {saveMinutes.isSuccess ? (
-                        <p className="feedback success">Proces-verbal salvat. Ședința este marcată ca ținută.</p>
-                      ) : null}
-                    </form>
-                  ) : activeMeeting.minutes ? (
-                    <>
-                      <p className="field-hint">PV {activeMeeting.minutes.number}</p>
-                      <p>{activeMeeting.minutes.topics || "—"}</p>
-                      <p>{activeMeeting.minutes.decisions || "—"}</p>
-                    </>
+                  {canEdit && dialog === "minutes" && activeMeeting.status !== "CANCELLED" ? (
+                    <MasterDataCreateModal
+                      title={`Proces-verbal · ${activeMeeting.title}`}
+                      titleId="cssm-minutes-modal"
+                      size="wide"
+                      onClose={closeDialog}
+                    >
+                      <form className="form-stack" onSubmit={onSaveMinutes}>
+                        <div className="field">
+                          <label htmlFor="cssm-pv-number">Număr PV</label>
+                          <input
+                            id="cssm-pv-number"
+                            value={minutesForm.number}
+                            onChange={(event) => setMinutesForm((prev) => ({ ...prev, number: event.target.value }))}
+                            placeholder="se generează automat dacă e gol"
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="cssm-pv-topics">Dezbatere / puncte discutate</label>
+                          <textarea
+                            id="cssm-pv-topics"
+                            rows={5}
+                            value={minutesForm.topics}
+                            onChange={(event) => setMinutesForm((prev) => ({ ...prev, topics: event.target.value }))}
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="cssm-pv-decisions">Hotărâri / măsuri</label>
+                          <textarea
+                            id="cssm-pv-decisions"
+                            rows={5}
+                            value={minutesForm.decisions}
+                            onChange={(event) => setMinutesForm((prev) => ({ ...prev, decisions: event.target.value }))}
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="cssm-pv-next">Următoarea ședință</label>
+                          <input
+                            id="cssm-pv-next"
+                            type="date"
+                            value={minutesForm.nextMeetingAt}
+                            onChange={(event) => setMinutesForm((prev) => ({ ...prev, nextMeetingAt: event.target.value }))}
+                          />
+                        </div>
+                        <button className="btn-primary" type="submit" disabled={saveMinutes.isPending}>
+                          {saveMinutes.isPending ? "Se salvează…" : "Salvează proces-verbal"}
+                        </button>
+                        {saveMinutes.isError ? (
+                          <p className="feedback error">{mutationErrorMessage(saveMinutes.error)}</p>
+                        ) : null}
+                      </form>
+                    </MasterDataCreateModal>
                   ) : null}
                 </>
               )

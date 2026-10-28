@@ -1,7 +1,6 @@
 import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import type { SsmSectionId } from "../../../shared/auth/effective-permissions";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
-import { TrainingAssignForm } from "../components/TrainingAssignForm";
 import { SsmDocumentsManager } from "../components/SsmDocumentsManager";
 import { SsmTrainingSuiteManager } from "../components/SsmTrainingSuiteManager";
 import { SsmEipManager } from "../components/SsmEipManager";
@@ -41,13 +40,11 @@ function renderSection(section: SsmSectionId) {
       return <SsmCssmManager />;
     case "conventions":
       return <SsmConventionsManager />;
-    case "compliance":
-      return <SsmComplianceDashboardManager />;
     case "reports":
       return <SsmReportsManager />;
-    case "quick":
+    case "compliance":
     default:
-      return <TrainingAssignForm />;
+      return <SsmComplianceDashboardManager />;
   }
 }
 

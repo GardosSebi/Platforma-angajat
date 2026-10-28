@@ -273,7 +273,6 @@ export function SsmReportsManager() {
   const worksites = useWorksitesLookup();
   const departments = useDepartmentsLookup();
 
-  const activeTabMeta = PAGE_TABS.find((item) => item.id === tab) ?? PAGE_TABS[0];
   const selectedReport = REPORT_TYPES.find((item) => item.type === selectedType);
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const rows = reportQuery.data?.rows ?? [];
@@ -360,12 +359,8 @@ export function SsmReportsManager() {
         ))}
       </div>
 
-      <header className="ssm-panel-header ssm-overview-toolbar">
-        <div>
-          <h3 className="card-title">{activeTabMeta.title}</h3>
-          <p className="field-hint">{activeTabMeta.caption}</p>
-        </div>
-        {tab === "generate" ? (
+      {tab === "generate" ? (
+        <header className="ssm-panel-header ssm-overview-toolbar ssm-overview-toolbar--end">
           <div className="ssm-inline-actions">
             <button
               type="button"
@@ -391,8 +386,8 @@ export function SsmReportsManager() {
               {downloading === "excel" ? "Excel…" : "Export Excel"}
             </button>
           </div>
-        ) : null}
-      </header>
+        </header>
+      ) : null}
 
       {tab === "generate" ? (
         <>

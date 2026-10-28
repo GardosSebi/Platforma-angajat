@@ -10,7 +10,6 @@ export type SsmSectionMeta = {
 export const SSM_SECTIONS: SsmSectionMeta[] = [
   { id: "compliance", label: "Calendar și restanțe", description: "Scadențe, restanțe și starea conformității." },
   { id: "training", label: "Instruiri", description: "Planificare, teste, semnături și fișe de instruire." },
-  { id: "quick", label: "Alocare instruire", description: "Alocă rapid o instruire unuia sau mai multor angajați." },
   { id: "medical", label: "Medicina muncii", description: "Controale medicale, rezultate și reminder-uri." },
   { id: "eip", label: "Echipamente EIP", description: "Tipuri EIP, normare pe post, distribuiri și stoc." },
   { id: "accidents", label: "Accidente", description: "Registru, cercetare și măsuri corective." },

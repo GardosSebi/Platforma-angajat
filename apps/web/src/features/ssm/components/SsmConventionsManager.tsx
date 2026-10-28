@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   SSM_CONVENTION_STATUS_LABELS,
   SSM_CONVENTION_STATUSES,
@@ -13,6 +13,7 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { SignatureCanvas } from "../../../shared/components/SignatureCanvas";
 import { mapToOptions } from "../../../shared/components/field-select-options";
+import { MasterDataCreateModal } from "../../master-data/components/MasterDataCreateModal";
 import { useWorksitesLookup } from "../../master-data/hooks/useMasterData";
 import { ssmApi } from "../api/ssm.api";
 import {
@@ -28,6 +29,7 @@ import {
 } from "../hooks/useSsmConventions";
 
 type ClauseKey = keyof SsmConventionClauses;
+type ConventionDialog = "create" | "party" | "terminate" | "clauses";
 
 const CLAUSES: Array<{ key: ClauseKey; label: string; placeholder: string }> = [
   {
@@ -131,6 +133,16 @@ function draftFrom(item: SsmConventionItem): DraftForm {
   };
 }
 
+function emptyCreateForm() {
+  return {
+    worksiteId: "",
+    title: "Convenție SSM pentru lucrări pe locul de muncă comun",
+    startsAt: new Date().toISOString().slice(0, 10),
+    endsAt: "",
+    firstParty: { ...EMPTY_PARTY }
+  };
+}
+
 export function SsmConventionsManager() {
   const session = useAuthSession();
   const canEdit = hasPermission(session?.roles, "ssm:documents:edit");
@@ -139,13 +151,10 @@ export function SsmConventionsManager() {
     status: ""
   });
   const [selectedId, setSelectedId] = useState<string>();
-  const [createForm, setCreateForm] = useState({
-    worksiteId: "",
-    title: "Convenție SSM pentru lucrări pe locul de muncă comun",
-    startsAt: new Date().toISOString().slice(0, 10),
-    endsAt: "",
-    firstParty: { ...EMPTY_PARTY }
-  });
+  const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const [dialog, setDialog] = useState<ConventionDialog | null>(null);
+  const closeDialog = useCallback(() => setDialog(null), []);
+  const closeSigning = useCallback(() => setSigningPartyId(null), []);
   const [draft, setDraft] = useState<DraftForm | null>(null);
   const [partyForm, setPartyForm] = useState<CreateSsmConventionPartyRequest>({ ...EMPTY_PARTY });
   const [signingPartyId, setSigningPartyId] = useState<string | null>(null);
@@ -170,6 +179,32 @@ export function SsmConventionsManager() {
   const signParty = useSignConventionParty();
   const activate = useActivateConvention();
   const terminate = useTerminateConvention();
+
+  const openDialog = (next: ConventionDialog, prefill?: Partial<ReturnType<typeof emptyCreateForm>>) => {
+    if (next === "create") {
+      createConvention.reset();
+      setCreateForm({ ...emptyCreateForm(), ...prefill });
+    }
+    if (next === "party") {
+      addParty.reset();
+      setPartyForm({ ...EMPTY_PARTY });
+    }
+    if (next === "terminate") {
+      terminate.reset();
+      setTerminateReason("");
+    }
+    if (next === "clauses") {
+      updateConvention.reset();
+      if (selected) setDraft(draftFrom(selected));
+    }
+    setDialog(next);
+  };
+
+  const openSigning = (partyId: string) => {
+    signParty.reset();
+    setSignature("");
+    setSigningPartyId(partyId);
+  };
 
   const worksiteOptions = useMemo(
     () => mapToOptions(worksites.data?.items ?? [], (site) => site.id, (site) => `${site.code} — ${site.name}`),
@@ -200,7 +235,7 @@ export function SsmConventionsManager() {
       {
         onSuccess: (created) => {
           setSelectedId(created.id);
-          setCreateForm((prev) => ({ ...prev, firstParty: { ...EMPTY_PARTY } }));
+          closeDialog();
         }
       }
     );
@@ -209,25 +244,30 @@ export function SsmConventionsManager() {
   const onSaveDraft = (event: FormEvent) => {
     event.preventDefault();
     if (!selected || !draft) return;
-    updateConvention.mutate({
-      conventionId: selected.id,
-      payload: {
-        title: draft.title.trim(),
-        startsAt: draft.startsAt,
-        endsAt: draft.endsAt || null,
-        coordinatorName: draft.coordinatorName,
-        coordinatorFunction: draft.coordinatorFunction,
-        coordinatorEmail: draft.coordinatorEmail.trim() || undefined,
-        notes: draft.notes,
-        activityDescription: draft.activityDescription,
-        sharedRisks: draft.sharedRisks,
-        preventionMeasures: draft.preventionMeasures,
-        emergencyArrangements: draft.emergencyArrangements,
-        trainingArrangements: draft.trainingArrangements,
-        eipArrangements: draft.eipArrangements
-      }
-    });
+    updateConvention.mutate(
+      {
+        conventionId: selected.id,
+        payload: {
+          title: draft.title.trim(),
+          startsAt: draft.startsAt,
+          endsAt: draft.endsAt || null,
+          coordinatorName: draft.coordinatorName,
+          coordinatorFunction: draft.coordinatorFunction,
+          coordinatorEmail: draft.coordinatorEmail.trim() || undefined,
+          notes: draft.notes,
+          activityDescription: draft.activityDescription,
+          sharedRisks: draft.sharedRisks,
+          preventionMeasures: draft.preventionMeasures,
+          emergencyArrangements: draft.emergencyArrangements,
+          trainingArrangements: draft.trainingArrangements,
+          eipArrangements: draft.eipArrangements
+        }
+      },
+      { onSuccess: closeDialog }
+    );
   };
+
+  const signingParty = selected?.parties.find((party) => party.id === signingPartyId);
 
   const download = (conventionId: string, fileName: string) => {
     setActionError(null);
@@ -242,14 +282,16 @@ export function SsmConventionsManager() {
   return (
     <div className="ssm-panel-layout">
       <div className="card form-stack ssm-doc-card">
-        <div className="ssm-card-header">
-          <h4 className="card-title">Convenții SSM multi-angajator</h4>
+        <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+          <h4 className="card-title" style={{ margin: 0 }}>
+            Convenții multi-angajator
+          </h4>
+          {canEdit ? (
+            <button type="button" className="btn-primary" onClick={() => openDialog("create")}>
+              Convenție nouă
+            </button>
+          ) : null}
         </div>
-        <p className="field-hint">
-          Pentru șantiere și depozite unde lucrează simultan personal propriu și al firmelor terțe: fiecare convenție
-          stabilește riscurile comune, măsurile, coordonarea, instruirea și organizarea în caz de urgență. După semnarea
-          de către toate părțile, convenția se activează și se publică în dosarul de control al punctului de lucru.
-        </p>
 
         {uncovered.length ? (
           <div className="callout-warn" role="status">
@@ -265,12 +307,11 @@ export function SsmConventionsManager() {
                       type="button"
                       className="btn-text"
                       onClick={() =>
-                        setCreateForm((prev) => ({
-                          ...prev,
+                        openDialog("create", {
                           worksiteId: row.worksiteId,
                           title: `Convenție SSM — ${row.companyName} / ${row.worksiteName}`,
                           firstParty: { ...EMPTY_PARTY, companyName: row.companyName }
-                        }))
+                        })
                       }
                     >
                       Pregătește convenția
@@ -331,83 +372,82 @@ export function SsmConventionsManager() {
           {!listQuery.isLoading && !items.length ? <p className="field-hint">Nu există convenții în filtru.</p> : null}
         </div>
 
-        {canEdit ? (
-          <form className="form-stack" onSubmit={onCreate}>
-            <h5 className="ssm-subtitle">Convenție nouă</h5>
-            <FieldSelect
-              id="conv-create-worksite"
-              label="Loc de muncă comun (șantier / depozit)"
-              value={createForm.worksiteId}
-              onChange={(worksiteId) => setCreateForm((prev) => ({ ...prev, worksiteId }))}
-              allowEmpty
-              emptyLabel="Selectează punctul de lucru"
-              options={worksiteOptions}
-              required
-            />
-            <div className="field">
-              <label htmlFor="conv-create-title">Titlu</label>
-              <input
-                id="conv-create-title"
-                value={createForm.title}
-                onChange={(event) => setCreateForm((prev) => ({ ...prev, title: event.target.value }))}
+        {canEdit && dialog === "create" ? (
+          <MasterDataCreateModal title="Convenție nouă" titleId="conv-create-modal" onClose={closeDialog}>
+            <form className="form-stack" onSubmit={onCreate}>
+              <FieldSelect
+                id="conv-create-worksite"
+                label="Loc de muncă comun (șantier / depozit)"
+                value={createForm.worksiteId}
+                onChange={(worksiteId) => setCreateForm((prev) => ({ ...prev, worksiteId }))}
+                allowEmpty
+                emptyLabel="Selectează punctul de lucru"
+                options={worksiteOptions}
                 required
-                minLength={3}
               />
-            </div>
-            <div className="ssm-inline-actions">
               <div className="field">
-                <label htmlFor="conv-create-start">Valabilă din</label>
+                <label htmlFor="conv-create-title">Titlu</label>
                 <input
-                  id="conv-create-start"
-                  type="date"
-                  value={createForm.startsAt}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, startsAt: event.target.value }))}
+                  id="conv-create-title"
+                  value={createForm.title}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, title: event.target.value }))}
                   required
+                  minLength={3}
+                />
+              </div>
+              <div className="ssm-panel-fields-row">
+                <div className="field">
+                  <label htmlFor="conv-create-start">Valabilă din</label>
+                  <input
+                    id="conv-create-start"
+                    type="date"
+                    value={createForm.startsAt}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, startsAt: event.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="conv-create-end">Până la (opțional)</label>
+                  <input
+                    id="conv-create-end"
+                    type="date"
+                    value={createForm.endsAt}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, endsAt: event.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="conv-create-company">Prima firmă terță</label>
+                <input
+                  id="conv-create-company"
+                  value={createForm.firstParty.companyName}
+                  onChange={(event) =>
+                    setCreateForm((prev) => ({ ...prev, firstParty: { ...prev.firstParty, companyName: event.target.value } }))
+                  }
+                  placeholder="Denumire societate"
                 />
               </div>
               <div className="field">
-                <label htmlFor="conv-create-end">Până la (opțional)</label>
+                <label htmlFor="conv-create-rep">Reprezentant legal firmă terță</label>
                 <input
-                  id="conv-create-end"
-                  type="date"
-                  value={createForm.endsAt}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, endsAt: event.target.value }))}
+                  id="conv-create-rep"
+                  value={createForm.firstParty.representativeName}
+                  onChange={(event) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      firstParty: { ...prev.firstParty, representativeName: event.target.value }
+                    }))
+                  }
+                  required={Boolean(createForm.firstParty.companyName.trim())}
                 />
               </div>
-            </div>
-            <div className="field">
-              <label htmlFor="conv-create-company">Prima firmă terță</label>
-              <input
-                id="conv-create-company"
-                value={createForm.firstParty.companyName}
-                onChange={(event) =>
-                  setCreateForm((prev) => ({ ...prev, firstParty: { ...prev.firstParty, companyName: event.target.value } }))
-                }
-                placeholder="Denumire societate"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="conv-create-rep">Reprezentant legal firmă terță</label>
-              <input
-                id="conv-create-rep"
-                value={createForm.firstParty.representativeName}
-                onChange={(event) =>
-                  setCreateForm((prev) => ({
-                    ...prev,
-                    firstParty: { ...prev.firstParty, representativeName: event.target.value }
-                  }))
-                }
-                required={Boolean(createForm.firstParty.companyName.trim())}
-              />
-            </div>
-            <p className="field-hint">
-              Beneficiarul (entitatea care deține punctul de lucru) este adăugat automat ca parte gazdă.
-            </p>
-            <button className="btn-primary" type="submit" disabled={createConvention.isPending || !createForm.worksiteId}>
-              {createConvention.isPending ? "Se creează…" : "Creează convenția (ciornă)"}
-            </button>
-            {createConvention.isError ? <p className="feedback error">{errorMessage(createConvention.error)}</p> : null}
-          </form>
+              <p className="field-hint">Beneficiarul punctului de lucru este adăugat automat ca parte gazdă.</p>
+              <button className="btn-primary" type="submit" disabled={createConvention.isPending || !createForm.worksiteId}>
+                {createConvention.isPending ? "Se creează…" : "Creează convenția (ciornă)"}
+              </button>
+              {createConvention.isError ? <p className="feedback error">{errorMessage(createConvention.error)}</p> : null}
+            </form>
+          </MasterDataCreateModal>
         ) : null}
       </div>
 
@@ -462,39 +502,55 @@ export function SsmConventionsManager() {
                   Șterge ciorna
                 </button>
               ) : null}
+              {canEdit && selected.status === "ACTIVE" ? (
+                <button type="button" className="btn-secondary" onClick={() => openDialog("terminate")}>
+                  Încetează convenția
+                </button>
+              ) : null}
             </div>
             {actionError ? <p className="feedback error">{actionError}</p> : null}
             {activate.isError ? <p className="feedback error">{errorMessage(activate.error)}</p> : null}
 
-            {canEdit && selected.status === "ACTIVE" ? (
-              <div className="ssm-inline-actions">
-                <div className="field">
-                  <label htmlFor="conv-terminate-reason">Motiv încetare</label>
-                  <input
-                    id="conv-terminate-reason"
-                    value={terminateReason}
-                    onChange={(event) => setTerminateReason(event.target.value)}
-                    placeholder="ex. finalizare lucrări"
-                  />
+            {canEdit && dialog === "terminate" && selected.status === "ACTIVE" ? (
+              <MasterDataCreateModal title="Încetare convenție" titleId="conv-terminate-modal" onClose={closeDialog}>
+                <div className="form-stack">
+                  <div className="field">
+                    <label htmlFor="conv-terminate-reason">Motiv încetare</label>
+                    <input
+                      id="conv-terminate-reason"
+                      value={terminateReason}
+                      onChange={(event) => setTerminateReason(event.target.value)}
+                      placeholder="ex. finalizare lucrări"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={terminate.isPending}
+                    onClick={() =>
+                      terminate.mutate(
+                        { conventionId: selected.id, reason: terminateReason.trim() || undefined },
+                        { onSuccess: closeDialog }
+                      )
+                    }
+                  >
+                    {terminate.isPending ? "Se salvează…" : "Încetează convenția"}
+                  </button>
+                  {terminate.isError ? <p className="feedback error">{errorMessage(terminate.error)}</p> : null}
                 </div>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={terminate.isPending}
-                  onClick={() =>
-                    terminate.mutate(
-                      { conventionId: selected.id, reason: terminateReason.trim() || undefined },
-                      { onSuccess: () => setTerminateReason("") }
-                    )
-                  }
-                >
-                  Încetează convenția
-                </button>
-                {terminate.isError ? <p className="feedback error">{errorMessage(terminate.error)}</p> : null}
-              </div>
+              </MasterDataCreateModal>
             ) : null}
 
-            <h5 className="ssm-subtitle">Părți și semnături</h5>
+            <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+              <h5 className="ssm-subtitle" style={{ margin: 0 }}>
+                Părți și semnături
+              </h5>
+              {editable ? (
+                <button type="button" className="btn-secondary" onClick={() => openDialog("party")}>
+                  Adaugă firmă terță
+                </button>
+              ) : null}
+            </div>
             <div className="ssm-history-list">
               {selected.parties.map((party) => (
                 <div key={party.id} className="ssm-history-item ssm-history-item--stack">
@@ -515,14 +571,7 @@ export function SsmConventionsManager() {
                       {party.signed ? `Semnat ${formatRoDate(party.signedAt)}` : "Nesemnat"}
                     </span>
                     {editable && !party.signed ? (
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => {
-                          setSigningPartyId(party.id);
-                          setSignature("");
-                        }}
-                      >
+                      <button type="button" className="btn-secondary" onClick={() => openSigning(party.id)}>
                         Semnează
                       </button>
                     ) : null}
@@ -537,205 +586,245 @@ export function SsmConventionsManager() {
                       </button>
                     ) : null}
                   </div>
-                  {signingPartyId === party.id ? (
-                    <div className="form-stack">
-                      <SignatureCanvas
-                        value={signature}
-                        onChange={setSignature}
-                        label={`Semnătura reprezentantului ${party.companyName}`}
-                      />
-                      <div className="ssm-inline-actions">
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          disabled={!signature.startsWith("data:image") || signParty.isPending}
-                          onClick={() =>
-                            signParty.mutate(
-                              { conventionId: selected.id, partyId: party.id, signature },
-                              { onSuccess: () => setSigningPartyId(null) }
-                            )
-                          }
-                        >
-                          {signParty.isPending ? "Se semnează…" : "Confirmă semnătura"}
-                        </button>
-                        <button type="button" className="btn-text" onClick={() => setSigningPartyId(null)}>
-                          Renunță
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               ))}
             </div>
-            {signParty.isError ? <p className="feedback error">{errorMessage(signParty.error)}</p> : null}
             {removeParty.isError ? <p className="feedback error">{errorMessage(removeParty.error)}</p> : null}
 
-            {editable ? (
-              <form
-                className="form-stack"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  addParty.mutate(
-                    { conventionId: selected.id, payload: trimmedParty(partyForm) },
-                    { onSuccess: () => setPartyForm({ ...EMPTY_PARTY }) }
-                  );
-                }}
+            {editable && signingParty ? (
+              <MasterDataCreateModal
+                title={`Semnătură · ${signingParty.companyName}`}
+                titleId="conv-sign-modal"
+                description={signingParty.representativeName}
+                onClose={closeSigning}
               >
-                <h5 className="ssm-subtitle">Adaugă firmă terță</h5>
-                <div className="ssm-inline-actions">
-                  <div className="field">
-                    <label htmlFor="conv-party-company">Societate</label>
-                    <input
-                      id="conv-party-company"
-                      value={partyForm.companyName}
-                      onChange={(event) => setPartyForm((prev) => ({ ...prev, companyName: event.target.value }))}
-                      required
-                      minLength={2}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="conv-party-cui">CUI</label>
-                    <input
-                      id="conv-party-cui"
-                      value={partyForm.cui ?? ""}
-                      onChange={(event) => setPartyForm((prev) => ({ ...prev, cui: event.target.value }))}
-                    />
-                  </div>
-                </div>
-                <div className="ssm-inline-actions">
-                  <div className="field">
-                    <label htmlFor="conv-party-rep">Reprezentant legal</label>
-                    <input
-                      id="conv-party-rep"
-                      value={partyForm.representativeName}
-                      onChange={(event) => setPartyForm((prev) => ({ ...prev, representativeName: event.target.value }))}
-                      required
-                      minLength={3}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="conv-party-workers">Nr. lucrători pe loc</label>
-                    <input
-                      id="conv-party-workers"
-                      type="number"
-                      min={0}
-                      value={partyForm.workersCount ?? ""}
-                      onChange={(event) =>
-                        setPartyForm((prev) => ({
-                          ...prev,
-                          workersCount: event.target.value === "" ? undefined : Number(event.target.value)
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="ssm-inline-actions">
-                  <div className="field">
-                    <label htmlFor="conv-party-contact">Persoană contact SSM</label>
-                    <input
-                      id="conv-party-contact"
-                      value={partyForm.ssmContactName ?? ""}
-                      onChange={(event) => setPartyForm((prev) => ({ ...prev, ssmContactName: event.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="conv-party-email">E-mail contact SSM</label>
-                    <input
-                      id="conv-party-email"
-                      type="email"
-                      value={partyForm.ssmContactEmail ?? ""}
-                      onChange={(event) => setPartyForm((prev) => ({ ...prev, ssmContactEmail: event.target.value }))}
-                    />
-                  </div>
-                </div>
-                <div className="field">
-                  <label htmlFor="conv-party-obligations">Obligații specifice ale firmei</label>
-                  <textarea
-                    id="conv-party-obligations"
-                    rows={2}
-                    value={partyForm.obligations ?? ""}
-                    onChange={(event) => setPartyForm((prev) => ({ ...prev, obligations: event.target.value }))}
+                <div className="form-stack">
+                  <SignatureCanvas
+                    value={signature}
+                    onChange={setSignature}
+                    label={`Semnătura reprezentantului ${signingParty.companyName}`}
                   />
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={!signature.startsWith("data:image") || signParty.isPending}
+                    onClick={() =>
+                      signParty.mutate(
+                        { conventionId: selected.id, partyId: signingParty.id, signature },
+                        { onSuccess: closeSigning }
+                      )
+                    }
+                  >
+                    {signParty.isPending ? "Se semnează…" : "Confirmă semnătura"}
+                  </button>
+                  {signParty.isError ? <p className="feedback error">{errorMessage(signParty.error)}</p> : null}
                 </div>
-                <button className="btn-secondary" type="submit" disabled={addParty.isPending}>
-                  {addParty.isPending ? "Se adaugă…" : "Adaugă firma"}
-                </button>
-                {addParty.isError ? <p className="feedback error">{errorMessage(addParty.error)}</p> : null}
-              </form>
+              </MasterDataCreateModal>
             ) : null}
 
-            <form className="form-stack" onSubmit={onSaveDraft}>
-              <h5 className="ssm-subtitle">Clauze</h5>
+            {editable && dialog === "party" ? (
+              <MasterDataCreateModal title="Adaugă firmă terță" titleId="conv-party-modal" onClose={closeDialog}>
+                <form
+                  className="form-stack"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    addParty.mutate(
+                      { conventionId: selected.id, payload: trimmedParty(partyForm) },
+                      {
+                        onSuccess: () => {
+                          setPartyForm({ ...EMPTY_PARTY });
+                          closeDialog();
+                        }
+                      }
+                    );
+                  }}
+                >
+                  <div className="ssm-panel-fields-row">
+                    <div className="field">
+                      <label htmlFor="conv-party-company">Societate</label>
+                      <input
+                        id="conv-party-company"
+                        value={partyForm.companyName}
+                        onChange={(event) => setPartyForm((prev) => ({ ...prev, companyName: event.target.value }))}
+                        required
+                        minLength={2}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="conv-party-cui">CUI</label>
+                      <input
+                        id="conv-party-cui"
+                        value={partyForm.cui ?? ""}
+                        onChange={(event) => setPartyForm((prev) => ({ ...prev, cui: event.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="ssm-panel-fields-row">
+                    <div className="field">
+                      <label htmlFor="conv-party-rep">Reprezentant legal</label>
+                      <input
+                        id="conv-party-rep"
+                        value={partyForm.representativeName}
+                        onChange={(event) => setPartyForm((prev) => ({ ...prev, representativeName: event.target.value }))}
+                        required
+                        minLength={3}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="conv-party-workers">Nr. lucrători pe loc</label>
+                      <input
+                        id="conv-party-workers"
+                        type="number"
+                        min={0}
+                        value={partyForm.workersCount ?? ""}
+                        onChange={(event) =>
+                          setPartyForm((prev) => ({
+                            ...prev,
+                            workersCount: event.target.value === "" ? undefined : Number(event.target.value)
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="ssm-panel-fields-row">
+                    <div className="field">
+                      <label htmlFor="conv-party-contact">Persoană contact SSM</label>
+                      <input
+                        id="conv-party-contact"
+                        value={partyForm.ssmContactName ?? ""}
+                        onChange={(event) => setPartyForm((prev) => ({ ...prev, ssmContactName: event.target.value }))}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="conv-party-email">E-mail contact SSM</label>
+                      <input
+                        id="conv-party-email"
+                        type="email"
+                        value={partyForm.ssmContactEmail ?? ""}
+                        onChange={(event) => setPartyForm((prev) => ({ ...prev, ssmContactEmail: event.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="conv-party-obligations">Obligații specifice ale firmei</label>
+                    <textarea
+                      id="conv-party-obligations"
+                      rows={2}
+                      value={partyForm.obligations ?? ""}
+                      onChange={(event) => setPartyForm((prev) => ({ ...prev, obligations: event.target.value }))}
+                    />
+                  </div>
+                  <button className="btn-primary" type="submit" disabled={addParty.isPending}>
+                    {addParty.isPending ? "Se adaugă…" : "Adaugă firma"}
+                  </button>
+                  {addParty.isError ? <p className="feedback error">{errorMessage(addParty.error)}</p> : null}
+                </form>
+              </MasterDataCreateModal>
+            ) : null}
+
+            <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
+              <h5 className="ssm-subtitle" style={{ margin: 0 }}>
+                Clauze
+              </h5>
               {editable ? (
-                <p className="field-hint">Orice modificare a clauzelor sau a părților resetează semnăturile colectate.</p>
+                <button type="button" className="btn-secondary" onClick={() => openDialog("clauses")}>
+                  Editează clauzele
+                </button>
               ) : null}
-              <div className="ssm-inline-actions">
-                <div className="field">
-                  <label htmlFor="conv-coord-name">Coordonator SSM loc comun</label>
-                  <input
-                    id="conv-coord-name"
-                    value={draft.coordinatorName}
-                    disabled={!editable}
-                    onChange={(event) => setDraft((prev) => (prev ? { ...prev, coordinatorName: event.target.value } : prev))}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="conv-coord-email">E-mail coordonator</label>
-                  <input
-                    id="conv-coord-email"
-                    type="email"
-                    value={draft.coordinatorEmail}
-                    disabled={!editable}
-                    onChange={(event) => setDraft((prev) => (prev ? { ...prev, coordinatorEmail: event.target.value } : prev))}
-                  />
-                </div>
-              </div>
-              <div className="ssm-inline-actions">
-                <div className="field">
-                  <label htmlFor="conv-draft-start">Valabilă din</label>
-                  <input
-                    id="conv-draft-start"
-                    type="date"
-                    value={draft.startsAt}
-                    disabled={!editable}
-                    onChange={(event) => setDraft((prev) => (prev ? { ...prev, startsAt: event.target.value } : prev))}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="conv-draft-end">Până la</label>
-                  <input
-                    id="conv-draft-end"
-                    type="date"
-                    value={draft.endsAt}
-                    disabled={!editable}
-                    onChange={(event) => setDraft((prev) => (prev ? { ...prev, endsAt: event.target.value } : prev))}
-                  />
+            </div>
+            <div className="ssm-history-list">
+              <div className="ssm-history-item ssm-history-item--stack">
+                <div>
+                  <strong>Coordonator SSM loc comun</strong>
+                  <div className="field-hint">
+                    {selected.coordinatorName || "—"}
+                    {selected.coordinatorEmail ? ` · ${selected.coordinatorEmail}` : ""}
+                  </div>
                 </div>
               </div>
               {CLAUSES.map((clause) => (
-                <div key={clause.key} className="field">
-                  <label htmlFor={`conv-clause-${clause.key}`}>{clause.label}</label>
-                  <textarea
-                    id={`conv-clause-${clause.key}`}
-                    rows={3}
-                    value={draft[clause.key]}
-                    disabled={!editable}
-                    placeholder={clause.placeholder}
-                    onChange={(event) =>
-                      setDraft((prev) => (prev ? { ...prev, [clause.key]: event.target.value } : prev))
-                    }
-                  />
+                <div key={clause.key} className="ssm-history-item ssm-history-item--stack">
+                  <div>
+                    <strong>{clause.label}</strong>
+                    <div className="field-hint" style={{ whiteSpace: "pre-line" }}>
+                      {selected[clause.key] || "—"}
+                    </div>
+                  </div>
                 </div>
               ))}
-              {editable ? (
-                <button className="btn-primary" type="submit" disabled={updateConvention.isPending}>
-                  {updateConvention.isPending ? "Se salvează…" : "Salvează clauzele"}
-                </button>
-              ) : null}
-              {updateConvention.isError ? (
-                <p className="feedback error">{errorMessage(updateConvention.error)}</p>
-              ) : null}
-            </form>
+            </div>
+
+            {editable && dialog === "clauses" ? (
+              <MasterDataCreateModal
+                title="Clauze convenție"
+                titleId="conv-clauses-modal"
+                description="Orice modificare a clauzelor sau a părților resetează semnăturile colectate."
+                size="wide"
+                onClose={closeDialog}
+              >
+                <form className="form-stack" onSubmit={onSaveDraft}>
+                  <div className="ssm-panel-fields-row">
+                    <div className="field">
+                      <label htmlFor="conv-coord-name">Coordonator SSM loc comun</label>
+                      <input
+                        id="conv-coord-name"
+                        value={draft.coordinatorName}
+                        onChange={(event) => setDraft((prev) => (prev ? { ...prev, coordinatorName: event.target.value } : prev))}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="conv-coord-email">E-mail coordonator</label>
+                      <input
+                        id="conv-coord-email"
+                        type="email"
+                        value={draft.coordinatorEmail}
+                        onChange={(event) => setDraft((prev) => (prev ? { ...prev, coordinatorEmail: event.target.value } : prev))}
+                      />
+                    </div>
+                  </div>
+                  <div className="ssm-panel-fields-row">
+                    <div className="field">
+                      <label htmlFor="conv-draft-start">Valabilă din</label>
+                      <input
+                        id="conv-draft-start"
+                        type="date"
+                        value={draft.startsAt}
+                        onChange={(event) => setDraft((prev) => (prev ? { ...prev, startsAt: event.target.value } : prev))}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="conv-draft-end">Până la</label>
+                      <input
+                        id="conv-draft-end"
+                        type="date"
+                        value={draft.endsAt}
+                        onChange={(event) => setDraft((prev) => (prev ? { ...prev, endsAt: event.target.value } : prev))}
+                      />
+                    </div>
+                  </div>
+                  {CLAUSES.map((clause) => (
+                    <div key={clause.key} className="field">
+                      <label htmlFor={`conv-clause-${clause.key}`}>{clause.label}</label>
+                      <textarea
+                        id={`conv-clause-${clause.key}`}
+                        rows={3}
+                        value={draft[clause.key]}
+                        placeholder={clause.placeholder}
+                        onChange={(event) =>
+                          setDraft((prev) => (prev ? { ...prev, [clause.key]: event.target.value } : prev))
+                        }
+                      />
+                    </div>
+                  ))}
+                  <button className="btn-primary" type="submit" disabled={updateConvention.isPending}>
+                    {updateConvention.isPending ? "Se salvează…" : "Salvează clauzele"}
+                  </button>
+                  {updateConvention.isError ? (
+                    <p className="feedback error">{errorMessage(updateConvention.error)}</p>
+                  ) : null}
+                </form>
+              </MasterDataCreateModal>
+            ) : null}
           </>
         )}
       </div>

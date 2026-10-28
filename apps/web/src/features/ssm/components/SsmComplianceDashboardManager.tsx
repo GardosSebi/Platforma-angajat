@@ -185,7 +185,6 @@ export function SsmComplianceDashboardManager() {
   const worksites = useWorksitesLookup();
   const departments = useDepartmentsLookup();
 
-  const activeTabMeta = OVERVIEW_TABS.find((item) => item.id === tab) ?? OVERVIEW_TABS[0];
   const filterCount = activeFilterCount(filters);
 
   const worksiteOptions = useMemo(() => {
@@ -289,11 +288,7 @@ export function SsmComplianceDashboardManager() {
         ))}
       </div>
 
-      <header className="ssm-panel-header ssm-overview-toolbar">
-        <div>
-          <h3 className="card-title">{activeTabMeta.title}</h3>
-          <p className="field-hint">{activeTabMeta.caption}</p>
-        </div>
+      <header className="ssm-panel-header ssm-overview-toolbar ssm-overview-toolbar--end">
         <div className="ssm-inline-actions">
           <button
             type="button"
