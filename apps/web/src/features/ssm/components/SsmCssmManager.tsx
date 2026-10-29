@@ -36,7 +36,7 @@ import {
 } from "../hooks/useSsmCssm";
 
 type CssmTab = "members" | "meetings" | "minutes" | "archive";
-type CssmDialog = "committee" | "decision" | "member" | "meeting" | "minutes";
+type CssmDialog = "committee" | "decision" | "member" | "meeting" | "minutes" | "presence" | "signature";
 
 const CADENCE_LABELS: Record<SsmCssmCadenceStatus, string> = {
   OK: "În termen",
@@ -158,6 +158,7 @@ export function SsmCssmManager() {
   const [meetingForm, setMeetingForm] = useState(EMPTY_MEETING);
   const [minutesForm, setMinutesForm] = useState({ number: "", topics: "", decisions: "", nextMeetingAt: "" });
   const [signature, setSignature] = useState("");
+  const [focusAttendeeId, setFocusAttendeeId] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<CssmDialog | null>(null);
   const closeDialog = useCallback(() => setDialog(null), []);
@@ -894,18 +895,31 @@ export function SsmCssmManager() {
                           </div>
                         </div>
                         {canEdit && activeMeeting.status !== "CANCELLED" ? (
-                          <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={() =>
-                              updateAttendee.mutate({
-                                attendeeId: attendee.id,
-                                payload: { present: !attendee.present }
-                              })
-                            }
-                          >
-                            {attendee.present ? "Marchează absent" : "Marchează prezent"}
-                          </button>
+                          <div className="ssm-inline-actions">
+                            <button
+                              type="button"
+                              className="btn-text"
+                              onClick={() => {
+                                updateAttendee.reset();
+                                setFocusAttendeeId(attendee.id);
+                                setDialog("presence");
+                              }}
+                            >
+                              Prezență
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-text"
+                              onClick={() => {
+                                updateAttendee.reset();
+                                setSignature("");
+                                setFocusAttendeeId(attendee.id);
+                                setDialog("signature");
+                              }}
+                            >
+                              Semnează
+                            </button>
+                          </div>
                         ) : null}
                       </div>
                     ))}
@@ -914,26 +928,111 @@ export function SsmCssmManager() {
                     ) : null}
                   </div>
 
-                  {canEdit && activeMeeting.status !== "CANCELLED" ? (
-                    <div className="form-stack">
-                      <label>Semnătură olografă (participant selectat din listă, aplicată ultimului marcat prezent)</label>
-                      <SignatureCanvas value={signature} onChange={setSignature} />
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        disabled={!signature || !activeMeeting.attendees.some((row) => row.present && !row.hasSignature)}
-                        onClick={() => {
-                          const target = activeMeeting.attendees.find((row) => row.present && !row.hasSignature);
-                          if (!target) return;
-                          updateAttendee.mutate({
-                            attendeeId: target.id,
-                            payload: { signature }
-                          });
-                        }}
-                      >
-                        Aplică semnătura următorului prezent
-                      </button>
-                    </div>
+                  {canEdit && dialog === "presence" && activeMeeting.status !== "CANCELLED" ? (
+                    <MasterDataCreateModal title="Prezență" titleId="cssm-presence-modal" onClose={closeDialog}>
+                      <div className="form-stack">
+                        <FieldSelect
+                          id="cssm-presence-person"
+                          label="Participant"
+                          value={focusAttendeeId}
+                          onChange={setFocusAttendeeId}
+                          options={activeMeeting.attendees.map((attendee) => ({
+                            value: attendee.id,
+                            label: `${attendee.fullName} · ${attendee.roleLabel ?? "Invitat"} · ${
+                              attendee.present ? "prezent" : "absent"
+                            }`
+                          }))}
+                        />
+                        <div className="ssm-wizard-actions">
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={updateAttendee.isPending || !focusAttendeeId}
+                            onClick={() =>
+                              updateAttendee.mutate(
+                                { attendeeId: focusAttendeeId, payload: { present: false } },
+                                { onSuccess: () => setDialog(null) }
+                              )
+                            }
+                          >
+                            Marchează absent
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={updateAttendee.isPending || !focusAttendeeId}
+                            onClick={() =>
+                              updateAttendee.mutate(
+                                { attendeeId: focusAttendeeId, payload: { present: true } },
+                                { onSuccess: () => setDialog(null) }
+                              )
+                            }
+                          >
+                            {updateAttendee.isPending ? "Se salvează…" : "Marchează prezent"}
+                          </button>
+                        </div>
+                        {updateAttendee.isError ? (
+                          <p className="feedback error">{mutationErrorMessage(updateAttendee.error)}</p>
+                        ) : null}
+                      </div>
+                    </MasterDataCreateModal>
+                  ) : null}
+
+                  {canEdit && dialog === "signature" && activeMeeting.status !== "CANCELLED" ? (
+                    <MasterDataCreateModal
+                      title="Semnătură participant"
+                      titleId="cssm-signature-modal"
+                      description="Alege persoana care semnează. Semnătura se aplică doar unui participant prezent."
+                      onClose={closeDialog}
+                    >
+                      <div className="form-stack">
+                        <FieldSelect
+                          id="cssm-signature-person"
+                          label="Participant"
+                          value={focusAttendeeId}
+                          onChange={(attendeeId) => {
+                            setFocusAttendeeId(attendeeId);
+                            setSignature("");
+                          }}
+                          options={activeMeeting.attendees.map((attendee) => ({
+                            value: attendee.id,
+                            label: `${attendee.fullName} · ${attendee.present ? "prezent" : "absent"}${
+                              attendee.hasSignature ? " · semnat" : ""
+                            }`
+                          }))}
+                        />
+                        {activeMeeting.attendees.find((attendee) => attendee.id === focusAttendeeId)?.present ? (
+                          <SignatureCanvas label="Semnătură" value={signature} onChange={setSignature} />
+                        ) : (
+                          <p className="field-hint">Marchează mai întâi participantul ca prezent.</p>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          disabled={
+                            updateAttendee.isPending ||
+                            !signature.startsWith("data:image") ||
+                            !activeMeeting.attendees.find((attendee) => attendee.id === focusAttendeeId)?.present
+                          }
+                          onClick={() =>
+                            updateAttendee.mutate(
+                              { attendeeId: focusAttendeeId, payload: { signature } },
+                              {
+                                onSuccess: () => {
+                                  setSignature("");
+                                  setDialog(null);
+                                }
+                              }
+                            )
+                          }
+                        >
+                          {updateAttendee.isPending ? "Se salvează…" : "Aplică semnătura"}
+                        </button>
+                        {updateAttendee.isError ? (
+                          <p className="feedback error">{mutationErrorMessage(updateAttendee.error)}</p>
+                        ) : null}
+                      </div>
+                    </MasterDataCreateModal>
                   ) : null}
 
                   {canEdit && dialog === "minutes" && activeMeeting.status !== "CANCELLED" ? (

@@ -4119,7 +4119,9 @@ button.ssm-doc-item:hover {
   }
 
   .ssm-gate-attendee-row,
-  .ssm-wizard-steps {
+  .ssm-wizard-steps,
+  .ssm-wizard-steps--4,
+  .ssm-panel-layout--gate {
     grid-template-columns: 1fr;
   }
 
@@ -4352,6 +4354,28 @@ button.ssm-doc-item:hover {
   list-style: none;
   margin: 0 0 1rem;
   padding: 0;
+}
+
+.ssm-wizard-steps--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ssm-panel-layout--gate {
+  grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.7fr);
+}
+
+.ssm-wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+@media (max-width: 980px) {
+  .ssm-wizard-steps--4,
+  .ssm-panel-layout--gate {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ssm-wizard-step {
@@ -6678,6 +6702,10 @@ button.ssm-doc-item:hover {
   place-items: center;
   padding: 1rem;
   background: rgba(15, 23, 42, 0.45);
+}
+
+.md-create-modal-backdrop--stacked {
+  z-index: 110;
 }
 
 .md-create-modal {

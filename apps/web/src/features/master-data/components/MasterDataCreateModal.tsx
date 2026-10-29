@@ -9,7 +9,11 @@ type Props = {
   children: ReactNode;
   /** Wider dialog for denser forms (e.g. employees). */
   size?: "default" | "wide";
+  /** Renders above another open dialog. Escape closes only this layer. */
+  stacked?: boolean;
 };
+
+let openModalDepth = 0;
 
 export function MasterDataCreateModal({
   title,
@@ -17,23 +21,31 @@ export function MasterDataCreateModal({
   description,
   onClose,
   children,
-  size = "default"
+  size = "default",
+  stacked = false
 }: Props) {
   useEffect(() => {
+    openModalDepth += 1;
+    const depth = openModalDepth;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && openModalDepth === depth) onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      openModalDepth = Math.max(0, openModalDepth - 1);
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
   }, [onClose]);
 
   return createPortal(
-    <div className="md-create-modal-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className={`md-create-modal-backdrop${stacked ? " md-create-modal-backdrop--stacked" : ""}`}
+      role="presentation"
+      onClick={onClose}
+    >
       <div
         className={`md-create-modal card form-stack comms-panel${size === "wide" ? " md-create-modal--wide" : ""}`}
         role="dialog"

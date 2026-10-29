@@ -36,6 +36,7 @@ import {
 
 type AccidentsTab = "register" | "stats";
 type CaseSection = "research" | "evidence" | "measures" | "close";
+type CaseAction = "task" | "evidence" | "measure" | "close";
 
 const ACCIDENT_TABS: Array<{ id: AccidentsTab; title: string; caption: string }> = [
   { id: "register", title: "Registru", caption: "Cazuri, cercetare, măsuri" },
@@ -225,6 +226,7 @@ export function SsmAccidentsManager() {
   const [witnessesText, setWitnessesText] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [caseAction, setCaseAction] = useState<CaseAction | null>(null);
   const [attachmentKind, setAttachmentKind] = useState<SsmAccidentAttachmentKind>("PHOTO");
   const [attachmentNotes, setAttachmentNotes] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -260,9 +262,14 @@ export function SsmAccidentsManager() {
     setCloseForm(EMPTY_CLOSE);
     setAttachmentFile(null);
     setAttachmentNotes("");
+    setCaseAction(null);
   };
 
-  const closeCaseModal = useCallback(() => setSelectedCaseId(""), []);
+  const closeCaseModal = useCallback(() => {
+    setSelectedCaseId("");
+    setCaseAction(null);
+  }, []);
+  const closeCaseAction = useCallback(() => setCaseAction(null), []);
 
   const closeCreateForm = () => {
     setShowCreateForm(false);
@@ -319,7 +326,12 @@ export function SsmAccidentsManager() {
         assignedTo: taskForm.assignedTo?.trim() || undefined,
         notes: taskForm.notes?.trim() || undefined
       },
-      { onSuccess: () => setTaskForm({ ...EMPTY_TASK, title: "", accidentCaseId: selectedCaseId }) }
+      {
+        onSuccess: () => {
+          setTaskForm({ ...EMPTY_TASK, title: "", accidentCaseId: selectedCaseId });
+          setCaseAction(null);
+        }
+      }
     );
   };
 
@@ -332,7 +344,12 @@ export function SsmAccidentsManager() {
         accidentCaseId: selectedCaseId,
         assignedTo: measureForm.assignedTo?.trim() || undefined
       },
-      { onSuccess: () => setMeasureForm({ ...EMPTY_MEASURE, accidentCaseId: selectedCaseId }) }
+      {
+        onSuccess: () => {
+          setMeasureForm({ ...EMPTY_MEASURE, accidentCaseId: selectedCaseId });
+          setCaseAction(null);
+        }
+      }
     );
   };
 
@@ -345,6 +362,7 @@ export function SsmAccidentsManager() {
         onSuccess: () => {
           setAttachmentFile(null);
           setAttachmentNotes("");
+          setCaseAction(null);
         }
       }
     );
@@ -353,13 +371,16 @@ export function SsmAccidentsManager() {
   const onCloseCase = (event: FormEvent) => {
     event.preventDefault();
     if (!selectedCaseId) return;
-    closeCase.mutate({
-      caseId: selectedCaseId,
-      payload: {
-        conclusions: closeForm.conclusions,
-        correctiveMeasures: closeForm.correctiveMeasures?.trim() || undefined
-      }
-    });
+    closeCase.mutate(
+      {
+        caseId: selectedCaseId,
+        payload: {
+          conclusions: closeForm.conclusions,
+          correctiveMeasures: closeForm.correctiveMeasures?.trim() || undefined
+        }
+      },
+      { onSuccess: () => setCaseAction(null) }
+    );
   };
 
   const stats = statsQuery.data;
@@ -743,61 +764,11 @@ export function SsmAccidentsManager() {
               </div>
 
               {selectedCase.status !== "CLOSED" ? (
-                <form className="ssm-inline-form form-stack" onSubmit={onAddTask}>
-                  <h4 className="card-title">Task nou</h4>
-                  <div className="field">
-                    <label htmlFor="task-title">Task</label>
-                    <input
-                      id="task-title"
-                      required
-                      value={taskForm.title}
-                      onChange={(e) => setTaskForm((p) => ({ ...p, title: e.target.value }))}
-                    />
-                  </div>
-                  <div className="ssm-panel-fields-row">
-                    <div className="field">
-                      <label htmlFor="task-assigned">Responsabil</label>
-                      <input
-                        id="task-assigned"
-                        value={taskForm.assignedTo ?? ""}
-                        onChange={(e) => setTaskForm((p) => ({ ...p, assignedTo: e.target.value }))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="task-due">Termen</label>
-                      <input
-                        id="task-due"
-                        type="datetime-local"
-                        required
-                        value={taskDueLocal}
-                        onChange={(e) =>
-                          setTaskForm((p) => ({
-                            ...p,
-                            dueAt: e.target.value ? fromDatetimeLocalValue(e.target.value) : p.dueAt
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="task-notes">Note</label>
-                    <input
-                      id="task-notes"
-                      value={taskForm.notes ?? ""}
-                      onChange={(e) => setTaskForm((p) => ({ ...p, notes: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <button className="btn-primary" type="submit" disabled={addTask.isPending}>
-                      {addTask.isPending ? "Se adaugă..." : "Adaugă task"}
-                    </button>
-                  </div>
-                  {addTask.isError ? (
-                    <p className="feedback error" role="alert">
-                      {mutationErrorMessage(addTask.error)}
-                    </p>
-                  ) : null}
-                </form>
+                <div className="ssm-wizard-actions">
+                  <button type="button" className="btn-primary" onClick={() => setCaseAction("task")}>
+                    Task nou
+                  </button>
+                </div>
               ) : null}
             </>
           ) : null}
@@ -844,50 +815,11 @@ export function SsmAccidentsManager() {
               ) : null}
 
               {selectedCase.status !== "CLOSED" ? (
-                <form className="ssm-inline-form form-stack" onSubmit={onUploadAttachment}>
-                  <h4 className="card-title">Probă nouă</h4>
-                  <div className="ssm-panel-fields-row">
-                    <FieldSelect
-                      id="att-kind"
-                      label="Tip"
-                      value={attachmentKind}
-                      onChange={(kind) => setAttachmentKind(kind as SsmAccidentAttachmentKind)}
-                      options={ATTACHMENT_KINDS.map((kind) => ({
-                        value: kind,
-                        label: attachmentKindLabel(kind)
-                      }))}
-                    />
-                    <div className="field">
-                      <label htmlFor="att-file">Fișier (PDF, imagine, DOC)</label>
-                      <input
-                        id="att-file"
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,image/*,application/pdf"
-                        required
-                        onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
-                      />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="att-notes">Note (opțional)</label>
-                    <input
-                      id="att-notes"
-                      value={attachmentNotes}
-                      onChange={(e) => setAttachmentNotes(e.target.value)}
-                      placeholder="ex. PV cercetare semnat, expertiză tehnică"
-                    />
-                  </div>
-                  <div>
-                    <button className="btn-primary" type="submit" disabled={uploadAttachment.isPending || !attachmentFile}>
-                      {uploadAttachment.isPending ? "Se încarcă..." : "Încarcă"}
-                    </button>
-                  </div>
-                  {uploadAttachment.isError ? (
-                    <p className="feedback error" role="alert">
-                      {mutationErrorMessage(uploadAttachment.error)}
-                    </p>
-                  ) : null}
-                </form>
+                <div className="ssm-wizard-actions">
+                  <button type="button" className="btn-primary" onClick={() => setCaseAction("evidence")}>
+                    Probă nouă
+                  </button>
+                </div>
               ) : null}
             </>
           ) : null}
@@ -919,54 +851,11 @@ export function SsmAccidentsManager() {
               </div>
 
               {selectedCase.status !== "CLOSED" ? (
-                <form className="ssm-inline-form form-stack" onSubmit={onAddMeasure}>
-                  <h4 className="card-title">Măsură corectivă nouă</h4>
-                  <div className="field">
-                    <label htmlFor="measure-desc">Descriere</label>
-                    <textarea
-                      id="measure-desc"
-                      rows={2}
-                      required
-                      value={measureForm.description}
-                      onChange={(e) => setMeasureForm((p) => ({ ...p, description: e.target.value }))}
-                    />
-                  </div>
-                  <div className="ssm-panel-fields-row">
-                    <div className="field">
-                      <label htmlFor="measure-assigned">Responsabil</label>
-                      <input
-                        id="measure-assigned"
-                        value={measureForm.assignedTo ?? ""}
-                        onChange={(e) => setMeasureForm((p) => ({ ...p, assignedTo: e.target.value }))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="measure-due">Termen</label>
-                      <input
-                        id="measure-due"
-                        type="datetime-local"
-                        required
-                        value={measureDueLocal}
-                        onChange={(e) =>
-                          setMeasureForm((p) => ({
-                            ...p,
-                            dueAt: e.target.value ? fromDatetimeLocalValue(e.target.value) : p.dueAt
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <button className="btn-primary" type="submit" disabled={addMeasure.isPending}>
-                      {addMeasure.isPending ? "Se adaugă..." : "Adaugă măsură"}
-                    </button>
-                  </div>
-                  {addMeasure.isError ? (
-                    <p className="feedback error" role="alert">
-                      {mutationErrorMessage(addMeasure.error)}
-                    </p>
-                  ) : null}
-                </form>
+                <div className="ssm-wizard-actions">
+                  <button type="button" className="btn-primary" onClick={() => setCaseAction("measure")}>
+                    Măsură nouă
+                  </button>
+                </div>
               ) : null}
             </>
           ) : null}
@@ -979,37 +868,11 @@ export function SsmAccidentsManager() {
                   <p className="field-hint">{selectedCase.conclusions ?? "Fără concluzii."}</p>
                 </div>
               ) : canApprove ? (
-                <form className="form-stack" onSubmit={onCloseCase}>
-                  <div className="field">
-                    <label htmlFor="close-conc">Concluzii cercetare</label>
-                    <textarea
-                      id="close-conc"
-                      rows={3}
-                      required
-                      value={closeForm.conclusions}
-                      onChange={(e) => setCloseForm((p) => ({ ...p, conclusions: e.target.value }))}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="close-measures">Rezumat măsuri (opțional)</label>
-                    <textarea
-                      id="close-measures"
-                      rows={2}
-                      value={closeForm.correctiveMeasures ?? ""}
-                      onChange={(e) => setCloseForm((p) => ({ ...p, correctiveMeasures: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <button type="submit" className="btn-primary" disabled={closeCase.isPending}>
-                      {closeCase.isPending ? "Se închide..." : "Închide cazul"}
-                    </button>
-                  </div>
-                  {closeCase.isError ? (
-                    <p className="feedback error" role="alert">
-                      {mutationErrorMessage(closeCase.error)}
-                    </p>
-                  ) : null}
-                </form>
+                <div className="ssm-wizard-actions">
+                  <button type="button" className="btn-primary" onClick={() => setCaseAction("close")}>
+                    Închide cazul
+                  </button>
+                </div>
               ) : (
                 <p className="field-hint">Închiderea cazului cere drept de aprobare.</p>
               )}
@@ -1032,6 +895,192 @@ export function SsmAccidentsManager() {
           ) : null}
 
           {downloadError ? <p className="feedback error">{downloadError}</p> : null}
+
+          {caseAction === "task" && selectedCase.status !== "CLOSED" ? (
+            <MasterDataCreateModal title="Task nou" titleId="accident-task-modal" stacked onClose={closeCaseAction}>
+              <form className="form-stack" onSubmit={onAddTask}>
+                <div className="field">
+                  <label htmlFor="task-title">Task</label>
+                  <input
+                    id="task-title"
+                    required
+                    value={taskForm.title}
+                    onChange={(event) => setTaskForm((prev) => ({ ...prev, title: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="task-assigned">Responsabil</label>
+                  <input
+                    id="task-assigned"
+                    value={taskForm.assignedTo ?? ""}
+                    onChange={(event) => setTaskForm((prev) => ({ ...prev, assignedTo: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="task-due">Termen</label>
+                  <input
+                    id="task-due"
+                    type="datetime-local"
+                    required
+                    value={taskDueLocal}
+                    onChange={(event) =>
+                      setTaskForm((prev) => ({
+                        ...prev,
+                        dueAt: event.target.value ? fromDatetimeLocalValue(event.target.value) : prev.dueAt
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="task-notes">Note</label>
+                  <input
+                    id="task-notes"
+                    value={taskForm.notes ?? ""}
+                    onChange={(event) => setTaskForm((prev) => ({ ...prev, notes: event.target.value }))}
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={addTask.isPending}>
+                  {addTask.isPending ? "Se adaugă..." : "Adaugă task"}
+                </button>
+                {addTask.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(addTask.error)}
+                  </p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
+          ) : null}
+
+          {caseAction === "evidence" && selectedCase.status !== "CLOSED" ? (
+            <MasterDataCreateModal title="Probă nouă" titleId="accident-evidence-modal" stacked onClose={closeCaseAction}>
+              <form className="form-stack" onSubmit={onUploadAttachment}>
+                <FieldSelect
+                  id="att-kind"
+                  label="Tip"
+                  value={attachmentKind}
+                  onChange={(kind) => setAttachmentKind(kind as SsmAccidentAttachmentKind)}
+                  options={ATTACHMENT_KINDS.map((kind) => ({
+                    value: kind,
+                    label: attachmentKindLabel(kind)
+                  }))}
+                />
+                <div className="field">
+                  <label htmlFor="att-file">Fișier (PDF, imagine, DOC)</label>
+                  <input
+                    id="att-file"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,image/*,application/pdf"
+                    required
+                    onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="att-notes">Note (opțional)</label>
+                  <input
+                    id="att-notes"
+                    value={attachmentNotes}
+                    onChange={(event) => setAttachmentNotes(event.target.value)}
+                    placeholder="ex. PV cercetare semnat, expertiză tehnică"
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={uploadAttachment.isPending || !attachmentFile}>
+                  {uploadAttachment.isPending ? "Se încarcă..." : "Încarcă"}
+                </button>
+                {uploadAttachment.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(uploadAttachment.error)}
+                  </p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
+          ) : null}
+
+          {caseAction === "measure" && selectedCase.status !== "CLOSED" ? (
+            <MasterDataCreateModal
+              title="Măsură corectivă nouă"
+              titleId="accident-measure-modal"
+              stacked
+              onClose={closeCaseAction}
+            >
+              <form className="form-stack" onSubmit={onAddMeasure}>
+                <div className="field">
+                  <label htmlFor="measure-desc">Descriere</label>
+                  <textarea
+                    id="measure-desc"
+                    rows={3}
+                    required
+                    value={measureForm.description}
+                    onChange={(event) => setMeasureForm((prev) => ({ ...prev, description: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="measure-assigned">Responsabil</label>
+                  <input
+                    id="measure-assigned"
+                    value={measureForm.assignedTo ?? ""}
+                    onChange={(event) => setMeasureForm((prev) => ({ ...prev, assignedTo: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="measure-due">Termen</label>
+                  <input
+                    id="measure-due"
+                    type="datetime-local"
+                    required
+                    value={measureDueLocal}
+                    onChange={(event) =>
+                      setMeasureForm((prev) => ({
+                        ...prev,
+                        dueAt: event.target.value ? fromDatetimeLocalValue(event.target.value) : prev.dueAt
+                      }))
+                    }
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={addMeasure.isPending}>
+                  {addMeasure.isPending ? "Se adaugă..." : "Adaugă măsură"}
+                </button>
+                {addMeasure.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(addMeasure.error)}
+                  </p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
+          ) : null}
+
+          {caseAction === "close" && selectedCase.status !== "CLOSED" && canApprove ? (
+            <MasterDataCreateModal title="Închide cazul" titleId="accident-close-modal" stacked onClose={closeCaseAction}>
+              <form className="form-stack" onSubmit={onCloseCase}>
+                <div className="field">
+                  <label htmlFor="close-conc">Concluzii cercetare</label>
+                  <textarea
+                    id="close-conc"
+                    rows={4}
+                    required
+                    value={closeForm.conclusions}
+                    onChange={(event) => setCloseForm((prev) => ({ ...prev, conclusions: event.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="close-measures">Rezumat măsuri (opțional)</label>
+                  <textarea
+                    id="close-measures"
+                    rows={3}
+                    value={closeForm.correctiveMeasures ?? ""}
+                    onChange={(event) => setCloseForm((prev) => ({ ...prev, correctiveMeasures: event.target.value }))}
+                  />
+                </div>
+                <button type="submit" className="btn-primary" disabled={closeCase.isPending}>
+                  {closeCase.isPending ? "Se închide..." : "Închide cazul"}
+                </button>
+                {closeCase.isError ? (
+                  <p className="feedback error" role="alert">
+                    {mutationErrorMessage(closeCase.error)}
+                  </p>
+                ) : null}
+              </form>
+            </MasterDataCreateModal>
+          ) : null}
         </MasterDataCreateModal>
       ) : null}
 

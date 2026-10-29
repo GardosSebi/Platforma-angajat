@@ -118,6 +118,7 @@ export function SsmMedicalManager() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showTypeForm, setShowTypeForm] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
 
   useEffect(() => {
     if (!controlForm.employeeId && employeeOptions[0]?.id) {
@@ -158,10 +159,12 @@ export function SsmMedicalManager() {
     setShowCreateForm(true);
   };
   const closeCreateForm = useCallback(() => setShowCreateForm(false), []);
+  const closeUpdate = useCallback(() => setUpdateOpen(false), []);
 
   const selectForUpdate = (controlId: string) => {
+    updateControl.reset();
     setSelectedControlId(controlId);
-    setTab("update");
+    setUpdateOpen(true);
   };
 
   const onCreateType = (event: FormEvent) => {
@@ -193,7 +196,7 @@ export function SsmMedicalManager() {
         aptitudeSheet
       },
       {
-        onSuccess: (created) => {
+        onSuccess: () => {
           setShowCreateForm(false);
           setAptitudeSheet(undefined);
           setControlForm((prev) => ({
@@ -201,7 +204,6 @@ export function SsmMedicalManager() {
             employeeId: prev.employeeId,
             controlTypeId: prev.controlTypeId
           }));
-          selectForUpdate(created.id);
         }
       }
     );
@@ -210,11 +212,14 @@ export function SsmMedicalManager() {
   const onUpdateControl = (event: FormEvent) => {
     event.preventDefault();
     if (!selectedControlId) return;
-    updateControl.mutate({
-      controlId: selectedControlId,
-      payload: editForm,
-      aptitudeSheet: editAptitudeSheet
-    });
+    updateControl.mutate(
+      {
+        controlId: selectedControlId,
+        payload: editForm,
+        aptitudeSheet: editAptitudeSheet
+      },
+      { onSuccess: () => setUpdateOpen(false) }
+    );
   };
 
   const downloadSheet = (controlId: string, fileName?: string | null) => {
@@ -494,7 +499,7 @@ export function SsmMedicalManager() {
             />
 
             {!selectedControl ? (
-              <p className="field-hint">Alege un control sau deschide-l din Registru cu „Actualizează”.</p>
+              <p className="field-hint">Alege un control din listă.</p>
             ) : (
               <form className="form-stack" onSubmit={onUpdateControl}>
                 <div className="ssm-history-item">
@@ -681,6 +686,85 @@ export function SsmMedicalManager() {
             </div>
           )}
         </div>
+      ) : null}
+
+      {updateOpen && selectedControl ? (
+        <MasterDataCreateModal
+          title="Actualizare control"
+          titleId="med-update-modal-title"
+          description={`${selectedControl.employeeName} · ${selectedControl.controlTypeName} · ${resultLabel(selectedControl.result)}`}
+          onClose={closeUpdate}
+        >
+          <form className="form-stack" onSubmit={onUpdateControl}>
+            {selectedControl.hasAptitudeSheet || selectedControl.aptitudeSheetName ? (
+              <button
+                type="button"
+                className="btn-text"
+                onClick={() => downloadSheet(selectedControl.id, selectedControl.aptitudeSheetName)}
+              >
+                Descarcă fișa
+              </button>
+            ) : (
+              <p className="field-hint">Fără fișă de aptitudini.</p>
+            )}
+            <FieldSelect
+              id="modal-edit-result"
+              label="Rezultat aptitudine"
+              value={editForm.result ?? ""}
+              onChange={(result) =>
+                setEditForm((p) => ({ ...p, result: (result as SsmMedicalControlResult) || undefined }))
+              }
+              allowEmpty
+              emptyLabel="Neselectat"
+              options={CONTROL_RESULTS.map((result) => ({ value: result, label: resultLabel(result) }))}
+            />
+            <div className="field">
+              <label htmlFor="modal-edit-performed">Efectuat la</label>
+              <input
+                id="modal-edit-performed"
+                value={editForm.performedAt ?? ""}
+                onChange={(e) => setEditForm((p) => ({ ...p, performedAt: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="modal-edit-validity">Valabil până la</label>
+              <input
+                id="modal-edit-validity"
+                value={editForm.validityUntil ?? ""}
+                onChange={(e) => setEditForm((p) => ({ ...p, validityUntil: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="modal-edit-rec">Recomandări</label>
+              <input
+                id="modal-edit-rec"
+                value={editForm.recommendations ?? ""}
+                onChange={(e) => setEditForm((p) => ({ ...p, recommendations: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="modal-edit-sheet">Înlocuire fișă aptitudini</label>
+              <input
+                id="modal-edit-sheet"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={(e) => setEditAptitudeSheet(e.target.files?.[0])}
+              />
+              {selectedControl.aptitudeSheetName ? (
+                <p className="field-hint">Fișă curentă: {selectedControl.aptitudeSheetName}</p>
+              ) : null}
+            </div>
+            <button type="submit" className="btn-primary" disabled={updateControl.isPending}>
+              {updateControl.isPending ? "Se actualizează..." : "Salvează modificările"}
+            </button>
+            {updateControl.isError ? (
+              <p className="feedback error" role="alert">
+                {mutationErrorMessage(updateControl.error)}
+              </p>
+            ) : null}
+            {downloadError ? <p className="feedback error">{downloadError}</p> : null}
+          </form>
+        </MasterDataCreateModal>
       ) : null}
     </section>
   );
