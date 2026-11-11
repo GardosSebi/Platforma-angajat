@@ -15,7 +15,6 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
-import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 import { JwtAuthGuard } from "../../../auth/jwt-auth.guard";
 import { TenantGuard } from "../../../auth/tenant.guard";
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
@@ -28,6 +27,7 @@ import { CommunicationsService } from "../application/services/communications.se
 import {
   CreateAnnouncementDto,
   CreateTemplateDto,
+  ListAnnouncementsQueryDto,
   MarkAnnouncementReadDto,
   SetAnnouncementReactionDto,
   SubmitAnnouncementAnswerDto,
@@ -96,10 +96,10 @@ export class CommunicationsController {
   listAnnouncements(
     @TenantId() tenantId: string,
     @CurrentUser() user: JwtPayload,
-    @Query() query: PaginationQueryDto,
-    @Query("forMe") forMe?: string
+    @Query() query: ListAnnouncementsQueryDto
   ) {
-    return this.communications.listAnnouncements(tenantId, query, user, forMe === "1" || forMe === "true");
+    const forMe = query.forMe === "1" || query.forMe === "true";
+    return this.communications.listAnnouncements(tenantId, query, user, forMe);
   }
 
   @Get("announcements/:id")

@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { matchPath, NavLink, useLocation } from "react-router-dom";
+import { Link, matchPath, NavLink, useLocation } from "react-router-dom";
 import { LocaleSwitcher } from "../shared/components/LocaleSwitcher";
 import { NotificationBell } from "../shared/components/NotificationBell";
 import { NavIcons } from "./nav-icons";
@@ -121,10 +121,34 @@ export function AppSidebar({ groups, tenantId, onSignOut, mobileOpen, onMobileOp
   );
 }
 
+function splitTo(to: string): { path: string; params: URLSearchParams } {
+  const [path, query = ""] = to.split("?");
+  return { path, params: new URLSearchParams(query) };
+}
+
+/** Children sharing a path (e.g. `/portal?tab=…`) are told apart by the query keys used among them. */
+function isQueryChildActive(
+  child: SidebarNavChild,
+  siblings: SidebarNavChild[],
+  pathname: string,
+  search: string
+): boolean {
+  const { path, params } = splitTo(child.to);
+  if (!matchPath({ path, end: true }, pathname)) return false;
+  const keys = new Set(
+    siblings.filter((s) => splitTo(s.to).path === path).flatMap((s) => [...splitTo(s.to).params.keys()])
+  );
+  const current = new URLSearchParams(search);
+  return [...keys].every((key) => params.get(key) === current.get(key));
+}
+
 function SidebarNavParent({ item, onNavigate }: { item: SidebarNavItem; onNavigate: () => void }) {
   const location = useLocation();
   const children = item.children ?? [];
-  const isWithin = children.some((child) => matchPath({ path: child.to, end: false }, location.pathname));
+  const queryRouted = children.some((child) => child.to.includes("?"));
+  const isWithin = children.some((child) =>
+    matchPath({ path: splitTo(child.to).path, end: false }, location.pathname)
+  );
   const [expanded, setExpanded] = useState(isWithin);
   const submenuId = useId();
 
@@ -147,17 +171,35 @@ function SidebarNavParent({ item, onNavigate }: { item: SidebarNavItem; onNaviga
       </button>
       {expanded ? (
         <ul id={submenuId} className="app-sidebar-sublist">
-          {children.map((child) => (
-            <li key={child.to}>
-              <NavLink
-                to={child.to}
-                className={({ isActive }) => `app-sidebar-sublink${isActive ? " active" : ""}`}
-                onClick={onNavigate}
-              >
-                {child.label}
-              </NavLink>
-            </li>
-          ))}
+          {children.map((child) => {
+            const content = <span className="app-sidebar-sublink-label">{child.label}</span>;
+            if (queryRouted) {
+              const active = isQueryChildActive(child, children, location.pathname, location.search);
+              return (
+                <li key={child.to}>
+                  <Link
+                    to={child.to}
+                    className={`app-sidebar-sublink${active ? " active" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                    onClick={onNavigate}
+                  >
+                    {content}
+                  </Link>
+                </li>
+              );
+            }
+            return (
+              <li key={child.to}>
+                <NavLink
+                  to={child.to}
+                  className={({ isActive }) => `app-sidebar-sublink${isActive ? " active" : ""}`}
+                  onClick={onNavigate}
+                >
+                  {content}
+                </NavLink>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </li>

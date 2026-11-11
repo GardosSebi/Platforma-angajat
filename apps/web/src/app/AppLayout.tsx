@@ -15,6 +15,15 @@ import { useAuthSession } from "../shared/auth/use-auth-session";
 import { AppSidebar, AppTopbar, type SidebarNavGroup } from "./AppSidebar";
 import { NavIcons } from "./nav-icons";
 import { ssmSectionPath, visibleSsmSections } from "../features/ssm/ssm-sections";
+import { PORTAL_TAB_LABELS, PORTAL_TABS, portalTabPath } from "../features/employee-portal/utils";
+function portalNavItem(label: string): SidebarNavGroup["items"][number] {
+  return {
+    to: "/portal",
+    label,
+    icon: NavIcons.home(),
+    children: PORTAL_TABS.map((tab) => ({ to: portalTabPath(tab), label: PORTAL_TAB_LABELS[tab] }))
+  };
+}
 
 function buildNavGroups(
   session: NonNullable<ReturnType<typeof useAuthSession>>,
@@ -31,7 +40,7 @@ function buildNavGroups(
       {
         title: "Portal angajat",
         items: [
-          { to: "/portal", label: t("nav.portal"), icon: NavIcons.home(), end: true },
+          portalNavItem(t("nav.portal")),
           { to: "/informatii", label: t("nav.info"), icon: NavIcons.info(), end: true }
         ]
       }
@@ -70,7 +79,7 @@ function buildNavGroups(
   if (showPortal) {
     groups.push({
       title: "Angajat",
-      items: [{ to: "/portal", label: t("nav.portal"), icon: NavIcons.home(), end: true }]
+      items: [portalNavItem(t("nav.portal"))]
     });
   }
 
@@ -95,7 +104,7 @@ function buildNavGroups(
       title: "Administrare",
       items: [
         { to: "/master-data", label: t("nav.masterData"), icon: NavIcons.masterData() },
-        { to: "/platform-admin", label: t("nav.admin"), icon: NavIcons.info() }
+        { to: "/platform-admin", label: t("nav.admin"), icon: NavIcons.admin() }
       ]
     });
   }

@@ -9,6 +9,13 @@ import {
   MaxLength,
   MinLength
 } from "class-validator";
+import { PaginationQueryDto } from "../../../../common/dto/pagination-query.dto";
+
+export class ListAnnouncementsQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsIn(["1", "true", "0", "false"])
+  forMe?: string;
+}
 
 const CONTENT_TYPES = [
   "TEXT",

@@ -217,24 +217,19 @@ export class CommunicationsService {
       where: { tenantId },
       orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }]
     });
-    let scopedRows = await this.filterAnnouncementsForScope(tenantId, allRows, scope);
+    let scopedRows: CommunicationAnnouncement[];
     if (forMe) {
-      const linkedEmployee = viewer?.email
-        ? await this.prisma.employee.findFirst({
-            where: { tenantId, email: { equals: viewer.email, mode: "insensitive" }, active: true },
-            select: { id: true }
-          })
-        : null;
-      if (!linkedEmployee) {
+      const linkedEmployeeId = await this.linkedEmployeeId(tenantId, viewer);
+      if (!linkedEmployeeId) {
         return paginatedResult([], 0, p.page, p.pageSize);
       }
-      const mine: CommunicationAnnouncement[] = [];
-      for (const row of scopedRows) {
+      scopedRows = [];
+      for (const row of allRows) {
         if (row.status !== CommunicationAnnouncementStatus.PUBLISHED) continue;
-        const targets = await this.resolveAudienceEmployeeIds(tenantId, row);
-        if (targets.includes(linkedEmployee.id)) mine.push(row);
+        if (await this.isTargetedTo(tenantId, row, linkedEmployeeId)) scopedRows.push(row);
       }
-      scopedRows = mine;
+    } else {
+      scopedRows = await this.filterAnnouncementsForScope(tenantId, allRows, scope);
     }
     const pageRows = scopedRows.slice(p.skip, p.skip + p.take);
     const items = await this.withStats(tenantId, pageRows, scope, viewer);
@@ -464,9 +459,7 @@ export class CommunicationsService {
   }
 
   async markRead(tenantId: string, announcementId: string, dto: MarkAnnouncementReadDto, viewer?: JwtPayload) {
-    const scope = await this.scopeFor(viewer, tenantId);
-    await this.assertAnnouncementVisible(tenantId, announcementId, scope);
-    await assertEmployeeInWorksiteScope(this.prisma, tenantId, dto.employeeId, scope);
+    await this.assertAnnouncementForEmployee(tenantId, announcementId, dto.employeeId, viewer);
     const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, tenantId, active: true } });
     if (!employee) {
       throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
@@ -484,12 +477,10 @@ export class CommunicationsService {
     dto: SetAnnouncementReactionDto,
     viewer?: JwtPayload
   ) {
-    const scope = await this.scopeFor(viewer, tenantId);
-    const announcement = await this.assertAnnouncementVisible(tenantId, announcementId, scope);
+    const announcement = await this.assertAnnouncementForEmployee(tenantId, announcementId, dto.employeeId, viewer);
     if (!announcement.reactionsEnabled) {
       throw new BadRequestException("Reacțiile nu sunt activate pentru acest anunț.");
     }
-    await assertEmployeeInWorksiteScope(this.prisma, tenantId, dto.employeeId, scope);
     const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, tenantId, active: true } });
     if (!employee) {
       throw new NotFoundException("Angajatul nu a fost găsit pentru tenantul curent.");
@@ -507,8 +498,7 @@ export class CommunicationsService {
     dto: SubmitAnnouncementAnswerDto,
     viewer?: JwtPayload
   ) {
-    const scope = await this.scopeFor(viewer, tenantId);
-    const announcement = await this.assertAnnouncementVisible(tenantId, announcementId, scope);
+    const announcement = await this.assertAnnouncementForEmployee(tenantId, announcementId, dto.employeeId, viewer);
     if (announcement.messageType !== CommunicationMessageType.QUESTION) {
       throw new BadRequestException("Doar mesajele de tip Întrebare acceptă răspunsuri.");
     }
@@ -519,7 +509,6 @@ export class CommunicationsService {
     if (!answerText) {
       throw new BadRequestException("Răspunsul nu poate fi gol.");
     }
-    await assertEmployeeInWorksiteScope(this.prisma, tenantId, dto.employeeId, scope);
     const employee = await this.prisma.employee.findFirst({
       where: { id: dto.employeeId, tenantId, active: true }
     });
@@ -1071,6 +1060,39 @@ export class CommunicationsService {
     return announcement;
   }
 
+  private async linkedEmployeeId(tenantId: string, viewer?: JwtPayload): Promise<string | null> {
+    const email = viewer?.email?.trim();
+    if (!email) return null;
+    const employee = await this.prisma.employee.findFirst({
+      where: { tenantId, active: true, email: { equals: email, mode: "insensitive" } },
+      select: { id: true }
+    });
+    return employee?.id ?? null;
+  }
+
+  private async isTargetedTo(tenantId: string, row: CommunicationAnnouncement, employeeId: string) {
+    const targets = await this.resolveAudienceEmployeeIds(tenantId, row);
+    return targets.includes(employeeId);
+  }
+
+  /** Recipients acting for themselves are authorised by audience; anyone else by worksite scope. */
+  private async assertAnnouncementForEmployee(
+    tenantId: string,
+    announcementId: string,
+    employeeId: string,
+    viewer?: JwtPayload
+  ) {
+    const announcement = await this.assertAnnouncement(tenantId, announcementId);
+    const selfId = await this.linkedEmployeeId(tenantId, viewer);
+    if (selfId && selfId === employeeId && (await this.isTargetedTo(tenantId, announcement, selfId))) {
+      return announcement;
+    }
+    const scope = await this.scopeFor(viewer, tenantId);
+    await this.assertAnnouncementVisible(tenantId, announcementId, scope);
+    await assertEmployeeInWorksiteScope(this.prisma, tenantId, employeeId, scope);
+    return announcement;
+  }
+
   private async filterAnnouncementsForScope(
     tenantId: string,
     rows: CommunicationAnnouncement[],
@@ -1246,12 +1268,8 @@ export class CommunicationsService {
       : [];
     const creatorById = new Map(creators.map((u) => [u.id, u]));
 
-    const linkedEmployee = viewer?.email
-      ? await this.prisma.employee.findFirst({
-          where: { tenantId, email: viewer.email, active: true },
-          select: { id: true }
-        })
-      : null;
+    const linkedEmployeeId = await this.linkedEmployeeId(tenantId, viewer);
+    const linkedEmployee = linkedEmployeeId ? { id: linkedEmployeeId } : null;
     const announcementIds = rows.map((r) => r.id);
     const myAnswers =
       linkedEmployee && announcementIds.length

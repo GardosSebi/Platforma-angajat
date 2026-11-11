@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { LocaleSwitcher } from "../../../shared/components/LocaleSwitcher";
 import {
   forgotPasswordRequest,
   getSsoStatus,
@@ -260,9 +259,6 @@ export function LoginPage() {
 
       <aside className="login-panel" aria-label={panel === "forgot" ? "Resetare parolă" : "Autentificare"}>
         <div className="login-card">
-          <div className="login-locale-row">
-            <LocaleSwitcher />
-          </div>
           <header className="login-brand">
             <span className="login-brand-mark" aria-hidden>
               EP
@@ -270,9 +266,7 @@ export function LoginPage() {
             <div>
               <h2 className="login-title">{panel === "forgot" ? "Resetare parolă" : t("auth.login")}</h2>
               <p className="login-sub">
-                {panel === "forgot"
-                  ? "Trimitem un link pe e-mail dacă există un cont local activ."
-                  : "Introduceți organizația, e-mailul și parola contului."}
+                
               </p>
             </div>
           </header>
@@ -447,9 +441,7 @@ export function LoginPage() {
                 </form>
               ) : null}
 
-              <p className="login-hint">
-                Cont demo: <code>e01</code> · <code>admin@company.local</code>
-              </p>
+           
             </>
           )}
         </div>

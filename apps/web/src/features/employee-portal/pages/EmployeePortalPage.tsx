@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { NavIcons } from "../../../app/nav-icons";
 import { EmployeeAnnouncementsPanel } from "../components/EmployeeAnnouncementsPanel";
 import { EmployeeDocumentsPanel } from "../components/EmployeeDocumentsPanel";
 import { EmployeeDossierPanel } from "../components/EmployeeDossierPanel";
@@ -10,32 +9,10 @@ import { EmployeeSurveysPanel } from "../components/EmployeeSurveysPanel";
 import { EmployeeTicketsPanel } from "../components/EmployeeTicketsPanel";
 import { EmployeeTrainingsPanel } from "../components/EmployeeTrainingsPanel";
 import type { EmployeePortalTab } from "../utils";
-import { PORTAL_TAB_LABELS } from "../utils";
-
-const TABS: EmployeePortalTab[] = [
-  "home",
-  "trainings",
-  "documents",
-  "dossier",
-  "medical",
-  "announcements",
-  "surveys",
-  "tickets"
-];
-
-const TAB_ICONS: Record<EmployeePortalTab, () => ReturnType<typeof NavIcons.home>> = {
-  home: NavIcons.home,
-  trainings: NavIcons.trainings,
-  documents: NavIcons.documents,
-  dossier: NavIcons.dossier,
-  medical: NavIcons.medical,
-  announcements: NavIcons.announcements,
-  surveys: NavIcons.surveys,
-  tickets: NavIcons.tickets
-};
+import { PORTAL_TAB_LABELS, PORTAL_TABS } from "../utils";
 
 function parseTab(value: string | null): EmployeePortalTab {
-  if (value && TABS.includes(value as EmployeePortalTab)) {
+  if (value && PORTAL_TABS.includes(value as EmployeePortalTab)) {
     return value as EmployeePortalTab;
   }
   return "home";
@@ -87,33 +64,11 @@ export function EmployeePortalPage() {
     <div className="employee-portal page-stack">
       <header className="page-header">
         <h1 className="page-title">{PORTAL_TAB_LABELS[tab]}</h1>
-        <p className="page-lead">
-          {tab === "home"
-            ? "Rezumatul activităților tale: instruiri, sondaje și solicitări."
-            : "Instruiri SSM, documente, anunțuri și solicitări interne — tot ce ai nevoie ca angajat."}
-        </p>
       </header>
 
       <div className="employee-portal-layout">
-        <nav className="employee-portal-nav" aria-label="Secțiuni portal angajat">
-          {TABS.map((id) => {
-            const Icon = TAB_ICONS[id];
-            return (
-              <button
-                key={id}
-                type="button"
-                className={`employee-portal-nav-link${tab === id ? " active" : ""}`}
-                onClick={() => setActiveTab(id)}
-              >
-                <span className="employee-portal-nav-icon">{Icon()}</span>
-                {PORTAL_TAB_LABELS[id]}
-              </button>
-            );
-          })}
-        </nav>
-
         <nav className="employee-portal-tabs" aria-label="Secțiuni portal angajat (mobil)">
-          {TABS.map((id) => (
+          {PORTAL_TABS.map((id) => (
             <button
               key={id}
               type="button"

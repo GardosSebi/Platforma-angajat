@@ -22,6 +22,21 @@ export const PORTAL_TAB_LABELS: Record<EmployeePortalTab, string> = {
   tickets: "Solicitări"
 };
 
+export const PORTAL_TABS: EmployeePortalTab[] = [
+  "home",
+  "trainings",
+  "documents",
+  "dossier",
+  "medical",
+  "announcements",
+  "surveys",
+  "tickets"
+];
+
+export function portalTabPath(tab: EmployeePortalTab): string {
+  return tab === "home" ? "/portal" : `/portal?tab=${tab}`;
+}
+
 export function planHasMaterial(
   plan: Pick<SsmTrainingPlanItem, "materialTitle" | "materialUrl" | "hasUploadedMaterial" | "materialFileName">
 ): boolean {

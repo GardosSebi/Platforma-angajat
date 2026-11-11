@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, StreamableFile } from "@nestjs/common";
-import { createReadStream } from "fs";
-import { mkdir, writeFile } from "fs/promises";
+import { constants, createReadStream } from "fs";
+import { access, mkdir, unlink, writeFile } from "fs/promises";
 import { extname, resolve } from "path";
 import {
   Prisma,
@@ -273,8 +273,15 @@ export class SsmAccidentsService {
       include: { tasks: true, correctiveMeasureItems: true }
     });
     if (!accidentCase) throw new NotFoundException("Cazul nu a fost găsit.");
+    if (accidentCase.status === SsmAccidentCaseStatus.CLOSED) {
+      throw new BadRequestException("Cazul este deja închis.");
+    }
     const hasOpenTasks = accidentCase.tasks.some((task) => !task.completedAt);
     if (hasOpenTasks) throw new BadRequestException("Finalizează toate sarcinile de cercetare înainte de închiderea cazului.");
+    const hasOpenMeasures = accidentCase.correctiveMeasureItems.some((measure) => !measure.completedAt);
+    if (hasOpenMeasures) {
+      throw new BadRequestException("Finalizează toate măsurile corective înainte de închiderea cazului.");
+    }
 
     const measuresSummary =
       dto.correctiveMeasures?.trim() ||
@@ -284,8 +291,8 @@ export class SsmAccidentsService {
             .join("\n")
         : null);
 
-    const updated = await this.prisma.ssmAccidentCase.update({
-      where: { id: caseId },
+    const closed = await this.prisma.ssmAccidentCase.updateMany({
+      where: { id: caseId, tenantId, status: { not: SsmAccidentCaseStatus.CLOSED } },
       data: {
         status: SsmAccidentCaseStatus.CLOSED,
         conclusions: dto.conclusions.trim(),
@@ -293,6 +300,8 @@ export class SsmAccidentsService {
         closedAt: new Date()
       }
     });
+    if (!closed.count) throw new BadRequestException("Cazul este deja închis.");
+    const updated = await this.prisma.ssmAccidentCase.findFirstOrThrow({ where: { id: caseId, tenantId } });
     await this.auditLog.write({
       tenantId,
       actorId,
@@ -629,6 +638,12 @@ export class SsmAccidentsService {
       throw new NotFoundException("Fișierul atașat a fost eliminat.");
     }
 
+    try {
+      await access(attachment.storagePath, constants.R_OK);
+    } catch {
+      throw new NotFoundException("Fișierul atașat nu mai există pe server.");
+    }
+
     const stream = createReadStream(attachment.storagePath);
     return new StreamableFile(stream, {
       type: attachment.mimeType || "application/octet-stream",
@@ -638,10 +653,19 @@ export class SsmAccidentsService {
 
   async deleteAttachment(tenantId: string, actorId: string, caseId: string, attachmentId: string) {
     const attachment = await this.prisma.ssmAccidentAttachment.findFirst({
-      where: { id: attachmentId, tenantId, accidentCaseId: caseId }
+      where: { id: attachmentId, tenantId, accidentCaseId: caseId },
+      include: { accidentCase: { select: { status: true } } }
     });
     if (!attachment) throw new NotFoundException("Atașamentul nu a fost găsit.");
+    if (attachment.accidentCase.status === SsmAccidentCaseStatus.CLOSED) {
+      throw new BadRequestException("Nu se pot șterge atașamente de la un caz închis.");
+    }
 
+    if (!attachment.filePurgedAt) {
+      await unlink(attachment.storagePath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
     await this.prisma.ssmAccidentAttachment.delete({ where: { id: attachment.id } });
     await this.auditLog.write({
       tenantId,

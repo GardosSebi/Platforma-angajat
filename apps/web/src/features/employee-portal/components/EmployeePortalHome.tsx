@@ -8,6 +8,8 @@ import { employeePortalApi } from "../api/employee-portal.api";
 import { ssmApi } from "../../ssm/api/ssm.api";
 import type { EmployeePortalTab } from "../utils";
 import { PORTAL_TAB_LABELS } from "../utils";
+import { PORTAL_TAB_ICONS } from "../portal-tab-icons";
+import { NavIcons } from "../../../app/nav-icons";
 
 const QUICK_LINKS: Array<{ tab: EmployeePortalTab; hint: string }> = [
   { tab: "trainings", hint: "Parcurge instruiri și semnează fișele" },
@@ -57,13 +59,15 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
       ) : null}
 
       {medicalQuery.data?.reminderVisible && !medicalQuery.data.blockedAdmission ? (
-        <div className="feedback warn employee-portal-alert" role="status">
-          <strong>Control medical:</strong>{" "}
-          {medicalQuery.data.daysUntilDue != null && medicalQuery.data.daysUntilDue < 0
-            ? `ești restant cu ${Math.abs(medicalQuery.data.daysUntilDue)} zile.`
-            : `scadență în ${medicalQuery.data.daysUntilDue ?? "—"} zile.`}{" "}
-          <button type="button" className="btn-text-link" onClick={() => onNavigate("medical")}>
-            Programează control →
+        <div className="feedback warn employee-portal-alert employee-portal-alert--action" role="status">
+          <span>
+            <strong>Control medical:</strong>{" "}
+            {medicalQuery.data.daysUntilDue != null && medicalQuery.data.daysUntilDue < 0
+              ? `ești restant cu ${Math.abs(medicalQuery.data.daysUntilDue)} zile.`
+              : `scadență în ${medicalQuery.data.daysUntilDue ?? "—"} zile.`}
+          </span>
+          <button type="button" className="btn-secondary" onClick={() => onNavigate("medical")}>
+            Programează control
           </button>
         </div>
       ) : null}
@@ -106,13 +110,19 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
       <div className="employee-quick-links">
         {QUICK_LINKS.map(({ tab, hint }) => (
           <button key={tab} type="button" className="card employee-quick-link" onClick={() => onNavigate(tab)}>
-            <strong>{PORTAL_TAB_LABELS[tab]}</strong>
-            <span className="field-hint">{hint}</span>
+            <span className="employee-quick-link-icon">{PORTAL_TAB_ICONS[tab]()}</span>
+            <span className="employee-quick-link-text">
+              <strong>{PORTAL_TAB_LABELS[tab]}</strong>
+              <span className="field-hint">{hint}</span>
+            </span>
           </button>
         ))}
         <Link to="/informatii" className="card employee-quick-link">
-          <strong>Informații & echipă</strong>
-          <span className="field-hint">Colegi, departament, pagini utile</span>
+          <span className="employee-quick-link-icon">{NavIcons.info()}</span>
+          <span className="employee-quick-link-text">
+            <strong>Informații & echipă</strong>
+            <span className="field-hint">Colegi, departament, pagini utile</span>
+          </span>
         </Link>
       </div>
 
@@ -130,9 +140,11 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
               </li>
             ))}
           </ul>
-          <button type="button" className="btn-text-link" onClick={() => onNavigate("trainings")}>
-            Vezi toate instruirile →
-          </button>
+          <div className="employee-portal-card-actions">
+            <button type="button" className="btn-secondary" onClick={() => onNavigate("trainings")}>
+              Vezi toate instruirile
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
