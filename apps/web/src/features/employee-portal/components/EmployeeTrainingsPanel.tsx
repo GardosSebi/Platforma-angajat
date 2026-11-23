@@ -153,7 +153,6 @@ export function EmployeeTrainingsPanel() {
     return (
       <div className="employee-portal-empty card">
         <p>Nu ai instruiri alocate momentan.</p>
-        <p className="field-hint">Vei primi o notificare când responsabilul SSM îți atribuie o instruire.</p>
       </div>
     );
   }
@@ -259,7 +258,7 @@ export function EmployeeTrainingsPanel() {
                   </div>
                 </>
               ) : (
-                <p className="field-hint">Nu există material de parcurs — poți trece direct la test.</p>
+                <p className="field-hint">Fără material de parcurs.</p>
               )}
 
               {materialReady && activePlan.score == null && activePlan.status !== "BLOCKED" ? (
@@ -301,7 +300,6 @@ export function EmployeeTrainingsPanel() {
 
               {activePlan.score != null && activePlan.status !== "BLOCKED" && !activePlan.employeeSignedAt ? (
                 <div className="employee-signature-block">
-                  <p className="field-hint">Semnează olograf în chenarul de mai jos pentru a confirma instruirea.</p>
                   <SignatureCanvas value={signature} onChange={setSignature} />
                   <button
                     type="button"

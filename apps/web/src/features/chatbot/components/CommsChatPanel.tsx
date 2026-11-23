@@ -77,7 +77,7 @@ export function CommsChatPanel({ canManageContacts }: Props) {
       {
         onSuccess: () => {
           setContactForm(EMPTY_CONTACT);
-          setFeedback({ type: "success", message: "Contact extern adăugat. Poți scrie pe canalul lui." });
+          setFeedback({ type: "success", message: "Contact extern adăugat." });
         },
         onError: (error) => setFeedback({ type: "error", message: mutationErrorMessage(error) })
       }
@@ -88,14 +88,9 @@ export function CommsChatPanel({ canManageContacts }: Props) {
     <div className="form-stack">
       <div className="card form-stack comms-panel">
         <h2 className="card-title">Chat companie / grup și comunicare externă</h2>
-        <p className="comms-toolbar-hint">
-          Canale interne pe companie sau grup, plus trimitere către contractori și parteneri (email în afara firmei).
-        </p>
         {channelsQuery.isLoading ? <p className="field-hint">Se încarcă canalele…</p> : null}
         {!channelsQuery.isLoading && channels.length === 0 ? (
-          <p className="field-hint">
-            Nu ai încă drept de chat. Cere administratorului un drept pe companie/grup sau comunicare externă.
-          </p>
+          <p className="field-hint">Nu ai încă drept de chat.</p>
         ) : null}
         {channels.length > 0 ? (
           <div className="comms-chat-layout">
@@ -121,10 +116,8 @@ export function CommsChatPanel({ canManageContacts }: Props) {
                 {selected?.name ?? "Canal"}
               </h3>
               {selected?.kind === "EXTERNAL" ? (
-                <p className="field-hint">Mesajele se trimit și pe email către {selected.externalContact?.email}.</p>
-              ) : (
-                <p className="field-hint">Chat intern pe scopul acordat.</p>
-              )}
+                <p className="field-hint">E-mail: {selected.externalContact?.email}</p>
+              ) : null}
               <div className="comms-chat-messages">
                 {(messagesQuery.data?.items ?? []).map((message) => (
                   <div key={message.id} className={`comms-chat-bubble${message.mine ? " mine" : ""}`}>
@@ -163,9 +156,6 @@ export function CommsChatPanel({ canManageContacts }: Props) {
       {canManageContacts ? (
         <form className="card form-stack comms-panel" onSubmit={onCreateContact}>
           <h3 className="card-title">Contacte externe (contractori / parteneri)</h3>
-          <p className="field-hint" style={{ marginTop: 0 }}>
-            Destinatari din afara firmei pentru chat și anunțuri cu audiență „Extern”.
-          </p>
           <div className="comms-form-row">
             <FieldSelect
               id="ext-kind"

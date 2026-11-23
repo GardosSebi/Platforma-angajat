@@ -102,14 +102,7 @@ export function CommsAnnouncementForm({
   return (
     <form className="card form-stack comms-panel comms-compose" onSubmit={onSubmit}>
       <div className="comms-compose-head">
-        <div>
-          <h2 className="card-title">{mode === "edit" ? "Editează anunț" : "Anunț nou"}</h2>
-          <p className="comms-toolbar-hint">
-            {mode === "edit"
-              ? "Modifică mesajul sau destinatarii, apoi salvează."
-              : "Completează mesajul, alege destinatarii, apoi salvează sau publică."}
-          </p>
-        </div>
+        <h2 className="card-title">{mode === "edit" ? "Editează anunț" : "Anunț nou"}</h2>
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Înapoi la listă
         </button>
@@ -158,11 +151,6 @@ export function CommsAnnouncementForm({
             label: MESSAGE_TYPE_LABELS[type]
           }))}
         />
-        {form.messageType === "QUESTION" ? (
-          <p className="field-hint">
-            Angajații vor putea trimite un răspuns text. Răspunsurile apar în detaliile anunțului.
-          </p>
-        ) : null}
         <div className="field">
           <label htmlFor="announcement-title">Titlu *</label>
           <input
@@ -190,10 +178,6 @@ export function CommsAnnouncementForm({
         </div>
         {form.contentType === "RICH_TEXT" ? (
           <div className="field">
-            <p className="field-hint">
-              Text formatat simplu, fără editor WYSIWYG. Folosește **aldin**, *cursiv*, `cod`, liste cu - și
-              [text](https://…). Previzualizarea de mai jos este ce văd angajații.
-            </p>
             <label>Previzualizare text formatat</label>
             {form.body.trim() ? (
               <FormattedText text={form.body} />
@@ -238,12 +222,6 @@ export function CommsAnnouncementForm({
                 event.target.value = "";
               }}
             />
-            {form.contentType === "SLIDE" ? (
-              <p className="field-hint">
-                Upload + previzualizare PDF în aplicație. Nu există player de prezentare; fișierele .ppt/.pptx se
-                descarcă.
-              </p>
-            ) : null}
             {uploadPending ? <p className="field-hint">Se încarcă…</p> : null}
             {uploadError ? <p className="feedback error">{uploadError}</p> : null}
             {form.contentUrl && !/^https?:\/\//i.test(form.contentUrl) ? (
@@ -312,10 +290,6 @@ export function CommsAnnouncementForm({
 
       <fieldset className="comms-fieldset">
         <legend>Traduceri (opțional)</legend>
-        <p className="field-hint">
-          Titlul și mesajul de mai sus sunt limba principală. Traducerile RO/EN sunt afișate angajaților după limba
-          browserului; dacă lipsește o traducere, se folosește textul principal.
-        </p>
         <div className="comms-form-row">
           <div className="field">
             <label htmlFor="tr-ro-title">Titlu RO</label>
@@ -392,9 +366,8 @@ export function CommsAnnouncementForm({
         {needsExternalList ? (
           <div className="field">
             <span>Destinatari externi</span>
-            <p className="field-hint">Contractori și parteneri din afara firmei. Mesajul se trimite pe email.</p>
             {audienceOptions.length === 0 ? (
-              <p className="field-hint">Nu există contacte externe. Adaugă-le din tab-ul Chat / Externi.</p>
+              <p className="field-hint">Nu există contacte externe.</p>
             ) : (
               <div className="form-stack">
                 {audienceOptions.map((option) => {

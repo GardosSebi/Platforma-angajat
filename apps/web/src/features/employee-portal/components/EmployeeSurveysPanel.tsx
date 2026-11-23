@@ -21,9 +21,6 @@ export function EmployeeSurveysPanel() {
     return (
       <div className="employee-portal-empty card">
         <p>Contul tău nu este legat de un profil de angajat.</p>
-        <p className="field-hint">
-          E-mailul de login trebuie să coincidă cu cel din fișa de personal ca să vezi și să completezi sondajele.
-        </p>
       </div>
     );
   }
@@ -40,10 +37,6 @@ export function EmployeeSurveysPanel() {
     return (
       <div className="employee-portal-empty card">
         <p>Nu ai sondaje active de completat.</p>
-        <p className="field-hint">
-          Sondajele apar aici când sunt <strong>activate</strong> de administrator și te includ în audiență (toți
-          angajații, departament, punct de lucru etc.).
-        </p>
       </div>
     );
   }

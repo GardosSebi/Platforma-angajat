@@ -40,15 +40,10 @@ export function WordTemplateEditor({ title, initialHtml, isPending, error, onSav
 
   return (
     <div className="ssm-word-editor card form-stack">
-      <div className="ssm-inline-actions" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h4 className="card-title" style={{ margin: 0 }}>
-            Editor Word — {title}
-          </h4>
-          <p className="field-hint" style={{ margin: "0.25rem 0 0" }}>
-            Editează șablonul în platformă. Salvarea generează un fișier Word (.docx) cu versiune.
-          </p>
-        </div>
+      <div className="ssm-inline-actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <h4 className="card-title" style={{ margin: 0 }}>
+          Editor Word — {title}
+        </h4>
         <button type="button" className="btn-text" onClick={onCancel}>
           Închide
         </button>

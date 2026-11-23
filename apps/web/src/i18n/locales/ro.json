@@ -74,7 +74,6 @@
   },
   "comms": {
     "title": "Comunicări",
-    "lead": "Publică mesaje, programează mementouri și urmărește rata de citire.",
     "tabs": {
       "announcements": "Anunțuri",
       "compose": "Anunț nou",

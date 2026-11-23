@@ -28,12 +28,12 @@ import {
 
 type MedicalTab = "types" | "register" | "update" | "reminders" | "appointments";
 
-const MEDICAL_TABS: Array<{ id: MedicalTab; title: string; caption: string }> = [
-  { id: "types", title: "Tipuri control", caption: "Config pe post și categorie" },
-  { id: "register", title: "Registru", caption: "Listă și înregistrare" },
-  { id: "update", title: "Actualizare", caption: "Rezultat și fișă aptitudini" },
-  { id: "reminders", title: "Reminder", caption: "Email + in-app" },
-  { id: "appointments", title: "Programări", caption: "Cereri din portalul angajatului" }
+const MEDICAL_TABS: Array<{ id: MedicalTab; title: string }> = [
+  { id: "types", title: "Tipuri control" },
+  { id: "register", title: "Registru" },
+  { id: "update", title: "Actualizare" },
+  { id: "reminders", title: "Reminder" },
+  { id: "appointments", title: "Programări" }
 ];
 
 const CONTROL_RESULTS: SsmMedicalControlResult[] = ["FIT", "FIT_CONDITIONAL", "TEMPORARY_UNFIT", "UNFIT"];
@@ -243,7 +243,6 @@ export function SsmMedicalManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -589,11 +588,10 @@ export function SsmMedicalManager() {
 
       {tab === "reminders" ? (
         <div className="card form-stack ssm-doc-card">
-          <p className="field-hint">
-            Reminder-ele de medicină a muncii se trimit pe email (angajat și responsabili SSM) și în aplicație, la
-            fel ca la instruiri, EIP și PSI. Cron-ul zilnic evită duplicatele pe același prag (30/15/7 zile).
-          </p>
-          <div className="form-actions" style={{ marginBottom: "0.85rem" }}>
+          <div className="ssm-card-header">
+            <h4 className="card-title" style={{ margin: 0 }}>
+              Reminder-e programate
+            </h4>
             <button
               type="button"
               className="btn-primary"

@@ -42,7 +42,6 @@ export function PublicSurveyPage() {
           <p className="feedback error" role="alert">
             {query.error instanceof Error ? query.error.message : "Nu s-a putut încărca sondajul."}
           </p>
-          <p className="field-hint">Linkul poate fi expirat, dezactivat sau incorect.</p>
         </div>
       </div>
     );

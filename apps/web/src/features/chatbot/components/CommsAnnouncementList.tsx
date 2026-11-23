@@ -67,9 +67,7 @@ export function CommsAnnouncementList({
       <div className="comms-toolbar">
         <div className="comms-toolbar-start">
           <h2 className="card-title">Anunțuri</h2>
-          <p className="comms-toolbar-hint">
-            {total} în total · filtrează ciornele cu chip-ul „Ciorne” · acțiuni vizibile în coloana din dreapta
-          </p>
+          <p className="comms-toolbar-hint">{total} în total</p>
         </div>
         {canEdit ? (
           <button type="button" className="btn-primary comms-toolbar-cta" onClick={onCreateClick}>

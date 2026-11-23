@@ -107,9 +107,7 @@ function DocumentPreviewModal({
         {!objectUrl && !error ? <p className="field-hint">Se încarcă documentul semnat…</p> : null}
         {objectUrl && isPdf ? <iframe title={title} src={objectUrl} className="itm-preview-frame" /> : null}
         {objectUrl && isImage ? <img src={objectUrl} alt={title} className="itm-preview-image" /> : null}
-        {objectUrl && !isPdf && !isImage ? (
-          <p className="field-hint">Previzualizarea în pagină e disponibilă pentru PDF și imagini. Descarcă fișierul pentru restul formatelor.</p>
-        ) : null}
+        {objectUrl && !isPdf && !isImage ? <p className="field-hint">Previzualizare indisponibilă.</p> : null}
       </div>
     </div>
   );
@@ -231,10 +229,6 @@ export function ItmInspectorPage() {
     <div className="page-stack">
       <header className="page-header">
         <h1>Portal inspector ITM / ISU</h1>
-        <p className="page-subtitle">
-          Acces doar în citire la documentele semnate, dosarele angajaților și rapoartele de control. Fiecare
-          vizualizare sau descărcare este jurnalizată GDPR.
-        </p>
       </header>
 
       <FieldSelect
@@ -378,9 +372,6 @@ export function ItmInspectorPage() {
       {tab === "dossiers" ? (
         <section className="card form-stack">
           <h2 className="card-title">Dosar digital angajat</h2>
-          <p className="field-hint">
-            Consultă fișele de instruire semnate, aptitudinea medicală și exportul ZIP pentru control ITM.
-          </p>
           <div className="field">
             <label htmlFor="itm-employee-search">Caută angajat</label>
             <input
@@ -506,7 +497,6 @@ export function ItmInspectorPage() {
       {tab === "reports" ? (
         <section className="card form-stack">
           <h2 className="card-title">Rapoarte conformitate</h2>
-          <p className="field-hint">Export PDF/Excel pentru evidențe la control. Acțiunea este jurnalizată GDPR.</p>
           <FieldSelect
             id="itm-report-type"
             label="Tip raport"
@@ -548,7 +538,6 @@ export function ItmInspectorPage() {
       {tab === "visits" ? (
         <section className="card form-stack">
           <h2 className="card-title">Evidență vizită control</h2>
-          <p className="field-hint">Deschide o vizită pe punctul de lucru filtrat, apoi închide-o la finalul controlului.</p>
           <div className="field">
             <label htmlFor="itm-visit-notes">Note vizită</label>
             <textarea id="itm-visit-notes" rows={3} value={visitNotes} onChange={(e) => setVisitNotes(e.target.value)} />
@@ -581,9 +570,6 @@ export function ItmInspectorPage() {
       {tab === "gdpr" ? (
         <section className="card">
           <h2 className="card-title">Jurnal acces (GDPR)</h2>
-          <p className="field-hint">
-            Cine a vizualizat, descărcat sau exportat ce documente din dosarul de control. Inspectorii văd propriul jurnal.
-          </p>
           {logsQuery.isLoading ? <p>Se încarcă jurnalul…</p> : null}
           <ul className="itm-gdpr-log">
             {(logsQuery.data ?? []).map((row) => (

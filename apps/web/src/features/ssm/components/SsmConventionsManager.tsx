@@ -441,7 +441,6 @@ export function SsmConventionsManager() {
                   required={Boolean(createForm.firstParty.companyName.trim())}
                 />
               </div>
-              <p className="field-hint">Beneficiarul punctului de lucru este adăugat automat ca parte gazdă.</p>
               <button className="btn-primary" type="submit" disabled={createConvention.isPending || !createForm.worksiteId}>
                 {createConvention.isPending ? "Se creează…" : "Creează convenția (ciornă)"}
               </button>

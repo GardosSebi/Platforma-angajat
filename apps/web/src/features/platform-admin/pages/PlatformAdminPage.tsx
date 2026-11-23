@@ -13,13 +13,7 @@ export function PlatformAdminPage() {
   return (
     <div className="comms-page platform-admin-page">
       <header className="comms-header">
-        <div>
-          <h1 className="page-title">Administrare platformă</h1>
-          <p className="page-lead">
-            Gestionează conturile, autentificarea SSO, roluri scoped, acces inspector ITM, paginile statice și
-            cererile GDPR.
-          </p>
-        </div>
+        <h1 className="page-title">Administrare platformă</h1>
       </header>
 
       <nav className="comms-tabs" aria-label="Secțiuni administrare">

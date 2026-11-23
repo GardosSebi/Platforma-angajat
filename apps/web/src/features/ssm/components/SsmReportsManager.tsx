@@ -15,61 +15,21 @@ import { SsmScheduledReportsPanel } from "./SsmScheduledReportsPanel";
 
 type ReportsTab = "generate" | "scheduled";
 
-const PAGE_TABS: Array<{ id: ReportsTab; title: string; caption: string }> = [
-  { id: "generate", title: "Generare", caption: "Preview și export" },
-  { id: "scheduled", title: "Programate", caption: "Trimitere automată" }
+const PAGE_TABS: Array<{ id: ReportsTab; title: string }> = [
+  { id: "generate", title: "Generare" },
+  { id: "scheduled", title: "Programate" }
 ];
 
-const REPORT_TYPES: Array<{ type: SsmReportType; label: string; shortLabel: string; description: string }> = [
-  {
-    type: "trainings",
-    label: "Instruiri",
-    shortLabel: "Instruiri",
-    description: "Angajat, departament, entitate, tematică, rezultat."
-  },
-  {
-    type: "eip",
-    label: "EIP · mișcări",
-    shortLabel: "EIP",
-    description: "Distribuiri și scadențe înlocuire."
-  },
-  {
-    type: "eip-stock",
-    label: "EIP · stoc",
-    shortLabel: "EIP stoc",
-    description: "Necesar, stoc pe mână, lipsă."
-  },
-  {
-    type: "medical",
-    label: "Medicina muncii",
-    shortLabel: "Medical",
-    description: "Controale pe angajat."
-  },
-  {
-    type: "documents",
-    label: "Documente",
-    shortLabel: "Documente",
-    description: "Versionare, expirate, fără revizuire."
-  },
-  {
-    type: "accidents",
-    label: "Accidente",
-    shortLabel: "Accidente",
-    description: "Registru incidente și boli."
-  },
-  { type: "psi", label: "PSI", shortLabel: "PSI", description: "Echipamente și instruiri PSI." },
-  {
-    type: "substances",
-    label: "Substanțe periculoase",
-    shortLabel: "Substanțe",
-    description: "Registru stoc, locații, fișe SDS și scadențe."
-  },
-  {
-    type: "compliance",
-    label: "Conformitate",
-    shortLabel: "Conformitate",
-    description: "KPI și breakdown pe module."
-  }
+const REPORT_TYPES: Array<{ type: SsmReportType; label: string; shortLabel: string }> = [
+  { type: "trainings", label: "Instruiri", shortLabel: "Instruiri" },
+  { type: "eip", label: "EIP · mișcări", shortLabel: "EIP" },
+  { type: "eip-stock", label: "EIP · stoc", shortLabel: "EIP stoc" },
+  { type: "medical", label: "Medicina muncii", shortLabel: "Medical" },
+  { type: "documents", label: "Documente", shortLabel: "Documente" },
+  { type: "accidents", label: "Accidente", shortLabel: "Accidente" },
+  { type: "psi", label: "PSI", shortLabel: "PSI" },
+  { type: "substances", label: "Substanțe periculoase", shortLabel: "Substanțe" },
+  { type: "compliance", label: "Conformitate", shortLabel: "Conformitate" }
 ];
 
 const FIELD_LABELS: Record<string, string> = {
@@ -354,7 +314,6 @@ export function SsmReportsManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -502,9 +461,6 @@ export function SsmReportsManager() {
                 </h4>
                 <span className="ssm-chip">{rows.length}</span>
               </div>
-              <p className="field-hint" style={{ marginTop: 0 }}>
-                {selectedReport?.description}
-              </p>
               {downloadError ? (
                 <p className="feedback error" role="alert">
                   {downloadError}
@@ -532,7 +488,7 @@ export function SsmReportsManager() {
                 ) : null}
               </div>
               {rows.length > 25 ? (
-                <p className="field-hint">Preview: primele 25 din {rows.length}. Exportul include toate rândurile.</p>
+                <p className="field-hint">Primele 25 din {rows.length}.</p>
               ) : null}
             </div>
 
@@ -540,9 +496,6 @@ export function SsmReportsManager() {
               <h4 className="card-title" style={{ margin: 0 }}>
                 Detalii rânduri
               </h4>
-              <p className="field-hint" style={{ marginTop: 0 }}>
-                Câmpurile din preview pentru tipul selectat.
-              </p>
               <div className="ssm-history-list">
                 {headers.map((header) => (
                   <div key={header} className="ssm-history-item">

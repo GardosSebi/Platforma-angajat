@@ -263,7 +263,6 @@ export function SsmGateManager() {
           onClick={() => setTab("wizard")}
         >
           <strong>Wizard poartă</strong>
-          <span>Intrare → instruire → Anexa 12</span>
         </button>
         <button
           type="button"
@@ -271,7 +270,6 @@ export function SsmGateManager() {
           onClick={() => setTab("blocks")}
         >
           <strong>Nu intra la lucru</strong>
-          <span>Listă operațională șefi tură / poartă</span>
         </button>
       </div>
 
@@ -325,7 +323,7 @@ export function SsmGateManager() {
             </ol>
 
             {!canEdit ? (
-              <p className="field-hint">Ai acces doar în citire. Crearea vizitelor necesită drept de editare instruiri.</p>
+              <p className="field-hint">Acces doar în citire.</p>
             ) : null}
 
             {step === 1 && !activeVisit && canEdit ? (
@@ -486,10 +484,6 @@ export function SsmGateManager() {
 
             {step === 4 && activeVisit ? (
               <div className="form-stack">
-                <p className="field-hint">
-                  Semnează pe rând instructorul și fiecare participant. Fișa colectivă se închide după toate semnăturile
-                  necesare.
-                </p>
                 <div className="ssm-history-list">
                   <div className="ssm-history-item">
                     <div>
@@ -555,10 +549,6 @@ export function SsmGateManager() {
                   <p className="feedback success">Fișa colectivă a fost semnată.</p>
                 ) : null}
               </div>
-            ) : null}
-
-            {step === 1 && !canEdit ? (
-              <p className="field-hint">Alege o vizită din listă. Crearea unei intrări noi cere drept de editare.</p>
             ) : null}
           </div>
 
@@ -681,9 +671,6 @@ export function SsmGateManager() {
       {tab === "blocks" ? (
         <div className="card ssm-doc-card admission-block-print">
           <h4 className="card-title">Nu intra la lucru</h4>
-          <p className="field-hint">
-            Listă operațională pentru șefi de tură și poartă: instruiri blocate sau aptitudine medicală inapt.
-          </p>
           <div className="form-actions" style={{ marginBottom: "0.85rem" }}>
             <button type="button" className="btn-secondary" onClick={() => window.print()}>
               Tipărește lista

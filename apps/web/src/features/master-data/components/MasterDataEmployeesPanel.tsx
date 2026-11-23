@@ -444,7 +444,6 @@ export function MasterDataEmployeesPanel() {
             <FieldSelect
               id="md-emp-create-employment-type"
               label="Tip angajare"
-              hint="Detașații, delegații și personalul temporar primesc instruirea introductiv-generală la creare."
               value={form.employmentType ?? "OWN"}
               onChange={(employmentType) =>
                 setForm((p) => ({ ...p, employmentType: employmentType as EmploymentType }))
@@ -512,7 +511,6 @@ export function MasterDataEmployeesPanel() {
             <OptionCardRadioGroup
               name="md-emp-create-role"
               legend="Rol la creare"
-              hint="Alege un singur rol pentru contul de autentificare al angajatului."
               value={createRole}
               onChange={(role) => setCreateRole(role as SystemRoleCode)}
               options={roleCardOptions}
@@ -538,7 +536,6 @@ export function MasterDataEmployeesPanel() {
         <MasterDataCreateModal
           title={detailQuery.data?.fullName ?? "Detalii angajat"}
           titleId="md-employee-detail-title"
-          description="Profil, plasament și istoric — modificările se salvează din secțiunile de mai jos."
           onClose={closeDetail}
           size="wide"
         >
@@ -582,7 +579,6 @@ export function MasterDataEmployeesPanel() {
             <FieldSelect
               id="md-emp-edit-employment-type"
               label="Tip angajare"
-              hint="Dacă treci angajatul la detașat, delegat sau temporar și nu are deja instruirea introductiv-generală, aceasta se alocă automat."
               value={editForm.employmentType ?? "OWN"}
               onChange={(employmentType) =>
                 setEditForm((p) => ({ ...p, employmentType: employmentType as EmploymentType }))
@@ -592,7 +588,6 @@ export function MasterDataEmployeesPanel() {
             <OptionCardRadioGroup
               name="md-emp-edit-status"
               legend="Status"
-              hint="Alege dacă angajatul este activ sau inactiv în structura organizațională."
               value={editForm.active === false ? "false" : "true"}
               onChange={(next) => setEditForm((p) => ({ ...p, active: next === "true" }))}
               options={[...ACTIVE_STATUS_CARD_OPTIONS]}
@@ -601,15 +596,12 @@ export function MasterDataEmployeesPanel() {
               <OptionCardRadioGroup
                 name="md-emp-edit-role"
                 legend="Rol utilizator"
-                hint="Rolul contului de autentificare asociat acestui angajat (același e-mail)."
                 value={editRole}
                 onChange={(role) => setEditRole(role as SystemRoleCode)}
                 options={roleCardOptions}
               />
             ) : (
-              <p className="text-muted small">
-                Nu există cont de autentificare pentru acest e-mail. Rolul se setează la crearea angajatului.
-              </p>
+              <p className="text-muted small">Fără cont de autentificare.</p>
             )}
             <div className="comms-form-row">
               <div className="field">
@@ -644,9 +636,6 @@ export function MasterDataEmployeesPanel() {
 
           <form className="form-stack md-placement-form" onSubmit={onSavePlacement}>
             <h4>Schimbare plasament (post / punct de lucru)</h4>
-            <p className="field-hint">
-              Modificările de plasament sunt înregistrate în istoric; datele anterioare nu se șterg.
-            </p>
             <div className="comms-form-row">
               <FieldSelect
                 id="md-emp-place-worksite"

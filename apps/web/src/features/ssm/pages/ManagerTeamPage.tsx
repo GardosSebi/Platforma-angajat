@@ -94,10 +94,6 @@ export function ManagerTeamPage() {
       <header className="comms-header">
         <div>
           <h1 className="page-title">Echipa mea</h1>
-          <p className="page-lead">
-            Situație SSM pe echipa proprie: conformitate, restanțe, blocări de admitere și aprobare instruiri la locul
-            de muncă.
-          </p>
           {data ? <p className="field-hint">{data.scopeLabel}</p> : null}
         </div>
         <Link className="btn-secondary" to="/ssm/compliance">
@@ -150,9 +146,6 @@ export function ManagerTeamPage() {
 
       <section className="card">
         <h2 className="card-title">Aprobare instruiri la locul de muncă</h2>
-        <p className="field-hint">
-          Angajatul a semnat fișa; tu confirmi ca manager. Poți aproba individual sau în pachet.
-        </p>
         {!pending.length ? <p className="field-hint">Nicio instruire în așteptarea aprobării tale.</p> : null}
         {pending.length ? (
           <>

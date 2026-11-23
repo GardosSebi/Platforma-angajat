@@ -101,11 +101,6 @@ export function SsmExposureSheetsPanel() {
             </button>
           ) : null}
         </div>
-        <p className="field-hint">
-          Fiecare angajat primește automat fișa la angajare, la schimbarea postului și la fiecare versiune nouă a
-          evaluării de risc pentru post. Fișa devine definitivă după semnătura lucrătorului și a evaluatorului și se
-          arhivează în dosarul digital.
-        </p>
         {issueMissing.isSuccess ? (
           <p className="feedback success">
             Au fost emise {issueMissing.data.issued} fișe.
@@ -185,7 +180,7 @@ export function SsmExposureSheetsPanel() {
 
       <div className="card form-stack ssm-doc-card">
         {!selected ? (
-          <p className="field-hint">Selectează un angajat pentru istoricul fișelor și semnare.</p>
+          <p className="field-hint">Niciun angajat selectat.</p>
         ) : (
           <>
             <div className="ssm-card-header">

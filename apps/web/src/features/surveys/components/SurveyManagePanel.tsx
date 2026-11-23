@@ -85,7 +85,7 @@ export function SurveyManagePanel({
       <section className="card comms-panel">
         <div className="comms-empty-state">
           <h2 className="card-title">Gestionează sondaj</h2>
-          <p className="field-hint">Selectează un sondaj din listă pentru distribuire, statistici și export.</p>
+          <p className="field-hint">Niciun sondaj selectat.</p>
           <button type="button" className="btn-secondary" onClick={onBackToList}>
             Mergi la listă
           </button>

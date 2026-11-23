@@ -37,13 +37,13 @@ import { SsmIsuControlPanel } from "./SsmIsuControlPanel";
 type PsiTab = "isu" | "docs" | "equipment" | "trainings" | "responsibles" | "drills";
 type PsiDialog = "training" | "responsible" | "drill";
 
-const PSI_TABS: Array<{ id: PsiTab; title: string; caption: string }> = [
-  { id: "isu", title: "Control ISU", caption: "Pregătire + pachet" },
-  { id: "docs", title: "Documentație", caption: "Acoperire pe punct" },
-  { id: "equipment", title: "Echipamente", caption: "Inventar și verificări" },
-  { id: "trainings", title: "Instruiri", caption: "Registru + suite PSI" },
-  { id: "responsibles", title: "Responsabili", caption: "Roluri pe punct" },
-  { id: "drills", title: "Evacuare", caption: "Exerciții înregistrate" }
+const PSI_TABS: Array<{ id: PsiTab; title: string }> = [
+  { id: "isu", title: "Control ISU" },
+  { id: "docs", title: "Documentație" },
+  { id: "equipment", title: "Echipamente" },
+  { id: "trainings", title: "Instruiri" },
+  { id: "responsibles", title: "Responsabili" },
+  { id: "drills", title: "Evacuare" }
 ];
 
 const RESPONSIBLE_ROLES: Array<{ value: SsmPsiResponsibleRole; label: string }> = [
@@ -320,11 +320,7 @@ export function SsmPsiManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>
-              {item.id === "equipment" && alertCount > 0
-                ? `${item.caption} · ${alertCount} alerte`
-                : item.caption}
-            </span>
+            {item.id === "equipment" && alertCount > 0 ? <span>{alertCount} alerte</span> : null}
           </button>
         ))}
       </div>
@@ -334,7 +330,6 @@ export function SsmPsiManager() {
       {tab === "docs" ? (
         <div className="ssm-panel-layout ssm-panel-layout--single">
           <div className="card form-stack ssm-doc-card">
-            <p className="field-hint">Documentele se încarcă din modulul Documente.</p>
             <div className="ssm-history-list">
               {(docsQuery.data?.worksites ?? []).map((worksite) => (
                 <div key={worksite.id} className="ssm-history-item" style={{ flexDirection: "column", alignItems: "stretch" }}>

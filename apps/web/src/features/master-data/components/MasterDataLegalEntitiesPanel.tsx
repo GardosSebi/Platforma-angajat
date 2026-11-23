@@ -360,7 +360,6 @@ export function MasterDataLegalEntitiesPanel() {
         <MasterDataCreateModal
           title="Entitate juridică nouă"
           titleId="md-legal-entity-create-title"
-          description="Alege un punct de lucru existent sau creează unul nou, apoi salvează entitatea."
           onClose={() => setShowForm(false)}
         >
           <form className="form-stack" onSubmit={onSubmit}>
@@ -425,8 +424,8 @@ export function MasterDataLegalEntitiesPanel() {
                   worksitesLookup.isLoading
                     ? "Se încarcă punctele de lucru..."
                     : worksiteSelectOptions.length
-                      ? "Alege din listă sau creează unul nou."
-                      : "Nu există puncte de lucru. Creează unul nou mai jos."
+                      ? undefined
+                      : "Nu există puncte de lucru."
                 }
               />
               <div className="field">

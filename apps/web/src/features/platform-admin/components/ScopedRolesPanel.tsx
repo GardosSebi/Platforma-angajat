@@ -81,9 +81,6 @@ export function ScopedRolesPanel() {
   return (
     <div className="card form-stack">
       <h2 className="card-title">Roluri scoped per utilizator</h2>
-      <p className="page-lead">
-        Limitează vizibilitatea unui utilizator la un punct de lucru sau la un grup de angajați.
-      </p>
 
       <form className="form-stack" onSubmit={onSubmit}>
         <FieldSelect

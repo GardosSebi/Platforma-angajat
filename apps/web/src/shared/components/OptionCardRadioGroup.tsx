@@ -9,7 +9,6 @@ export type OptionCardChoice = {
 type OptionCardRadioGroupProps = {
   name: string;
   legend: string;
-  hint?: string;
   value: string;
   onChange: (value: string) => void;
   options: OptionCardChoice[];
@@ -20,18 +19,22 @@ type OptionCardRadioGroupProps = {
 export function OptionCardRadioGroup({
   name,
   legend,
-  hint,
   value,
   onChange,
   options,
   ariaLabel,
   className
 }: OptionCardRadioGroupProps) {
+  const inline = options.every((option) => !option.description);
+
   return (
     <fieldset className={className ? `role-fieldset-create ${className}` : "role-fieldset-create"}>
       <legend>{legend}</legend>
-      {hint ? <p className="text-muted small role-fieldset-hint">{hint}</p> : null}
-      <div className="checkbox-grid--stacked-roles" role="radiogroup" aria-label={ariaLabel ?? legend}>
+      <div
+        className={inline ? "checkbox-grid--stacked-roles checkbox-grid--inline-roles" : "checkbox-grid--stacked-roles"}
+        role="radiogroup"
+        aria-label={ariaLabel ?? legend}
+      >
         {options.map((option) => (
           <label key={option.value} className="checkbox-label checkbox-label--role-row">
             <input

@@ -85,7 +85,6 @@ export function SsmDashboardPage() {
     <section className="ssm-active-section">
       <header className="ssm-active-section-header">
         <h1 className="page-title">{active.label}</h1>
-        <p className="page-lead">{active.description}</p>
       </header>
       <div className="ssm-dashboard-grid">{renderSection(active.id)}</div>
     </section>

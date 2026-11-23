@@ -39,8 +39,8 @@ export function CommsTemplatesPanel({
         <h2 className="card-title">Șabloane reutilizabile</h2>
         <p className="comms-toolbar-hint">
           {templates.length === 0
-            ? "Nu există șabloane. Salvează mesaje frecvente pentru a le aplica rapid la anunțuri noi."
-            : `${templates.length} șablon${templates.length === 1 ? "" : "e"} salvate. Editează sau șterge din listă.`}
+            ? "Nu există șabloane."
+            : `${templates.length} șablon${templates.length === 1 ? "" : "e"} salvate.`}
         </p>
 
         {templates.length > 0 ? (
@@ -121,12 +121,9 @@ export function CommsTemplatesPanel({
             required
           />
         </div>
-        {form.contentType === "RICH_TEXT" ? (
+        {form.contentType === "RICH_TEXT" && form.body.trim() ? (
           <div className="field">
-            <p className="field-hint">
-              Text formatat simplu: **aldin**, *cursiv*, liste cu - și [link](https://…). Fără editor WYSIWYG.
-            </p>
-            {form.body.trim() ? <FormattedText text={form.body} /> : null}
+            <FormattedText text={form.body} />
           </div>
         ) : null}
         <button className="btn-primary" type="submit" disabled={isPending}>

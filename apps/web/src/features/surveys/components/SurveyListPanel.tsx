@@ -69,7 +69,7 @@ export function SurveyListPanel({
       <div className="comms-toolbar">
         <div className="comms-toolbar-start">
           <h2 className="card-title">Sondaje</h2>
-          <p className="comms-toolbar-hint">{total} în total · click pe rând pentru a gestiona</p>
+          <p className="comms-toolbar-hint">{total} în total</p>
         </div>
         <button type="button" className="btn-primary comms-toolbar-cta" onClick={onCreateClick}>
            Sondaj nou

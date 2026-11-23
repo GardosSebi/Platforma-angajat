@@ -41,9 +41,9 @@ type RiskFormState = {
   createLinkedPreventionPlan: boolean;
 };
 
-const RISK_TABS: Array<{ id: RiskTabId; title: string; caption: string }> = [
-  { id: "list", title: "Evaluări", caption: "Listă, versiuni și PPP" },
-  { id: "exposure", title: "Fișe expunere", caption: "Emitere, semnare, arhivă" }
+const RISK_TABS: Array<{ id: RiskTabId; title: string }> = [
+  { id: "list", title: "Evaluări" },
+  { id: "exposure", title: "Fișe expunere" }
 ];
 
 const TARGET_TYPE_OPTIONS = [
@@ -360,7 +360,6 @@ export function SsmRiskManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>

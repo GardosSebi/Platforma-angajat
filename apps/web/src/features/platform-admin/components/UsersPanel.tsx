@@ -253,7 +253,6 @@ export function UsersPanel() {
           <OptionCardRadioGroup
             name="pa-user-create-role"
             legend="Rol"
-            hint="Alege un singur rol pentru contul de autentificare."
             value={createRole}
             onChange={(role) => setCreateRole(role as SystemRoleCode)}
             options={roleCardOptions}
@@ -294,7 +293,6 @@ export function UsersPanel() {
             <OptionCardRadioGroup
               name="pa-user-edit-role"
               legend="Rol utilizator"
-              hint="Rolul contului de autentificare."
               value={editRole}
               onChange={(role) => setEditRole(role as SystemRoleCode)}
               options={roleCardOptions}
@@ -302,7 +300,6 @@ export function UsersPanel() {
             <OptionCardRadioGroup
               name="pa-user-edit-status"
               legend="Stare cont"
-              hint="Contul inactiv nu poate autentifica în platformă."
               value={editActive ? "true" : "false"}
               onChange={(next) => setEditActive(next === "true")}
               options={[...ACTIVE_STATUS_CARD_OPTIONS]}

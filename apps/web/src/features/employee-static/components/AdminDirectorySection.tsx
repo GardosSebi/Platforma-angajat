@@ -175,8 +175,7 @@ export function AdminDirectorySection({
       <section className="card" aria-labelledby="admin-directory-heading">
         <h2 id="admin-directory-heading">Organizație (vizualizare administrator)</h2>
         <p className="field-hint">
-          {formatAngajatiCount(data.totals.employees)} activi în {formatPuncteLucruCount(data.totals.worksites)}. Ca
-          administrator vezi toți utilizatorii, grupați pe locație.
+          {formatAngajatiCount(data.totals.employees)} activi în {formatPuncteLucruCount(data.totals.worksites)}.
         </p>
       </section>
 

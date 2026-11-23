@@ -51,20 +51,6 @@ function documentStatusChip(status: SsmDocumentStatus): string {
   return "warn";
 }
 
-const TYPE_HINTS: Partial<Record<CreateSsmDocumentRequest["type"], string>> = {
-  RISK_ASSESSMENT: "→ Evaluări risc",
-  EXPOSURE_SHEET: "→ Evaluări risc",
-  PPP: "→ Plan PPP",
-  REGISTER: "→ Accidente",
-  PSI: "→ PSI",
-  EMERGENCY_PROCEDURE: "→ PSI",
-  DECISION: "→ CSSM",
-  THEMATIC: "→ Instruire",
-  EIP_NORM: "→ EIP (normativ pe post)",
-  DANGEROUS_SUBSTANCES:
-    "Listele documentare rămân aici; evidența de stoc (cantități, locații, fișe SDS) este în modulul Substanțe periculoase."
-};
-
 const EMPTY_DOC: CreateSsmDocumentRequest = {
   title: "",
   type: "IPSSM",
@@ -183,10 +169,6 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
             </button>
           ) : null}
         </div>
-        <p className="field-hint" style={{ marginTop: 0 }}>
-          Modele editabile (Word în platformă). Poți încărca PDF/Word/video sau deschide editorul in-app pentru
-          șabloane Word. Din șablon poți crea rapid un document versionat.
-        </p>
         {editingId && canEdit ? (
           editorQuery.isLoading ? (
             <p className="field-hint">Se încarcă editorul…</p>
@@ -268,7 +250,7 @@ function DocumentTemplatesPanel({ canEdit }: { canEdit: boolean }) {
           ))}
         </div>
         {!templatesQuery.isLoading && !(templatesQuery.data?.items ?? []).length ? (
-          <p className="field-hint">Niciun șablon. Încarcă setul implicit dacă ai drept de editare.</p>
+          <p className="field-hint">Niciun șablon.</p>
         ) : null}
         {uploadFileMutation.isError ? (
           <p className="feedback error" role="alert">
@@ -359,9 +341,6 @@ function DocumentTypePoliciesPanel() {
             {seedMutation.isPending ? "Se încarcă…" : "Politici implicite"}
           </button>
         </div>
-        <p className="field-hint" style={{ marginTop: 0 }}>
-          Roluri view / edit / approve pe categorie. Click pe tip pentru editare.
-        </p>
         <div className="ssm-history-list">
           {items.map((item) => {
             const draft = drafts[item.documentType] ?? {
@@ -459,7 +438,7 @@ function DocumentTypePoliciesPanel() {
           })}
         </div>
         {!policiesQuery.isLoading && !items.length ? (
-          <p className="field-hint">Nicio politică. Încarcă setul implicit.</p>
+          <p className="field-hint">Nicio politică.</p>
         ) : null}
         {seedMutation.isSuccess ? (
           <p className="feedback success" role="status">
@@ -505,13 +484,11 @@ export function SsmDocumentsManager() {
   const [versionNote, setVersionNote] = useState("");
 
   const pageTabs = useMemo(() => {
-    const tabs: Array<{ id: DocsTab; title: string; caption: string }> = [
-      { id: "library", title: "Bibliotecă", caption: "Listă și versiuni" }
-    ];
-    tabs.push({ id: "templates", title: "Șabloane", caption: "Word editabil în platformă" });
-    tabs.push({ id: "control", title: "Control ITM", caption: "Acces rapid" });
+    const tabs: Array<{ id: DocsTab; title: string }> = [{ id: "library", title: "Bibliotecă" }];
+    tabs.push({ id: "templates", title: "Șabloane" });
+    tabs.push({ id: "control", title: "Control ITM" });
     if (canApproveDocuments) {
-      tabs.push({ id: "policies", title: "Acces tipuri", caption: "Roluri pe categorie" });
+      tabs.push({ id: "policies", title: "Acces tipuri" });
     }
     return tabs;
   }, [canApproveDocuments]);
@@ -627,7 +604,6 @@ export function SsmDocumentsManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -833,8 +809,7 @@ export function SsmDocumentsManager() {
               {selectedDoc ? (
                 <>
                   <p className="field-hint" style={{ marginTop: 0 }}>
-                    {selectedDoc.type}
-                    {TYPE_HINTS[selectedDoc.type] ? ` ${TYPE_HINTS[selectedDoc.type]}` : ""} ·{" "}
+                    {selectedDoc.type} ·{" "}
                     {selectedDoc.targetLabel ?? selectedDoc.targetType} · v
                     {selectedDoc.activeVersion.versionNumber} · {documentStatusLabel(selectedDoc.status)}
                     {selectedDoc.approvedAt
@@ -975,7 +950,7 @@ export function SsmDocumentsManager() {
                   ) : null}
                 </>
               ) : (
-                <p className="field-hint">Selectează un document pentru download, versionare și istoric.</p>
+                <p className="field-hint">Niciun document selectat.</p>
               )}
             </div>
           </div>
@@ -986,7 +961,6 @@ export function SsmDocumentsManager() {
         <MasterDataCreateModal
           title="Document nou"
           titleId="ssm-doc-create-modal-title"
-          description="Word, PDF sau video."
           size="wide"
           onClose={closeCreate}
         >
@@ -1012,9 +986,6 @@ export function SsmDocumentsManager() {
                 (type) => SSM_DOCUMENT_TYPE_LABELS[type as CreateSsmDocumentRequest["type"]] ?? type
               )}
             />
-            {TYPE_HINTS[createPayload.type] ? (
-              <p className="field-hint">{TYPE_HINTS[createPayload.type]}</p>
-            ) : null}
             <FieldSelect
               id="doc-target-type"
               label="Alocare"
@@ -1128,9 +1099,6 @@ export function SsmDocumentsManager() {
               </h4>
               <span className="ssm-chip">{controlDocsCount}</span>
             </div>
-            <p className="field-hint" style={{ marginTop: 0 }}>
-              Documente marcate pentru control. Poți filtra biblioteca pe „Numai ITM/ISU”.
-            </p>
             <div className="ssm-history-list">
               {controlFolders.map((folder) => (
                 <button

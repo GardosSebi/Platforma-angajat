@@ -299,7 +299,6 @@ export function MasterDataGroupsPanel() {
             <OptionCardRadioGroup
               name="md-grp-edit-status"
               legend="Status"
-              hint="Grupurile inactive nu se folosesc la atribuirea instruirilor."
               value={editActive ? "true" : "false"}
               onChange={(next) => setEditActive(next === "true")}
               options={[...ACTIVE_STATUS_CARD_OPTIONS]}

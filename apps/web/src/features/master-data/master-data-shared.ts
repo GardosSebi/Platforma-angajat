@@ -46,16 +46,8 @@ export const ACTIVE_STATUS_OPTIONS = [
 ] as const;
 
 export const ACTIVE_STATUS_CARD_OPTIONS = [
-  {
-    value: "true",
-    title: "Activ",
-    description: "Înregistrarea este folosită în liste, atribuiri și rapoarte."
-  },
-  {
-    value: "false",
-    title: "Inactiv",
-    description: "Înregistrarea rămâne în sistem, dar nu se folosește la operațiuni noi."
-  }
+  { value: "true", title: "Activ" },
+  { value: "false", title: "Inactiv" }
 ] as const;
 
 export function activeLabel(active: boolean): string {

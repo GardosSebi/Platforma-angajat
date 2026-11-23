@@ -12,10 +12,7 @@ export function TicketStatsPanel({ stats, isLoading, onBack }: Props) {
     <div className="ticket-stats-stack">
       <section className="card comms-panel">
         <div className="comms-compose-head">
-          <div>
-            <h2 className="card-title">Statistici helpdesk</h2>
-            <p className="comms-toolbar-hint">Distribuție pe stare, categorie, prioritate și operatori.</p>
-          </div>
+          <h2 className="card-title">Statistici helpdesk</h2>
           <button type="button" className="btn-secondary" onClick={onBack}>
             Înapoi la board
           </button>

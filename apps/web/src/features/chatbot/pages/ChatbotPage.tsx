@@ -357,7 +357,7 @@ export function ChatbotPage() {
     const payload = buildAnnouncementPayload(announcementForm);
     const isEdit = Boolean(editingAnnouncementId);
     const onSuccess = () => {
-      const message = isEdit ? "Anunț actualizat." : "Anunț salvat. Poți continua din listă.";
+      const message = isEdit ? "Anunț actualizat." : "Anunț salvat.";
       resetCompose();
       setActionFeedback({ type: "success", message });
     };
@@ -483,10 +483,7 @@ export function ChatbotPage() {
   return (
     <div className="comms-page">
       <header className="comms-header">
-        <div>
-          <h1 className="page-title">{t("comms.title")}</h1>
-          <p className="page-lead">{t("comms.lead")}</p>
-        </div>
+        <h1 className="page-title">{t("comms.title")}</h1>
       </header>
 
       {worksiteRestricted ? (

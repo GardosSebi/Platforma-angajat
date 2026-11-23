@@ -32,10 +32,7 @@ export function CommsRemindersPanel({
   return (
     <section className="card comms-panel">
       <div className="comms-toolbar">
-        <div>
-          <h2 className="card-title">Mementouri</h2>
-          <p className="comms-toolbar-hint">Anunțuri cu memento planificat pentru angajații care nu au citit.</p>
-        </div>
+        <h2 className="card-title">Mementouri</h2>
         {canEdit ? (
           <button type="button" className="btn-secondary" onClick={onDispatch} disabled={isDispatchPending}>
             {isDispatchPending ? "Se trimit..." : "Trimite mementouri scadente"}

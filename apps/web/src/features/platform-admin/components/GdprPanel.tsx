@@ -89,14 +89,10 @@ export function GdprPanel() {
         ) : null}
         {overview ? (
           <>
-            <p className="page-lead">
-              Datele și fișierele sunt păstrate <strong>{overview.policy.retentionYears} ani</strong>. Accesul la
-              fișierele vechi (marcate după această perioadă) este jurnalizat. Data de referință actuală:{" "}
-              {new Date(overview.cutoff).toLocaleDateString("ro-RO")}.
-            </p>
             <ul className="gdpr-policy-list">
               <li>Audit acțiuni și acces la fișiere arhivate: activ</li>
               <li>Retenție istorică: {overview.policy.retentionYears} ani, fără ștergere automată</li>
+              <li>Data de referință: {new Date(overview.cutoff).toLocaleDateString("ro-RO")}</li>
               <li>
                 Export DSAR (Art. 15): {overview.policy.dsarExportEnabled ? "disponibil pentru administratori" : "oprit"}
               </li>
@@ -121,11 +117,6 @@ export function GdprPanel() {
 
       <section className="card form-stack">
         <h3 className="card-title">Cerere persoană vizată (DSAR)</h3>
-        <p className="page-lead">
-          Exportul include identitatea, contul, SSM, tichete, sondaje, comunicări și copii de fișiere atașate. Ștergerea
-          anonimizează identitatea și contactul; nu șterge instruiri, medicina muncii, EIP, accidente sau jurnalul de
-          audit (excepție Art. 17(3)(b)).
-        </p>
         <EmployeeSelect
           id="dsar-employee"
           label="Persoana vizată"
@@ -172,7 +163,6 @@ export function GdprPanel() {
               onChange={(event) => setConfirmPhrase(event.target.value)}
               required
             />
-            <p className="field-hint">Pentru a continua, scrie exact STERGE. Nu poți anonimiza propriul cont.</p>
           </div>
           <div className="form-actions">
             <button
@@ -208,9 +198,6 @@ export function GdprPanel() {
 
       <section className="card form-stack">
         <h3 className="card-title">Jurnal audit</h3>
-        <p className="field-hint">
-          Acțiuni înregistrate pe tenant, inclusiv DSAR_EXPORT, DSAR_ERASE și modificări SSO.
-        </p>
         <FieldSelect
           id="audit-module"
           label="Modul"

@@ -316,7 +316,6 @@ export function MasterDataSsmResponsiblesPanel() {
         <MasterDataCreateModal
           title="Responsabil SSM nou"
           titleId="md-ssm-responsible-create-title"
-          description="Completează datele responsabilului și asociază-l opțional la o entitate sau un punct de lucru."
           onClose={() => setShowForm(false)}
           size="wide"
         >

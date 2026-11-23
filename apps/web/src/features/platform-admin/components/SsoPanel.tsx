@@ -86,18 +86,11 @@ export function SsoPanel() {
 
   return (
     <form className="form-stack" onSubmit={onSubmit}>
-      <section className="card form-stack">
-        <h2 className="card-title">Autentificare Azure AD / LDAP</h2>
-        <p className="page-lead">
-          Secretul aplicației și parola de bind nu sunt afișate după salvare. Lasă câmpul gol ca să păstrezi valoarea
-          actuală.
-        </p>
-        {configQuery.isLoading ? <p className="field-hint">Se încarcă configurația…</p> : null}
-        {configQuery.isError ? <p className="feedback error">{mutationErrorMessage(configQuery.error)}</p> : null}
-      </section>
+      {configQuery.isLoading ? <p className="field-hint">Se încarcă configurația…</p> : null}
+      {configQuery.isError ? <p className="feedback error">{mutationErrorMessage(configQuery.error)}</p> : null}
 
       <section className="card form-stack">
-        <h3 className="card-title">Microsoft Azure AD</h3>
+        <h2 className="card-title">Microsoft Azure AD</h2>
         <label className="checkbox-row">
           <input
             type="checkbox"
@@ -144,12 +137,11 @@ export function SsoPanel() {
             placeholder="http://localhost:5173/login"
             onChange={(event) => setForm((prev) => ({ ...prev, azureRedirectUri: event.target.value }))}
           />
-          <p className="field-hint">Trebuie să coincidă cu URI-ul înregistrat în Azure App Registration.</p>
         </div>
       </section>
 
       <section className="card form-stack">
-        <h3 className="card-title">LDAP</h3>
+        <h2 className="card-title">LDAP</h2>
         <label className="checkbox-row">
           <input
             type="checkbox"
@@ -203,9 +195,9 @@ export function SsoPanel() {
           <input
             id="ldap-filter"
             value={form.ldapSearchFilter}
+            placeholder="(uid={{username}})"
             onChange={(event) => setForm((prev) => ({ ...prev, ldapSearchFilter: event.target.value }))}
           />
-          <p className="field-hint">Folosește {"{{username}}"} pentru valoarea introdusă la login.</p>
         </div>
       </section>
 

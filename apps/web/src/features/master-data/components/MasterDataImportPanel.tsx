@@ -75,12 +75,7 @@ export function MasterDataImportPanel() {
   return (
     <section className="card comms-panel">
       <div className="comms-toolbar">
-        <div className="comms-toolbar-start">
-          <h2 className="card-title">Import angajați CSV</h2>
-          <p className="comms-toolbar-hint">
-            Încarcă un fișier CSV sau lipește conținutul. Rândurile existente se actualizează după email.
-          </p>
-        </div>
+        <h2 className="card-title">Import angajați CSV</h2>
         <button type="button" className="btn-secondary comms-toolbar-cta" onClick={downloadTemplate}>
           Descarcă șablon
         </button>
@@ -146,9 +141,7 @@ export function MasterDataImportPanel() {
             accept=".csv,text/csv"
             onChange={(event) => void onPickFile(event.target.files?.[0] ?? null)}
           />
-          <p className="field-hint">
-            {fileName ? `Fișier încărcat: ${fileName}` : "Opțional — poți încărca un fișier sau edita textul de mai jos."}
-          </p>
+          {fileName ? <p className="field-hint">Fișier încărcat: {fileName}</p> : null}
         </div>
 
         <div className="field">

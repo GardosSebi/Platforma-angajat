@@ -31,11 +31,6 @@ export function EmployeeStaticListPage() {
     <div className="page-stack">
       <header className="page-header">
         <h1>Informații</h1>
-        <p className="page-lead">
-          {isTenantAdmin
-            ? "Ca administrator SSM vezi toți angajații pe puncte de lucru și administratorii platformă."
-            : "Vezi echipa ta: departament, grupuri și colegii din același punct de lucru."}
-        </p>
       </header>
 
       {isTenantAdmin ? (

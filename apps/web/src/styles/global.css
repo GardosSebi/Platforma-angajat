@@ -496,7 +496,7 @@ button {
 /* —— Comunicări: calendar programări —— */
 .comms-calendar-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
@@ -1198,26 +1198,22 @@ button {
 }
 
 .ssm-overview-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: #fff;
-  padding: 0.65rem 0.75rem;
-  text-align: left;
+  padding: 0.6rem 0.75rem;
+  text-align: center;
   color: var(--color-text);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .ssm-overview-tab strong {
-  display: block;
   font-size: 0.86rem;
-}
-
-.ssm-overview-tab span {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--color-muted);
-  margin-top: 0.2rem;
 }
 
 .ssm-overview-tab:hover {
@@ -1268,26 +1264,32 @@ button {
 }
 
 .ssm-panel-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: #fff;
-  padding: 0.7rem 0.8rem;
-  text-align: left;
+  padding: 0.6rem 0.8rem;
+  text-align: center;
   color: var(--color-text);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .ssm-panel-tab strong {
-  display: block;
   font-size: 0.88rem;
 }
 
 .ssm-panel-tab span {
-  display: block;
-  font-size: 0.74rem;
-  color: var(--color-muted);
-  margin-top: 0.2rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .ssm-panel-tab:hover {
@@ -1402,7 +1404,11 @@ button {
 }
 
 .ssm-active-section-header {
-  margin-bottom: 0.8rem;
+  margin-bottom: 1.15rem;
+}
+
+.ssm-active-section-header .page-title:last-child {
+  margin-bottom: 0;
 }
 
 .ssm-active-section-header .card-title {
@@ -2630,10 +2636,6 @@ button.ssm-overview-select-row.selected {
   padding: 0.4rem 0.55rem;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-}
-
-.comms-usage-note {
-  margin: 0.75rem 0 0;
 }
 
 .gdpr-policy-list {
@@ -4252,9 +4254,17 @@ button.ssm-doc-item:hover {
   padding: 0;
 }
 
+.page-header {
+  margin-bottom: 1.15rem;
+}
+
 .page-header h1 {
   margin: 0 0 0.35rem;
   font-size: 1.5rem;
+}
+
+.page-header h1:last-child {
+  margin-bottom: 0;
 }
 
 .page-lead {
@@ -4288,14 +4298,6 @@ button.ssm-doc-item:hover {
   border-color: var(--color-primary);
   background: var(--color-primary-muted);
   color: var(--color-primary);
-}
-
-.page-subtitle {
-  margin: 0 0 1rem;
-  color: var(--color-muted);
-  font-size: 0.92rem;
-  max-width: 72ch;
-  line-height: 1.5;
 }
 
 .tab-bar {
@@ -4652,6 +4654,20 @@ button.ssm-doc-item:hover {
   max-width: 40rem;
 }
 
+.checkbox-grid--inline-roles {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.checkbox-grid--inline-roles .checkbox-label--role-row {
+  flex: 0 1 10rem;
+  align-items: center;
+}
+
+.checkbox-grid--inline-roles .checkbox-label--role-row input {
+  margin-top: 0;
+}
+
 .checkbox-label--role-row {
   align-items: flex-start;
   gap: 0.55rem;
@@ -4690,10 +4706,6 @@ button.ssm-doc-item:hover {
 .role-desc {
   font-size: 0.85rem;
   color: var(--color-muted);
-}
-
-.role-fieldset-create .role-fieldset-hint {
-  margin: 0 0 0.65rem;
 }
 
 .scoped-list {
@@ -5428,10 +5440,10 @@ button.ssm-doc-item:hover {
 
 .employee-quick-link {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
   text-align: left;
-  padding: 1rem;
+  padding: 0.85rem 1rem;
   border: 1px solid var(--color-border);
   color: var(--color-text);
   font: inherit;
@@ -5466,11 +5478,6 @@ button.ssm-doc-item:hover {
 
 .employee-quick-link-text strong {
   font-size: 0.95rem;
-}
-
-.employee-quick-link-text .field-hint {
-  margin: 0;
-  line-height: 1.35;
 }
 
 .employee-portal-split {
@@ -5659,9 +5666,13 @@ button.ssm-doc-item:hover {
 .comms-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.comms-header .page-title:last-child {
+  margin-bottom: 0;
 }
 
 .comms-header .page-lead {
@@ -5901,10 +5912,16 @@ button.ssm-doc-item:hover {
 .comms-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem 1rem;
   margin-bottom: 1rem;
+}
+
+.comms-toolbar .card-title,
+.comms-compose-head .card-title,
+.comms-calendar-head .card-title {
+  margin: 0;
 }
 
 .comms-toolbar-hint {
@@ -6128,6 +6145,7 @@ button.ssm-doc-item:hover {
 .comms-compose-head {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.25rem;
@@ -6770,7 +6788,7 @@ button.ssm-doc-item:hover {
 
 .md-create-modal-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
@@ -7064,8 +7082,7 @@ button.ssm-doc-item:hover {
     flex: 1 1 calc(50% - 0.35rem);
   }
 
-  .page-lead,
-  .page-subtitle {
+  .page-lead {
     max-width: none;
   }
 }

@@ -137,7 +137,6 @@ export function EmployeeMedicalPanel() {
 
       <section className="card form-stack">
         <h3 className="card-title">Programare control medical</h3>
-        <p className="field-hint">Trimite o cerere către responsabilul SSM. Vei fi anunțat după confirmare.</p>
         <form className="form-stack" onSubmit={onSubmit}>
           <div className="field">
             <label htmlFor="med-pref">Data preferată</label>

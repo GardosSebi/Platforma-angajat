@@ -189,9 +189,6 @@ export function SurveyQuestionEditor({
           <button type="button" className="btn-secondary survey-add-option" onClick={onAddOption}>
             + Opțiune
           </button>
-          {questionForm.type === "IMAGE_SELECT" ? (
-            <p className="field-hint">Încarcă JPEG, PNG, GIF sau WebP (max. 8 MB) pentru fiecare variantă.</p>
-          ) : null}
           {uploadError ? <p className="feedback error">{uploadError}</p> : null}
         </div>
       ) : null}

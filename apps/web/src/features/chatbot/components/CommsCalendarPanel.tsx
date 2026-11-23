@@ -36,10 +36,7 @@ export function CommsCalendarPanel({ items, isLoading, onOpenAnnouncement }: Pro
   return (
     <section className="card comms-panel">
       <div className="comms-calendar-head">
-        <div>
-          <h2 className="card-title">Calendar programări</h2>
-          <p className="comms-toolbar-hint">Anunțuri programate sau gata de trimis, grupate pe zi.</p>
-        </div>
+        <h2 className="card-title">Calendar programări</h2>
         {items.length ? (
           <span className="comms-calendar-count">
             {items.length} {items.length === 1 ? "trimitere" : "trimiteri"}

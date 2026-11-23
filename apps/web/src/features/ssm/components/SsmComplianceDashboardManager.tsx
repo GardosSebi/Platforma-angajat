@@ -20,11 +20,11 @@ import { ssmApi } from "../api/ssm.api";
 
 type OverviewTab = "status" | "calendar" | "overdue" | "traffic";
 
-const OVERVIEW_TABS: Array<{ id: OverviewTab; title: string; caption: string }> = [
-  { id: "status", title: "Situație", caption: "KPI și breakdown" },
-  { id: "calendar", title: "Calendar", caption: "Evenimente SSM" },
-  { id: "overdue", title: "Restanțe", caption: "Angajați neconformi" },
-  { id: "traffic", title: "Semafor", caption: "Entitate / departament" }
+const OVERVIEW_TABS: Array<{ id: OverviewTab; title: string }> = [
+  { id: "status", title: "Situație" },
+  { id: "calendar", title: "Calendar" },
+  { id: "overdue", title: "Restanțe" },
+  { id: "traffic", title: "Semafor" }
 ];
 
 const SOURCE_LABELS: Record<SsmCalendarSource, string> = {
@@ -283,7 +283,6 @@ export function SsmComplianceDashboardManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -603,7 +602,7 @@ export function SsmComplianceDashboardManager() {
               {selectedDay && selectedDayEvents.length === 0 ? (
                 <p className="field-hint">Niciun eveniment în această zi.</p>
               ) : null}
-              {!selectedDay ? <p className="field-hint">Apasă pe o zi din calendar.</p> : null}
+              {!selectedDay ? <p className="field-hint">Nicio zi selectată.</p> : null}
             </div>
           </div>
         </div>
@@ -705,7 +704,7 @@ export function SsmComplianceDashboardManager() {
                 </div>
               </>
             ) : (
-              <p className="field-hint">Selectează un angajat din listă pentru a vedea cerințele restante.</p>
+              <p className="field-hint">Niciun angajat selectat.</p>
             )}
           </div>
         </div>
@@ -721,7 +720,7 @@ export function SsmComplianceDashboardManager() {
               <span className="ssm-chip">{dashboardQuery.data?.byEntity.length ?? 0}</span>
             </div>
             <p className="field-hint" style={{ marginTop: 0 }}>
-              Verde ≥90% · Galben ≥75% · Roșu &lt;75%. Click filtrează.
+              Verde ≥90% · Galben ≥75% · Roșu &lt;75%
             </p>
             <TrafficList
               items={dashboardQuery.data?.byEntity ?? []}
@@ -740,9 +739,6 @@ export function SsmComplianceDashboardManager() {
               </h4>
               <span className="ssm-chip">{dashboardQuery.data?.byDepartment.length ?? 0}</span>
             </div>
-            <p className="field-hint" style={{ marginTop: 0 }}>
-              Click pe un departament pentru a filtra restul dashboard-ului.
-            </p>
             <TrafficList
               items={dashboardQuery.data?.byDepartment ?? []}
               onSelect={(departmentId) => {

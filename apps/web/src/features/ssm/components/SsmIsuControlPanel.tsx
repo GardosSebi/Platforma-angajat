@@ -72,12 +72,6 @@ export function SsmIsuControlPanel({ onOpenTab }: { onOpenTab: (tab: PsiTarget) 
             </button>
           ) : null}
         </div>
-        <p className="field-hint">
-          Analog dosarului ITM, pe apărarea împotriva incendiilor: plan de evacuare și instrucțiuni PSI aprobate,
-          verificările stingătoarelor și ale celorlalte mijloace de stingere, exercițiile de evacuare, personalul cu
-          instruire PSI valabilă și persoanele desemnate. Pachetul conține un sumar PDF, documentele aprobate, registrele
-          CSV și dovezile atașate.
-        </p>
         {exportError ? <p className="feedback error">{exportError}</p> : null}
 
         <FieldSelect

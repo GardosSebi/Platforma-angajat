@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { EmployeeSelect } from "../../master-data/components/EmployeeSelect";
 import { useEmployeeOptions } from "../../master-data/hooks/useMasterData";
 
@@ -17,13 +16,6 @@ type Props<T extends TrainerFields> = {
 export function TrainingInstructorFields<T extends TrainerFields>({ idPrefix, value, onChange }: Props<T>) {
   const employeesQuery = useEmployeeOptions();
   const employees = employeesQuery.data?.items ?? [];
-  const hint = useMemo(() => {
-    if (value.trainerEmployeeId) {
-      const emp = employees.find((item) => item.id === value.trainerEmployeeId);
-      return emp ? `Instructor selectat: ${emp.fullName}` : undefined;
-    }
-    return "Poți selecta un angajat sau completa manual numele, ca la fișa colectivă / poartă.";
-  }, [employees, value.trainerEmployeeId]);
 
   return (
     <>
@@ -50,7 +42,6 @@ export function TrainingInstructorFields<T extends TrainerFields>({ idPrefix, va
           onChange={(event) => onChange({ ...value, trainerName: event.target.value })}
           placeholder="ex. Ion Popescu"
         />
-        <p className="field-hint">{hint}</p>
       </div>
       <div className="field">
         <label htmlFor={`${idPrefix}-trainer-function`}>Funcția instructorului</label>

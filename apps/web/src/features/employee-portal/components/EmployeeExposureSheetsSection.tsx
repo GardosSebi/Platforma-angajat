@@ -39,10 +39,6 @@ export function EmployeeExposureSheetsSection({ employeeId, sheets }: Props) {
   return (
     <section className="card employee-dossier-section">
       <h3 className="card-title">Fișa de expunere la riscuri a postului</h3>
-      <p className="field-hint">
-        Fișa este emisă la angajare și la fiecare revizie a evaluării de risc pentru postul tău. Citește riscurile și
-        măsurile, apoi semnează pentru luare la cunoștință.
-      </p>
       {error ? <p className="feedback error">{error}</p> : null}
       {!current.length ? <p className="field-hint">Nu există o fișă emisă pentru postul tău.</p> : null}
 

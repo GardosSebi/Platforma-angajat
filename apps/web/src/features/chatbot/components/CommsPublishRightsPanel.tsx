@@ -140,10 +140,6 @@ export function CommsPublishRightsPanel() {
     <div className="form-stack">
       <form className="card form-stack comms-panel" onSubmit={onSubmit}>
         <h2 className="card-title">Drepturi de comunicare</h2>
-        <p className="comms-toolbar-hint">
-          Cap. 4.5: drepturi de chat pe companie/grup, publicare internă și comunicare externă (contractori,
-          parteneri).
-        </p>
 
         <FieldSelect
           id="publish-right-user"

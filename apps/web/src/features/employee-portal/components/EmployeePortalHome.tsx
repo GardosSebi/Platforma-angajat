@@ -11,13 +11,7 @@ import { PORTAL_TAB_LABELS } from "../utils";
 import { PORTAL_TAB_ICONS } from "../portal-tab-icons";
 import { NavIcons } from "../../../app/nav-icons";
 
-const QUICK_LINKS: Array<{ tab: EmployeePortalTab; hint: string }> = [
-  { tab: "trainings", hint: "Parcurge instruiri și semnează fișele" },
-  { tab: "documents", hint: "Documente SSM aplicabile postului tău" },
-  { tab: "medical", hint: "Reminder control medical și programare" },
-  { tab: "surveys", hint: "Sondaje active pentru tine" },
-  { tab: "tickets", hint: "Cereri HR, concediu, IT" }
-];
+const QUICK_LINKS: EmployeePortalTab[] = ["trainings", "documents", "medical", "surveys", "tickets"];
 
 export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeePortalTab) => void }) {
   const session = useAuthSession();
@@ -108,12 +102,11 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
 
       <h3 className="ssm-subtitle">Acces rapid</h3>
       <div className="employee-quick-links">
-        {QUICK_LINKS.map(({ tab, hint }) => (
+        {QUICK_LINKS.map((tab) => (
           <button key={tab} type="button" className="card employee-quick-link" onClick={() => onNavigate(tab)}>
             <span className="employee-quick-link-icon">{PORTAL_TAB_ICONS[tab]()}</span>
             <span className="employee-quick-link-text">
               <strong>{PORTAL_TAB_LABELS[tab]}</strong>
-              <span className="field-hint">{hint}</span>
             </span>
           </button>
         ))}
@@ -121,7 +114,6 @@ export function EmployeePortalHome({ onNavigate }: { onNavigate: (tab: EmployeeP
           <span className="employee-quick-link-icon">{NavIcons.info()}</span>
           <span className="employee-quick-link-text">
             <strong>Informații & echipă</strong>
-            <span className="field-hint">Colegi, departament, pagini utile</span>
           </span>
         </Link>
       </div>

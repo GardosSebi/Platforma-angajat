@@ -102,10 +102,6 @@ export function CommsMediaPreview({ contentUrl, contentType, className, alt = ""
   if (isPpt) {
     return (
       <div className="comms-slide-fallback">
-        <p className="field-hint">
-          Previzualizarea în aplicație este disponibilă pentru PDF. Fișierele PowerPoint se descarcă — nu există player
-          de prezentare.
-        </p>
         {objectUrl ? (
           <p>
             <a href={objectUrl} download={fileName} className="btn-text-link">

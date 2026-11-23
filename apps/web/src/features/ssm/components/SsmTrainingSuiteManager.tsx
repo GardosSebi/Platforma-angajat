@@ -59,11 +59,11 @@ const TRAINING_CATEGORIES: SsmTrainingCategory[] = [
 
 type TrainingTab = "track" | "types" | "flow" | "dossier";
 
-const TRAINING_TABS: Array<{ id: TrainingTab; title: string; caption: string; adminOnly?: boolean }> = [
-  { id: "track", title: "Urmărire", caption: "Planuri, scadențe, conformitate" },
-  { id: "types", title: "Catalog tipuri", caption: "Cod, categorie, test", adminOnly: true },
-  { id: "flow", title: "Flux e-learning", caption: "Material, test, semnături" },
-  { id: "dossier", title: "Dosar digital", caption: "Fișe și export ZIP" }
+const TRAINING_TABS: Array<{ id: TrainingTab; title: string; adminOnly?: boolean }> = [
+  { id: "track", title: "Urmărire" },
+  { id: "types", title: "Catalog tipuri", adminOnly: true },
+  { id: "flow", title: "Flux e-learning" },
+  { id: "dossier", title: "Dosar digital" }
 ];
 
 const defaultPlan = (trainingTypeId = "", employeeId = ""): CreateSsmTrainingPlanRequest => ({
@@ -447,7 +447,6 @@ export function SsmTrainingSuiteManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -603,7 +602,7 @@ export function SsmTrainingSuiteManager() {
                 required
                 allowEmpty
                 emptyLabel="Selectează grupul"
-                hint={groupOptions.length ? undefined : "Nu există grupuri active. Grupurile se creează din Date de bază."}
+                hint={groupOptions.length ? undefined : "Nu există grupuri active."}
               />
             )}
             <TrainingTypeSelect
@@ -683,7 +682,6 @@ export function SsmTrainingSuiteManager() {
         <MasterDataCreateModal
           title="Fișă de instruire colectivă"
           titleId="ssm-collective-modal-title"
-          description="Anexa 12 HG 1425/2006, pentru vizitatori și lucrători din firme externe."
           onClose={closePlanDialog}
         >
           <form className="form-stack" onSubmit={onGenerateCollective}>
@@ -920,9 +918,7 @@ export function SsmTrainingSuiteManager() {
                     <button type="button" className="btn-primary" onClick={() => openPlanDialog("plan")}>
                       Instruire nouă
                     </button>
-                  ) : (
-                    <p className="field-hint">Cere unui responsabil SSM să îți aloce o instruire.</p>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
             </div>

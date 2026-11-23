@@ -219,10 +219,7 @@ export function TicketingPage() {
   return (
     <div className="comms-page ticketing-page">
       <header className="comms-header">
-        <div>
-          <h1 className="page-title">Help desk</h1>
-          <p className="page-lead">Gestionează solicitările interne: HR, IT, concedii și altele.</p>
-        </div>
+        <h1 className="page-title">Help desk</h1>
       </header>
 
       <div className="comms-kpi" aria-label="Indicatori tichete">

@@ -116,13 +116,7 @@ export function SurveyCreateForm({
   return (
     <form className="card form-stack comms-panel survey-create-form survey-create-form--visual" onSubmit={onSubmit}>
       <div className="comms-compose-head">
-        <div>
-          <h2 className="card-title">{isEdit ? "Editează sondaj" : "Sondaj nou"}</h2>
-          <p className="comms-toolbar-hint">
-            Editor vizual drag-and-drop: trage tipurile din paletă pe canvas, reordonează întrebările și vezi
-            previzualizarea live.
-          </p>
-        </div>
+        <h2 className="card-title">{isEdit ? "Editează sondaj" : "Sondaj nou"}</h2>
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Înapoi la listă
         </button>
@@ -269,9 +263,6 @@ export function SurveyCreateForm({
 
       <fieldset className="comms-fieldset survey-section">
         <legend>3. Logică condițională</legend>
-        <p className="field-hint">
-          Afișează o întrebare doar când răspunsul la alta îndeplinește o condiție. Adaugă întâi întrebările pe canvas.
-        </p>
         {conditionalLogic.length === 0 ? (
           <p className="field-hint">Nicio regulă încă.</p>
         ) : (

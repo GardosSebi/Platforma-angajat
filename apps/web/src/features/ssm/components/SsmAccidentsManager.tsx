@@ -38,9 +38,9 @@ type AccidentsTab = "register" | "stats";
 type CaseSection = "research" | "evidence" | "measures" | "close";
 type CaseAction = "task" | "evidence" | "measure" | "close";
 
-const ACCIDENT_TABS: Array<{ id: AccidentsTab; title: string; caption: string }> = [
-  { id: "register", title: "Registru", caption: "Cazuri, cercetare, măsuri" },
-  { id: "stats", title: "Statistici", caption: "Frecvență și distribuții" }
+const ACCIDENT_TABS: Array<{ id: AccidentsTab; title: string }> = [
+  { id: "register", title: "Registru" },
+  { id: "stats", title: "Statistici" }
 ];
 
 const CASE_SECTIONS: Array<{ id: CaseSection; title: string }> = [
@@ -398,7 +398,6 @@ export function SsmAccidentsManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -466,11 +465,6 @@ export function SsmAccidentsManager() {
                   value={caseForm.type}
                   onChange={(type) => setCaseForm((p) => ({ ...p, type: type as SsmAccidentType }))}
                   options={ACCIDENT_TYPES.map((type) => ({ value: type, label: typeLabel(type) }))}
-                  hint={
-                    caseForm.type === "INCIDENT"
-                      ? "Include evenimente fără accident (near-miss). Nu există etichetă separată — se înregistrează ca incident."
-                      : undefined
-                  }
                 />
                 <FieldSelect
                   id="acc-severity"
@@ -873,9 +867,7 @@ export function SsmAccidentsManager() {
                     Închide cazul
                   </button>
                 </div>
-              ) : (
-                <p className="field-hint">Închiderea cazului cere drept de aprobare.</p>
-              )}
+              ) : null}
               <div>
                 <button
                   type="button"

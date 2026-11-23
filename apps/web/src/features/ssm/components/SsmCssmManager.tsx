@@ -529,9 +529,6 @@ export function SsmCssmManager() {
                       label: months === 1 ? "1 lună" : `${months} luni${months === 3 ? " (trimestrial, minim legal)" : ""}`
                     }))}
                   />
-                  <p className="field-hint">
-                    Cu număr de decizie completat, salvarea publică decizia în Documente SSM (tip Decizie).
-                  </p>
                   <button className="btn-primary" type="submit" disabled={updateCommittee.isPending}>
                     {updateCommittee.isPending ? "Se salvează…" : "Salvează decizia"}
                   </button>
@@ -573,11 +570,11 @@ export function SsmCssmManager() {
             <div className="ssm-overview-tabs" role="tablist" aria-label="CSSM">
               {(
                 [
-                  { id: "members", title: "Componență", caption: "Membri și roluri" },
-                  { id: "meetings", title: "Ședințe", caption: "Convocări" },
-                  { id: "minutes", title: "Procese-verbale", caption: "Hotărâri" },
-                  { id: "archive", title: "Arhivă", caption: "Pe entitate și an" }
-                ] as Array<{ id: CssmTab; title: string; caption: string }>
+                  { id: "members", title: "Componență" },
+                  { id: "meetings", title: "Ședințe" },
+                  { id: "minutes", title: "Procese-verbale" },
+                  { id: "archive", title: "Arhivă" }
+                ] as Array<{ id: CssmTab; title: string }>
               ).map((item) => (
                 <button
                   key={item.id}
@@ -588,7 +585,6 @@ export function SsmCssmManager() {
                   onClick={() => setTab(item.id)}
                 >
                   <strong>{item.title}</strong>
-                  <span>{item.caption}</span>
                 </button>
               ))}
             </div>
@@ -923,9 +919,7 @@ export function SsmCssmManager() {
                         ) : null}
                       </div>
                     ))}
-                    {!activeMeeting.attendees.length ? (
-                      <p className="field-hint">Membrii vor fi copați automat la crearea ședinței.</p>
-                    ) : null}
+                    {!activeMeeting.attendees.length ? <p className="field-hint">Niciun participant.</p> : null}
                   </div>
 
                   {canEdit && dialog === "presence" && activeMeeting.status !== "CANCELLED" ? (
@@ -982,7 +976,6 @@ export function SsmCssmManager() {
                     <MasterDataCreateModal
                       title="Semnătură participant"
                       titleId="cssm-signature-modal"
-                      description="Alege persoana care semnează. Semnătura se aplică doar unui participant prezent."
                       onClose={closeDialog}
                     >
                       <div className="form-stack">
@@ -1004,7 +997,7 @@ export function SsmCssmManager() {
                         {activeMeeting.attendees.find((attendee) => attendee.id === focusAttendeeId)?.present ? (
                           <SignatureCanvas label="Semnătură" value={signature} onChange={setSignature} />
                         ) : (
-                          <p className="field-hint">Marchează mai întâi participantul ca prezent.</p>
+                          <p className="field-hint">Participant absent.</p>
                         )}
                         <button
                           type="button"
@@ -1112,10 +1105,6 @@ export function SsmCssmManager() {
                     Descarcă arhiva completă (ZIP)
                   </button>
                 </div>
-                <p className="field-hint">
-                  Decizia de numire, convocările și procesele-verbale semnate, grupate pe ani. Acoperirea trimestrială
-                  arată dacă s-a ținut cel puțin o ședință în fiecare trimestru.
-                </p>
                 {archiveQuery.isLoading ? <p className="field-hint">Se încarcă arhiva…</p> : null}
                 {archiveQuery.isError ? (
                   <p className="feedback error">{mutationErrorMessage(archiveQuery.error)}</p>

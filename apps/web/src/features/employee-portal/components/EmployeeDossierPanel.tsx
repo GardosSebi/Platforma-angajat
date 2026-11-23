@@ -23,7 +23,6 @@ export function EmployeeDossierPanel() {
     return (
       <div className="employee-portal-empty card">
         <p>Contul tău nu este legat de un profil de angajat.</p>
-        <p className="field-hint">Contactează HR sau administratorul pentru asocierea e-mailului cu fișa de personal.</p>
       </div>
     );
   }
@@ -42,9 +41,6 @@ export function EmployeeDossierPanel() {
     <div className="employee-portal-dossier">
       <div className="card employee-dossier-section">
         <h3 className="card-title">Medicină muncii</h3>
-        <p className="field-hint">
-          Reminder-ul de control medical, programarea și fișele de aptitudini sunt în tab-ul dedicat.
-        </p>
         <Link to="/portal?tab=medical" className="btn-text-link">
           Deschide tab-ul Medicină →
         </Link>

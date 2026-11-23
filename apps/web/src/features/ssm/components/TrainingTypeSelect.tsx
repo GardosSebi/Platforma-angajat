@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { trainingCategoryLabel } from "@repo/shared-types/ssm-training-catalog";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { useTrainingTypes } from "../hooks/useSsmTrainingSuite";
@@ -14,7 +14,6 @@ type Props = {
   emptyLabel?: string;
   activeOnly?: boolean;
   disabled?: boolean;
-  hint?: ReactNode;
 };
 
 export function TrainingTypeSelect({
@@ -27,8 +26,7 @@ export function TrainingTypeSelect({
   allowEmpty = false,
   emptyLabel = "Selectează tip",
   activeOnly = true,
-  disabled = false,
-  hint
+  disabled = false
 }: Props) {
   const typesQuery = useTrainingTypes();
   const options = useMemo(() => {
@@ -51,12 +49,6 @@ export function TrainingTypeSelect({
       allowEmpty={allowEmpty}
       emptyLabel={emptyLabel}
       disabled={disabled || typesQuery.isLoading || options.length === 0}
-      hint={
-        hint ??
-        (!typesQuery.isLoading && !typesQuery.isError && options.length === 0
-          ? "Nu există tipuri active în catalog. Adaugă un tip din secțiunea „Instruire și conformitate”."
-          : undefined)
-      }
       error={
         typesQuery.isError
           ? typesQuery.error instanceof Error

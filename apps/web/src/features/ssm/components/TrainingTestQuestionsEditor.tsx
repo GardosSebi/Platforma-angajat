@@ -49,7 +49,7 @@ export function TrainingTestQuestionsEditor({ value, onChange }: Props) {
         ) : null}
       </div>
       {!questions.length ? (
-        <p className="field-hint">Fără întrebări personalizate — se folosesc întrebările implicite pe categorie.</p>
+        <p className="field-hint">Se folosesc întrebările implicite.</p>
       ) : null}
       {questions.map((question, qIndex) => (
         <div key={question.id} className="ssm-test-editor-item">

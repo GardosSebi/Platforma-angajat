@@ -119,11 +119,6 @@ export function CommsUsagePanel({ enabled }: Props) {
           </ul>
         </>
       ) : null}
-
-      <p className="field-hint comms-usage-note">
-        Raportul este disponibil doar ca indicatori în aplicație. Nu există export PDF sau Excel pentru utilizarea
-        comunicării.
-      </p>
     </section>
   );
 }

@@ -3,24 +3,23 @@ import { canAccessSsmSection, type SsmSectionId } from "../../shared/auth/effect
 export type SsmSectionMeta = {
   id: SsmSectionId;
   label: string;
-  description: string;
 };
 
 /** Ordinea din meniul lateral. `gate` are pagină proprie (`/ssm/poarta`). */
 export const SSM_SECTIONS: SsmSectionMeta[] = [
-  { id: "compliance", label: "Calendar și restanțe", description: "Scadențe, restanțe și starea conformității." },
-  { id: "training", label: "Instruiri", description: "Planificare, teste, semnături și fișe de instruire." },
-  { id: "medical", label: "Medicina muncii", description: "Controale medicale, rezultate și reminder-uri." },
-  { id: "eip", label: "Echipamente EIP", description: "Tipuri EIP, normare pe post, distribuiri și stoc." },
-  { id: "accidents", label: "Accidente", description: "Registru, cercetare și măsuri corective." },
-  { id: "risk", label: "Evaluări risc", description: "Evaluări pe post sau punct de lucru și fișe de expunere." },
-  { id: "ppp", label: "Plan PPP", description: "Măsuri de prevenire cu responsabili și termene." },
-  { id: "documents", label: "Documente", description: "Documente SSM pe post și istoricul versiunilor." },
-  { id: "substances", label: "Substanțe periculoase", description: "Registru, cantități și fișe SDS." },
-  { id: "conventions", label: "Convenții SSM", description: "Convenții cu firme terțe pe șantiere și depozite comune." },
-  { id: "psi", label: "PSI / urgențe", description: "Echipamente PSI, verificări, exerciții și control ISU." },
-  { id: "cssm", label: "CSSM", description: "Comitet, ședințe și procese-verbale." },
-  { id: "reports", label: "Rapoarte", description: "Export PDF și Excel pentru control." }
+  { id: "compliance", label: "Calendar și restanțe" },
+  { id: "training", label: "Instruiri" },
+  { id: "medical", label: "Medicina muncii" },
+  { id: "eip", label: "Echipamente EIP" },
+  { id: "accidents", label: "Accidente" },
+  { id: "risk", label: "Evaluări risc" },
+  { id: "ppp", label: "Plan PPP" },
+  { id: "documents", label: "Documente" },
+  { id: "substances", label: "Substanțe periculoase" },
+  { id: "conventions", label: "Convenții SSM" },
+  { id: "psi", label: "PSI / urgențe" },
+  { id: "cssm", label: "CSSM" },
+  { id: "reports", label: "Rapoarte" }
 ];
 
 export const DEFAULT_SSM_SECTION: SsmSectionId = "compliance";

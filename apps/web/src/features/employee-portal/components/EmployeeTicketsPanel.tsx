@@ -4,7 +4,6 @@ import type {
   HelpdeskTicketItem,
   HelpdeskTicketPriority
 } from "@repo/shared-types/ticketing";
-import { HELPDESK_TICKET_STATUSES } from "@repo/shared-types/ticketing";
 import { FieldSelect } from "../../../shared/components/FieldSelect";
 import { useAuthSession } from "../../../shared/auth/use-auth-session";
 import { requireLinkedEmployeeId } from "../../../shared/auth/roles";
@@ -183,7 +182,7 @@ export function EmployeeTicketsPanel() {
                     </p>
                   ))}
                   {!commentsQuery.isLoading && !(commentsQuery.data?.items ?? []).length ? (
-                    <p className="field-hint">Niciun mesaj încă. Poți răspunde mai jos.</p>
+                    <p className="field-hint">Niciun mesaj încă.</p>
                   ) : null}
                   {ticket.status !== "CLOSED" ? (
                     <form
@@ -222,9 +221,6 @@ export function EmployeeTicketsPanel() {
           ))}
         </ul>
       )}
-      <p className="field-hint">
-        Stări posibile: {HELPDESK_TICKET_STATUSES.map((s) => STATUS_LABELS[s]).join(", ")}.
-      </p>
     </div>
   );
 }

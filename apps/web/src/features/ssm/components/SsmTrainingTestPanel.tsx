@@ -51,9 +51,7 @@ export function SsmTrainingTestPanel({
 
   return (
     <form className="form-stack employee-test-form" onSubmit={onFormSubmit}>
-      <p className="field-hint">
-        Răspunde la toate întrebările. Promovarea necesită minimum {passThresholdPercent}% răspunsuri corecte.
-      </p>
+      <p className="field-hint">Prag promovare: {passThresholdPercent}%</p>
       <ol className="ssm-test-questions">
         {questions.map((question, index) => (
           <li key={question.id} className="ssm-test-question">

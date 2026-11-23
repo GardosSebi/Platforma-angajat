@@ -43,12 +43,12 @@ import { useAuthSession } from "../../../shared/auth/use-auth-session";
 type EipPanelTab = "types" | "norms" | "movements" | "orders" | "reports";
 type EipDialog = "type" | "norm" | "movement" | "order" | "signRegister";
 
-const EIP_TABS: Array<{ id: EipPanelTab; title: string; caption: string }> = [
-  { id: "types", title: "Catalog tipuri", caption: "Cod, denumire, durată" },
-  { id: "norms", title: "Normativ pe post", caption: "Cantitate și înlocuire" },
-  { id: "movements", title: "Mișcări & registru", caption: "Stoc, distribuție, semnătură" },
-  { id: "orders", title: "Necesar vs. comandă", caption: "Gap aprovizionare" },
-  { id: "reports", title: "Scadențe & stoc", caption: "Reminder și gap report" }
+const EIP_TABS: Array<{ id: EipPanelTab; title: string }> = [
+  { id: "types", title: "Catalog tipuri" },
+  { id: "norms", title: "Normativ pe post" },
+  { id: "movements", title: "Mișcări & registru" },
+  { id: "orders", title: "Necesar vs. comandă" },
+  { id: "reports", title: "Scadențe & stoc" }
 ];
 
 const EMPTY_TYPE: CreateSsmEipTypeRequest = {
@@ -275,7 +275,6 @@ export function SsmEipManager() {
             onClick={() => setTab(item.id)}
           >
             <strong>{item.title}</strong>
-            <span>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -480,7 +479,6 @@ export function SsmEipManager() {
 
           <div className="card ssm-doc-card">
             <h4 className="card-title">PDF normativ pe post</h4>
-            <p className="field-hint">Publicarea îl adaugă în Documente SSM.</p>
             <div className="ssm-inline-actions" style={{ marginBottom: "0.75rem" }}>
               <button
                 type="button"
@@ -512,7 +510,7 @@ export function SsmEipManager() {
               </p>
             ) : null}
             {normsByJob.length === 0 ? (
-              <p className="field-hint">Salvează cel puțin un normativ pe post pentru a genera documentul.</p>
+              <p className="field-hint">Nu există normative pe post.</p>
             ) : (
               <div className="ssm-history-list">
                 {normsByJob.map((job) => (

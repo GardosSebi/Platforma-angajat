@@ -183,9 +183,6 @@ export function SsmScheduledReportsPanel({ embedded = false }: Props) {
           </h4>
           <span className="ssm-chip">{schedules.length}</span>
         </div>
-        <p className="field-hint" style={{ marginTop: 0 }}>
-          Trimitere automată pe e-mail: zilnic, săptămânal sau lunar.
-        </p>
         {feedback ? (
           <p className={`feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>
             {feedback.message}
@@ -316,9 +313,7 @@ export function SsmScheduledReportsPanel({ embedded = false }: Props) {
               {createSchedule.isPending ? "Se salvează…" : "Programează raport"}
             </button>
           </form>
-        ) : (
-          <p className="field-hint">Apasă „Adaugă” pentru a crea o trimitere automată.</p>
-        )}
+        ) : null}
       </div>
     </div>
   );

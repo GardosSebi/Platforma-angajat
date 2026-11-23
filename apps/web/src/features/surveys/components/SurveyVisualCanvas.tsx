@@ -106,7 +106,6 @@ export function SurveyVisualCanvas({
     <div className="survey-visual-builder">
       <aside className="survey-palette" aria-label="Paletă tipuri de întrebări">
         <h3>Paletă</h3>
-        <p className="field-hint">Trage pe canvas sau apasă pentru a adăuga.</p>
         {PALETTE_GROUPS.map((group) => (
           <div key={group.title} className="survey-palette-group">
             <p className="survey-palette-title">{group.title}</p>
@@ -129,7 +128,7 @@ export function SurveyVisualCanvas({
       <section className="survey-canvas" aria-label="Canvas chestionar">
         <div className="survey-canvas-head">
           <h3>Canvas</h3>
-          <span className="field-hint">{questions.length} întrebări · drag pentru reordonare</span>
+          <span className="field-hint">{questions.length} întrebări</span>
         </div>
         <div
           className={`survey-drop-slot${dropIndex === 0 ? " active" : ""}`}
@@ -143,7 +142,7 @@ export function SurveyVisualCanvas({
             onDragOver={(event) => onSlotDragOver(event, 0)}
             onDrop={(event) => onSlotDrop(event, 0)}
           >
-            Trage un tip de întrebare aici pentru a începe chestionarul.
+            Trage o întrebare aici.
           </div>
         ) : null}
         {questions.map((question, index) => {
@@ -233,7 +232,6 @@ export function SurveyVisualCanvas({
 
       <aside className="survey-live-preview" aria-label="Previzualizare live">
         <h3>Previzualizare</h3>
-        <p className="field-hint">Cum vede respondentul formularul. Nimic nu se salvează.</p>
         {questions.length ? (
           <SurveyFormFiller
             title={surveyTitle.trim() || "Sondaj fără titlu"}
@@ -244,7 +242,7 @@ export function SurveyVisualCanvas({
             previewMode
           />
         ) : (
-          <p className="field-hint">Adaugă întrebări pe canvas pentru previzualizare.</p>
+          <p className="field-hint">Nicio întrebare.</p>
         )}
       </aside>
     </div>

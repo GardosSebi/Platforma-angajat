@@ -83,10 +83,6 @@ export function SurveyRespondPage() {
           <p className="feedback error" role="alert">
             {query.error instanceof Error ? query.error.message : "Eroare la încărcare."}
           </p>
-          <p className="field-hint">
-            Verificați că sunteți autentificat pe tenant-ul corect, că sondajul este <strong>activ</strong>, că e-mailul
-            contului corespunde fișei de angajat și că sondajul vă include în audiență.
-          </p>
           <Link to={surveysHome} className="btn-text-link">
             Înapoi la sondaje
           </Link>

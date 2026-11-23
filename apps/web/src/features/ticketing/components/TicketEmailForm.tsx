@@ -12,8 +12,6 @@ type Props = {
 export function TicketEmailForm({ form, isPending, feedback, onChange, onSubmit }: Props) {
   return (
     <form className="form-stack ticket-create-form" onSubmit={onSubmit}>
-      <p className="comms-toolbar-hint">Creează un tichet pe baza unui mesaj email primit.</p>
-
       <fieldset className="comms-fieldset">
         <legend>Email</legend>
         <div className="comms-form-row">

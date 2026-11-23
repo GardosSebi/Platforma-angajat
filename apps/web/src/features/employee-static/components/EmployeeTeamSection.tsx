@@ -93,10 +93,7 @@ export function EmployeeTeamSection({
     return (
       <section className="card" aria-labelledby="team-heading">
         <h2 id="team-heading">Echipa mea</h2>
-        <p className="text-muted">
-          Contul tău nu este legat de un profil de angajat (același e-mail ca la login). Contactează administratorul
-          pentru alocare în departament sau grup.
-        </p>
+        <p className="text-muted">Contul tău nu este legat de un profil de angajat.</p>
       </section>
     );
   }
@@ -107,12 +104,6 @@ export function EmployeeTeamSection({
   return (
     <section className="card team-context-card" aria-labelledby="team-heading">
       <h2 id="team-heading">Echipa mea</h2>
-      {context.worksiteRestricted ? (
-        <p className="field-hint">
-          Sunt afișați doar colegii din același punct de lucru (conform rolului tău: responsabil SSM, manager sau
-          angajat).
-        </p>
-      ) : null}
       <dl className="team-placement-dl">
         {employee.department ? (
           <>

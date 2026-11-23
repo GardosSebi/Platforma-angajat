@@ -37,8 +37,6 @@ export function TicketCreateForm({
 }: Props) {
   return (
     <form className="form-stack ticket-create-form" onSubmit={onSubmit}>
-      <p className="comms-toolbar-hint">Înregistrează o solicitare primită telefonic, pe email sau la birou.</p>
-
       <fieldset className="comms-fieldset">
         <legend>Solicitare</legend>
         <div className="field">

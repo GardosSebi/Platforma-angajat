@@ -379,7 +379,7 @@ export function SurveysPage() {
       onSuccess: (created) => {
         setSelectedSurveyId(created.id);
         resetCreateForm();
-        setCreateFeedback({ type: "success", message: "Sondaj salvat. Poți continua din listă sau gestionare." });
+        setCreateFeedback({ type: "success", message: "Sondaj salvat." });
         setTab("list");
       },
       onError: (error) => {
@@ -468,10 +468,7 @@ export function SurveysPage() {
   return (
     <div className="comms-page surveys-page">
       <header className="comms-header">
-        <div>
-          <h1 className="page-title">Sondaje</h1>
-          <p className="page-lead">Creează chestionare, distribuie linkuri și analizează răspunsurile.</p>
-        </div>
+        <h1 className="page-title">Sondaje</h1>
       </header>
 
       <div className="comms-kpi" aria-label="Indicatori sondaje">

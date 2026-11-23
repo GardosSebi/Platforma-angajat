@@ -56,10 +56,6 @@ export function ItmAccessPanel() {
     <div className="form-stack">
       <form className="card form-stack" onSubmit={onSubmit}>
         <h2 className="card-title">Acordare acces inspector ITM</h2>
-        <p className="page-lead">
-          Setează data expirării pentru conturile cu rol ITM_INSPECTOR. Fără acces activ, inspectorul nu poate
-          deschide portalul de control.
-        </p>
 
         <FieldSelect
           id="itm-user"
@@ -70,11 +66,7 @@ export function ItmAccessPanel() {
           required
           allowEmpty
           emptyLabel="Selectează inspector"
-          hint={
-            inspectorOptions.length === 0
-              ? "Nu există utilizatori cu rol ITM_INSPECTOR. Adaugă rolul din Master Data."
-              : undefined
-          }
+          hint={inspectorOptions.length === 0 ? "Nu există utilizatori cu rol ITM_INSPECTOR." : undefined}
         />
 
         <div className="field">
